@@ -1,3 +1,5 @@
+{-# LANGUAGE DerivingStrategies #-}
+
 module BlackJack.Server where
 
 import Control.Exception (Exception)
@@ -19,6 +21,11 @@ data Server p m = Server
     connect :: String -> m p
   , -- | Initialises a head with given parties.
     -- Those parties must have been connected to first.
+    -- Returns an action that can be used to check whether or not the initialisation is
+    -- done.
     -- Might throw a `ServerException`.
-    initHead :: [p] -> m ()
+    initHead :: [p] -> m (m InitResult)
   }
+
+data InitResult = InitDone | InitPending | InitFailed String
+  deriving stock (Eq, Show)

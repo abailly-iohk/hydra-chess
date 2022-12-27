@@ -32,6 +32,7 @@ library
     , base
     , black-jack-core
     , containers
+    , io-classes
     , QuickCheck
     , random
 
@@ -62,6 +63,8 @@ test-suite tests
     , containers
     , hspec
     , hspec-core
+    , io-classes
+    , io-sim
     , QuickCheck
 
   build-tool-depends: hspec-discover:hspec-discover -any
