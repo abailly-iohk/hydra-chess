@@ -2,10 +2,15 @@ index-state: 2022-10-21T00:00:00Z
 
 packages:
   black-jack-core
+  black-jack-client
 
 tests: False
 
 package black-jack-core
+  tests: True
+  benchmarks: True
+
+package black-jack-client
   tests: True
   benchmarks: True
 
