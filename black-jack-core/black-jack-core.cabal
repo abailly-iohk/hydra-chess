@@ -1,0 +1,67 @@
+cabal-version:      2.4
+name:               black-jack-core
+version:            0.1.0.0
+
+-- A short (one-line) description of the package.
+-- synopsis:
+
+-- A longer description of the package.
+-- description:
+
+-- A URL where users can report bugs.
+-- bug-reports:
+
+-- The license under which the package is released.
+-- license:
+author:             Arnaud Bailly
+maintainer:         arnaud.bailly@iohk.io
+
+-- A copyright notice.
+-- copyright:
+-- category:
+extra-source-files: CHANGELOG.md
+
+library
+  hs-source-dirs:  src
+  ghc-options:     -Wall -Werror
+  exposed-modules:
+    BlackJack
+    BlackJack.Game
+    BlackJack.Pretty
+
+  build-depends:
+    , base
+    , containers
+    , QuickCheck
+    , random
+
+executable black-jack
+  main-is:          Main.hs
+
+  -- Modules included in this executable, other than Main.
+  -- other-modules:
+
+  -- LANGUAGE extensions used by modules in this package.
+  -- other-extensions:
+  build-depends:
+    , base             ^>=4.14.3.0
+    , black-jack-core
+
+  hs-source-dirs:   app
+  default-language: Haskell2010
+
+test-suite tests
+  ghc-options:        -threaded -rtsopts -with-rtsopts=-N -Wall -Werror
+  hs-source-dirs:     test
+  other-modules:      BlackJack.GameSpec
+  main-is:            Spec.hs
+  type:               exitcode-stdio-1.0
+  build-depends:
+    , base
+    , black-jack-core
+    , containers
+    , hspec
+    , hspec-core
+    , QuickCheck
+
+  build-tool-depends: hspec-discover:hspec-discover -any

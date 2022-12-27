@@ -1,0 +1,13 @@
+index-state: 2022-10-21T00:00:00Z
+
+packages:
+  black-jack-core
+
+tests: False
+
+package black-jack-core
+  tests: True
+  benchmarks: True
+
+-- Always show detailed output for tests
+test-show-details: direct
