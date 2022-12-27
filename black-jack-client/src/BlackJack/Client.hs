@@ -6,8 +6,9 @@
 
 module BlackJack.Client where
 
-import BlackJack.Server (InitResult (..), IsParty, Server (..))
+import BlackJack.Server (InitResult (..), IsParty, Server (..), ServerException (ServerException))
 import Control.Monad (forM)
+import Control.Monad.Class.MonadThrow (MonadThrow, throwIO)
 import Control.Monad.Class.MonadTimer (MonadDelay, threadDelay)
 
 data Result p = TableCreated [p]
@@ -15,7 +16,7 @@ data Result p = TableCreated [p]
 
 data Client p m = Client {newTable :: [String] -> m (Result p)}
 
-startClient :: forall p m. (IsParty p, Monad m, MonadDelay m) => Server p m -> m (Client p m)
+startClient :: forall p m. (IsParty p, Monad m, MonadDelay m, MonadThrow m) => Server p m -> m (Client p m)
 startClient server = pure $ Client{newTable}
  where
   newTable ps = do
@@ -25,6 +26,6 @@ startClient server = pure $ Client{newTable}
           result >>= \case
             InitDone -> pure ()
             InitPending -> threadDelay 1 >> loop
-            InitFailed _ -> pure ()
+            InitFailed reason -> throwIO $ ServerException reason
     loop
     pure $ TableCreated parties

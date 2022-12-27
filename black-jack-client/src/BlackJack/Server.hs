@@ -7,7 +7,7 @@ import Control.Exception (Exception)
 data Message = Ping
   deriving (Eq, Show)
 
-data ServerException = ServerException
+data ServerException = ServerException {reason :: String}
   deriving (Eq, Show)
 
 instance Exception ServerException
