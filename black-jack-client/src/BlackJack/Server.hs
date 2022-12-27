@@ -10,14 +10,15 @@ data ServerException = ServerException
 
 instance Exception ServerException
 
-newtype Server m = Server
-  { -- | Initialises connection to the server.
+class IsParty p where
+  partyId :: p -> String
+
+data Server p m = Server
+  { -- | Connects to given party.
     -- Might throw a `ServerException`.
-    connect :: m ()
+    connect :: String -> m p
+  , -- | Initialises a head with given parties.
+    -- Those parties must have been connected to first.
+    -- Might throw a `ServerException`.
+    initHead :: [p] -> m ()
   }
-
--- | Handle to interface for inbound messages.
-type Callback m = Message -> m ()
-
--- | A type tying both inbound and outbound messages sending in a single /Component/.
-type BlackJackServer m a = Callback m -> (Server m -> m a) -> m a
