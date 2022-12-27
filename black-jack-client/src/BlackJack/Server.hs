@@ -3,18 +3,18 @@ module BlackJack.Server where
 import Control.Exception (Exception)
 
 data Message = Ping
-    deriving (Eq, Show)
+  deriving (Eq, Show)
 
 data ServerException = ServerException
-    deriving (Eq, Show)
+  deriving (Eq, Show)
 
 instance Exception ServerException
 
 newtype Server m = Server
-    { -- | Initialises connection to the server.
-      -- Might throw a `ServerException`.
-      connect :: m ()
-    }
+  { -- | Initialises connection to the server.
+    -- Might throw a `ServerException`.
+    connect :: m ()
+  }
 
 -- | Handle to interface for inbound messages.
 type Callback m = Message -> m ()
