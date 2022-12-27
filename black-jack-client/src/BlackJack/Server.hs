@@ -1,11 +1,19 @@
 module BlackJack.Server where
 
+import Control.Exception (Exception)
+
 data Message = Ping
     deriving (Eq, Show)
 
+data ServerException = ServerException
+    deriving (Eq, Show)
+
+instance Exception ServerException
+
 newtype Server m = Server
-    { -- | Send a `Message` to the network
-      broadcast :: Message -> m ()
+    { -- | Initialises connection to the server.
+      -- Might throw a `ServerException`.
+      connect :: m ()
     }
 
 -- | Handle to interface for inbound messages.
