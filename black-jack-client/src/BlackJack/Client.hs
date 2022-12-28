@@ -6,15 +6,21 @@
 
 module BlackJack.Client where
 
-import BlackJack.Server (InitResult (..), IsParty, Server (..), ServerException (ServerException))
+import BlackJack.Server (InitResult (..), IsParty, Server (..))
 import Control.Monad (forM)
-import Control.Monad.Class.MonadThrow (MonadThrow, throwIO)
+import Control.Monad.Class.MonadThrow (MonadThrow)
 import Control.Monad.Class.MonadTimer (MonadDelay, threadDelay)
+import Data.Text (Text)
+import Numeric.Natural (Natural)
 
-data Result p = TableCreated [p]
+data Result p
+  = TableCreated {parties :: [p], tableId :: Text}
+  | TableCreationFailed {failureReason :: Text}
   deriving stock (Eq, Show)
 
-data Client p m = Client {newTable :: [String] -> m (Result p)}
+data TableHandle p m = TableHandle {fundTable :: Natural -> m (Result p)}
+
+data Client p m = Client {newTable :: [Text] -> m (Result p)}
 
 startClient :: forall p m. (IsParty p, Monad m, MonadDelay m, MonadThrow m) => Server p m -> m (Client p m)
 startClient server = pure $ Client{newTable}
@@ -24,8 +30,7 @@ startClient server = pure $ Client{newTable}
     result <- initHead server parties
     let loop =
           result >>= \case
-            InitDone -> pure ()
+            InitDone{headId} -> pure $ TableCreated{parties, tableId = headId}
             InitPending -> threadDelay 1 >> loop
-            InitFailed reason -> throwIO $ ServerException reason
+            InitFailed{reason} -> pure $ TableCreationFailed{failureReason = reason}
     loop
-    pure $ TableCreated parties
