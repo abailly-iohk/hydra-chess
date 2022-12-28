@@ -12,7 +12,7 @@ import Data.Void (Void)
 import Prelude hiding (getLine, print)
 
 data Command
-  = NewTable [String]
+  = NewTable [Text]
   | Quit
   deriving (Eq, Show)
 
