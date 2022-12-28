@@ -2,22 +2,24 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
 module BlackJack.Client where
 
-import BlackJack.Server (CommitResult (CommitDone), InitResult (..), IsChain (..), Server (..))
+import BlackJack.Server (CommitResult (..), InitResult (..), IsChain (..), Server (..))
 import Control.Monad (forM)
 import Control.Monad.Class.MonadThrow (MonadThrow)
 import Control.Monad.Class.MonadTimer (MonadDelay, threadDelay)
-import Data.Text (Text)
+import Data.Text (Text, pack)
 
 data Result c
   = TableCreated {parties :: [Party c], tableId :: Text}
   | TableCreationFailed {failureReason :: Text}
   | TableFunded {amount :: Coin c, tableId :: Text}
+  | TableFundingFailed {failureReason :: Text}
 
 deriving instance IsChain c => Eq (Result c)
 deriving instance IsChain c => Show (Result c)
@@ -48,3 +50,8 @@ startClient server = pure $ Client{newTable, fundTable}
     result <- commit server fund
     result >>= \case
       CommitDone c -> pure $ TableFunded c tid
+      other -> pure $ TableFundingFailed $ asText other
+
+asText :: IsChain c => CommitResult c -> Text
+asText CommitDone{coin} = pack $ "commit done with coin " <> show coin
+asText NoMatchingCoin{value} = pack $ "no matching coins for value " <> show value

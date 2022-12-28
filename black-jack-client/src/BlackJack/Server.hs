@@ -64,7 +64,9 @@ data InitResult
   | InitFailed {reason :: Text}
   deriving stock (Eq, Show)
 
-data CommitResult c = CommitDone {coin :: Coin c}
+data CommitResult c
+  = CommitDone {coin :: Coin c}
+  | NoMatchingCoin {value :: Integer, coins :: [Coin c]}
 
 deriving instance IsChain c => Show (CommitResult c)
 deriving instance IsChain c => Eq (CommitResult c)

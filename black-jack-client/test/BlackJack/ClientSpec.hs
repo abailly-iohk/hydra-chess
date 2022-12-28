@@ -5,11 +5,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module BlackJack.ClientSpec where
 
-import BlackJack.Client (Client (..), Result (..), startClient)
-import BlackJack.Server (CommitResult (CommitDone), InitResult (..), IsChain (..), Server (..))
+import BlackJack.Client (Client (..), Result (..), asText, startClient)
+import BlackJack.Server (CommitResult (CommitDone, NoMatchingCoin), InitResult (..), IsChain (..), Server (..))
 import Control.Monad.IOSim (runSimOrThrow)
 import Data.Function ((&))
 import Data.Maybe (fromJust)
@@ -44,8 +45,9 @@ spec = do
 
       result `shouldBe` TableCreationFailed "fail to init"
 
-  describe "Fund Table" $
+  describe "Fund Table" $ do
     prop "commit to head some funds given table created" prop_commit_to_head_when_funding_table
+    prop "commit fails when funds do not match existing coins" prop_commit_fail_on_non_matching_coins
 
 prop_init_head_on_new_table :: KnownParties -> Property
 prop_init_head_on_new_table (KnownParties parties) =
@@ -60,11 +62,22 @@ prop_init_head_on_new_table (KnownParties parties) =
 prop_commit_to_head_when_funding_table :: KnownParties -> Committable -> Property
 prop_commit_to_head_when_funding_table (KnownParties parties) (Committable coins) =
   forAll (elements coins) $ \coin ->
-    let result = runSimOrThrow $ do
+    let value = coinValue @MockChain coin
+        result = runSimOrThrow $ do
           Client{newTable, fundTable} <- startClient (connectedServer coins parties)
           TableCreated{tableId} <- newTable (partyId @MockChain <$> parties)
-          fundTable tableId (coinValue @MockChain coin)
+          fundTable tableId value
      in result === TableFunded coin mockId
+
+prop_commit_fail_on_non_matching_coins :: KnownParties -> Property
+prop_commit_fail_on_non_matching_coins (KnownParties parties) =
+  forAll arbitrary $ \(getPositive -> value) ->
+    let expectedError = NoMatchingCoin value []
+        result = runSimOrThrow $ do
+          Client{newTable, fundTable} <- startClient ((connectedServer [] parties){commit = const $ pure $ pure expectedError})
+          TableCreated{tableId} <- newTable (partyId @MockChain <$> parties)
+          fundTable tableId value
+     in result === TableFundingFailed (asText expectedError)
 
 newtype KnownParties = KnownParties [MockParty]
   deriving newtype (Eq, Show)
