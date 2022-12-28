@@ -1,4 +1,5 @@
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -10,7 +11,6 @@
 module BlackJack.Client where
 
 import BlackJack.Server (CommitResult (..), InitResult (..), IsChain (..), Server (..))
-import Control.Monad (forM)
 import Control.Monad.Class.MonadThrow (MonadThrow)
 import Control.Monad.Class.MonadTimer (MonadDelay, threadDelay)
 import Data.Text (Text, pack)
@@ -37,11 +37,10 @@ startClient ::
 startClient server = pure $ Client{newTable, fundTable}
  where
   newTable ps = do
-    peers <- forM ps $ connect server
-    result <- initHead server peers
+    result <- initHead server ps
     let loop =
           result >>= \case
-            InitDone{headId} -> pure $ TableCreated{parties = peers, tableId = headId}
+            InitDone{headId, parties} -> pure $ TableCreated{parties, tableId = headId}
             InitPending -> threadDelay 1 >> loop
             InitFailed{reason} -> pure $ TableCreationFailed{failureReason = reason}
     loop

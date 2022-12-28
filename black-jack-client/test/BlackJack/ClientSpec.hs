@@ -13,7 +13,6 @@ import BlackJack.Client (Client (..), Result (..), asText, startClient)
 import BlackJack.Server (CommitResult (CommitDone, NoMatchingCoin), InitResult (..), IsChain (..), Server (..))
 import Control.Monad.IOSim (runSimOrThrow)
 import Data.Function ((&))
-import Data.Maybe (fromJust)
 import Data.Monoid (Sum (..))
 import Data.Text (Text)
 import Test.Hspec (Spec, describe, it, shouldBe)
@@ -121,9 +120,7 @@ mockId = "1234"
 
 connectedServer :: Monad m => [MockCoin] -> [MockParty] -> Server MockChain m
 connectedServer _coins parties =
-  let partyMap = (\p -> (partyId @MockChain p, p)) <$> parties
-   in Server
-        { connect = pure . fromJust . flip lookup partyMap
-        , initHead = const $ pure (pure $ InitDone mockId)
-        , commit = \value -> pure (pure $ CommitDone $ MockCoin value)
-        }
+  Server
+    { initHead = \ps -> pure (pure $ InitDone mockId $ filter (\p -> partyId @MockChain p `elem` ps) parties)
+    , commit = \value -> pure (pure $ CommitDone $ MockCoin value)
+    }

@@ -43,26 +43,25 @@ class
 
 -- | A handle to some underlying server for a single Head.
 data Server c m = Server
-  { -- | Connects to given party.
-    -- Might throw a `ServerException`.
-    connect :: Text -> m (Party c)
-  , -- | Initialises a head with given parties.
-    -- Those parties must have been connected to first.
+  { -- | Initialises a head with given parties.
     -- Returns an action that can be used to check whether or not the initialisation is
     -- done.
-    -- Might throw a `ServerException`.
-    initHead :: [Party c] -> m (m InitResult)
+    initHead :: [Text] -> m (m (InitResult c))
   , -- | Commit some value to the given head.
     -- The server is responsible for finding a suitable `Coin` that will fit the
     -- amount funded.
+    -- Returns an action that can be used to check whether or not the commit is done, or
+    -- failed.
     commit :: Integer -> m (m (CommitResult c))
   }
 
-data InitResult
-  = InitDone {headId :: Text}
+data InitResult c
+  = InitDone {headId :: Text, parties :: [Party c]}
   | InitPending
   | InitFailed {reason :: Text}
-  deriving stock (Eq, Show)
+
+deriving instance IsChain c => Show (InitResult c)
+deriving instance IsChain c => Eq (InitResult c)
 
 data CommitResult c
   = CommitDone {coin :: Coin c}
