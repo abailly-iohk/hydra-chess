@@ -1,18 +1,34 @@
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module BlackJack.ClientSpec where
 
 import BlackJack.Client (Client (..), Result (..), startClient)
-import BlackJack.Server (InitResult (..), IsParty (..), Server (..))
+import BlackJack.Server (CommitResult (CommitDone), InitResult (..), IsChain (..), Server (..))
 import Control.Monad.IOSim (runSimOrThrow)
+import Data.Function ((&))
 import Data.Maybe (fromJust)
+import Data.Monoid (Sum (..))
 import Data.Text (Text)
 import Test.Hspec (Spec, describe, it, shouldBe)
 import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck (Arbitrary (..), Positive (..), Property, forAll, generate, sublistOf, suchThat)
+import Test.QuickCheck (
+  Arbitrary (..),
+  Positive (..),
+  Property,
+  counterexample,
+  elements,
+  forAll,
+  generate,
+  getNonEmpty,
+  sublistOf,
+  (===),
+ )
 
 spec :: Spec
 spec = do
@@ -22,9 +38,9 @@ spec = do
       KnownParties parties <- generate arbitrary
 
       let result = runSimOrThrow $ do
-            let failingServer = (connectedServer parties){initHead = const $ pure (pure $ InitFailed "fail to init")}
+            let failingServer = (connectedServer [] parties){initHead = const $ pure (pure $ InitFailed "fail to init")}
             Client{newTable} <- startClient failingServer
-            newTable (fst <$> parties)
+            newTable (partyId @MockChain <$> parties)
 
       result `shouldBe` TableCreationFailed "fail to init"
 
@@ -35,42 +51,66 @@ prop_init_head_on_new_table :: KnownParties -> Property
 prop_init_head_on_new_table (KnownParties parties) =
   forAll (sublistOf parties) $ \peers ->
     let result = runSimOrThrow $ do
-          Client{newTable} <- startClient (connectedServer parties)
-          newTable (fst <$> peers)
-     in result == TableCreated (snd <$> peers) mockId
+          Client{newTable} <- startClient (connectedServer [] parties)
+          newTable (partyId @MockChain <$> peers)
+     in result == TableCreated peers mockId
+          & counterexample ("Result: " <> show result)
+          & counterexample ("Peers: " <> show peers)
 
-prop_commit_to_head_when_funding_table :: KnownParties -> Positive Integer -> Property
-prop_commit_to_head_when_funding_table (KnownParties parties) (Positive availableFunds) =
-  forAll (arbitrary `suchThat` (< availableFunds)) $ \funding ->
+prop_commit_to_head_when_funding_table :: KnownParties -> Committable -> Property
+prop_commit_to_head_when_funding_table (KnownParties parties) (Committable coins) =
+  forAll (elements coins) $ \coin ->
     let result = runSimOrThrow $ do
-          Client{newTable, fundTable} <- startClient (connectedServer parties)
-          TableCreated{tableId} <- newTable (fst <$> parties)
-          fundTable tableId funding
-     in result == TableFunded funding mockId
+          Client{newTable, fundTable} <- startClient (connectedServer coins parties)
+          TableCreated{tableId} <- newTable (partyId @MockChain <$> parties)
+          fundTable tableId (coinValue @MockChain coin)
+     in result === TableFunded coin mockId
 
-newtype KnownParties = KnownParties [(Text, MockParty)]
+newtype KnownParties = KnownParties [MockParty]
   deriving newtype (Eq, Show)
 
 instance Arbitrary KnownParties where
   arbitrary =
     KnownParties
       <$> sublistOf
-        ( (\n -> (n, Party n))
-            <$> ["bob", "carol", "daniel", "emily", "francis"]
-        )
+        (Party <$> ["bob", "carol", "daniel", "emily", "francis"])
+
+newtype Committable = Committable [MockCoin]
+  deriving newtype (Eq, Show)
+
+instance Arbitrary Committable where
+  arbitrary = Committable . getNonEmpty <$> arbitrary
+  shrink (Committable coins) = Committable <$> filter (not . null) (shrink coins)
+
+data MockChain = MockChain
+
+newtype MockCoin = MockCoin Integer
+  deriving newtype (Eq, Show)
+  deriving (Semigroup, Monoid) via Sum Integer
+
+instance Arbitrary MockCoin where
+  arbitrary = MockCoin . getPositive <$> arbitrary
+  shrink (MockCoin c) = MockCoin <$> shrink c
 
 newtype MockParty = Party Text
   deriving newtype (Eq, Show)
 
-instance IsParty MockParty where
+instance IsChain MockChain where
+  type Party MockChain = MockParty
+  type Coin MockChain = MockCoin
+
   partyId (Party s) = s
+
+  coinValue (MockCoin c) = c
 
 mockId :: Text
 mockId = "1234"
 
-connectedServer :: Monad m => [(Text, MockParty)] -> Server MockParty m
-connectedServer parties =
-  Server
-    { connect = pure . fromJust . flip lookup parties
-    , initHead = const $ pure (pure $ InitDone mockId)
-    }
+connectedServer :: Monad m => [MockCoin] -> [MockParty] -> Server MockChain m
+connectedServer _coins parties =
+  let partyMap = (\p -> (partyId @MockChain p, p)) <$> parties
+   in Server
+        { connect = pure . fromJust . flip lookup partyMap
+        , initHead = const $ pure (pure $ InitDone mockId)
+        , commit = \value -> pure (pure $ CommitDone $ MockCoin value)
+        }

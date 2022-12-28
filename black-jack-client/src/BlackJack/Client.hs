@@ -1,40 +1,50 @@
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module BlackJack.Client where
 
-import BlackJack.Server (InitResult (..), IsParty, Server (..))
+import BlackJack.Server (CommitResult (CommitDone), InitResult (..), IsChain (..), Server (..))
 import Control.Monad (forM)
 import Control.Monad.Class.MonadThrow (MonadThrow)
 import Control.Monad.Class.MonadTimer (MonadDelay, threadDelay)
 import Data.Text (Text)
 
-data Result p
-  = TableCreated {parties :: [p], tableId :: Text}
+data Result c
+  = TableCreated {parties :: [Party c], tableId :: Text}
   | TableCreationFailed {failureReason :: Text}
-  | TableFunded {amount :: Integer, tableId :: Text}
-  deriving stock (Eq, Show)
+  | TableFunded {amount :: Coin c, tableId :: Text}
 
-data Client p m = Client
-  { newTable :: [Text] -> m (Result p)
-  , fundTable :: Text -> Integer -> m (Result p)
+deriving instance IsChain c => Eq (Result c)
+deriving instance IsChain c => Show (Result c)
+
+data Client c m = Client
+  { newTable :: [Text] -> m (Result c)
+  , fundTable :: Text -> Integer -> m (Result c)
   }
 
-startClient :: forall p m. (IsParty p, Monad m, MonadDelay m, MonadThrow m) => Server p m -> m (Client p m)
+startClient ::
+  forall c m.
+  (IsChain c, Monad m, MonadDelay m, MonadThrow m) =>
+  Server c m ->
+  m (Client c m)
 startClient server = pure $ Client{newTable, fundTable}
  where
   newTable ps = do
-    parties <- forM ps $ connect server
-    result <- initHead server parties
+    peers <- forM ps $ connect server
+    result <- initHead server peers
     let loop =
           result >>= \case
-            InitDone{headId} -> pure $ TableCreated{parties, tableId = headId}
+            InitDone{headId} -> pure $ TableCreated{parties = peers, tableId = headId}
             InitPending -> threadDelay 1 >> loop
             InitFailed{reason} -> pure $ TableCreationFailed{failureReason = reason}
     loop
 
-  fundTable tid fund =
-    pure $ TableFunded fund tid
+  fundTable tid fund = do
+    result <- commit server fund
+    result >>= \case
+      CommitDone c -> pure $ TableFunded c tid
