@@ -11,19 +11,20 @@ import Control.Monad (forM)
 import Control.Monad.Class.MonadThrow (MonadThrow)
 import Control.Monad.Class.MonadTimer (MonadDelay, threadDelay)
 import Data.Text (Text)
-import Numeric.Natural (Natural)
 
 data Result p
   = TableCreated {parties :: [p], tableId :: Text}
   | TableCreationFailed {failureReason :: Text}
+  | TableFunded {amount :: Integer, tableId :: Text}
   deriving stock (Eq, Show)
 
-data TableHandle p m = TableHandle {fundTable :: Natural -> m (Result p)}
-
-data Client p m = Client {newTable :: [Text] -> m (Result p)}
+data Client p m = Client
+  { newTable :: [Text] -> m (Result p)
+  , fundTable :: Text -> Integer -> m (Result p)
+  }
 
 startClient :: forall p m. (IsParty p, Monad m, MonadDelay m, MonadThrow m) => Server p m -> m (Client p m)
-startClient server = pure $ Client{newTable}
+startClient server = pure $ Client{newTable, fundTable}
  where
   newTable ps = do
     parties <- forM ps $ connect server
@@ -34,3 +35,6 @@ startClient server = pure $ Client{newTable}
             InitPending -> threadDelay 1 >> loop
             InitFailed{reason} -> pure $ TableCreationFailed{failureReason = reason}
     loop
+
+  fundTable tid fund =
+    pure $ TableFunded fund tid

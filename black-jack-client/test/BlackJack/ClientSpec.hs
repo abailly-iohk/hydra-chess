@@ -12,7 +12,7 @@ import Data.Maybe (fromJust)
 import Data.Text (Text)
 import Test.Hspec (Spec, describe, it, shouldBe)
 import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck (Arbitrary (..), Property, forAll, generate, sublistOf)
+import Test.QuickCheck (Arbitrary (..), Positive (..), Property, forAll, generate, sublistOf, suchThat)
 
 spec :: Spec
 spec = do
@@ -28,8 +28,8 @@ spec = do
 
       result `shouldBe` TableCreationFailed "fail to init"
 
--- describe "Fund Table" $
---   prop "commit to head some funds given table created" prop_commit_to_head
+  describe "Fund Table" $
+    prop "commit to head some funds given table created" prop_commit_to_head_when_funding_table
 
 prop_init_head_on_new_table :: KnownParties -> Property
 prop_init_head_on_new_table (KnownParties parties) =
@@ -38,6 +38,15 @@ prop_init_head_on_new_table (KnownParties parties) =
           Client{newTable} <- startClient (connectedServer parties)
           newTable (fst <$> peers)
      in result == TableCreated (snd <$> peers) mockId
+
+prop_commit_to_head_when_funding_table :: KnownParties -> Positive Integer -> Property
+prop_commit_to_head_when_funding_table (KnownParties parties) (Positive availableFunds) =
+  forAll (arbitrary `suchThat` (< availableFunds)) $ \funding ->
+    let result = runSimOrThrow $ do
+          Client{newTable, fundTable} <- startClient (connectedServer parties)
+          TableCreated{tableId} <- newTable (fst <$> parties)
+          fundTable tableId funding
+     in result == TableFunded funding mockId
 
 newtype KnownParties = KnownParties [(Text, MockParty)]
   deriving newtype (Eq, Show)
