@@ -52,7 +52,7 @@ data Server c m = Server
     -- amount funded.
     -- Returns an action that can be used to check whether or not the commit is done, or
     -- failed.
-    commit :: Integer -> m (m (CommitResult c))
+    commit :: Integer -> Text -> m (m (CommitResult c))
   }
 
 data InitResult c

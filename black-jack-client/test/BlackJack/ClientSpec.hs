@@ -11,6 +11,7 @@ module BlackJack.ClientSpec where
 
 import BlackJack.Client (Client (..), Result (..), asText, startClient)
 import BlackJack.Server (CommitResult (CommitDone, NoMatchingCoin), InitResult (..), IsChain (..), Server (..))
+import Control.Monad.Class.MonadAsync (concurrently)
 import Control.Monad.IOSim (runSimOrThrow)
 import Data.Function ((&))
 import Data.Monoid (Sum (..))
@@ -43,6 +44,18 @@ spec = do
             newTable (partyId @MockChain <$> parties)
 
       result `shouldBe` TableCreationFailed "fail to init"
+    it "is notified when invited to a new table" $ do
+      let result = runSimOrThrow $ do
+            let peers = [Party "alice", Party "bob"]
+                server = connectedServer [] peers
+                client1 = do
+                  Client{newTable} <- startClient server
+                  newTable ["bob"]
+                client2 = do
+                  Client{notify} <- startClient server
+                  notify
+            concurrently client1 client2
+      result `shouldBe` (TableCreated [Party "bob"] mockId, Just (TableCreated [Party "alice"] mockId))
 
   describe "Fund Table" $ do
     prop "commit to head some funds given table created" prop_commit_to_head_when_funding_table
@@ -73,7 +86,7 @@ prop_commit_fail_on_non_matching_coins (KnownParties parties) =
   forAll arbitrary $ \(getPositive -> value) ->
     let expectedError = NoMatchingCoin value []
         result = runSimOrThrow $ do
-          Client{newTable, fundTable} <- startClient ((connectedServer [] parties){commit = const $ pure $ pure expectedError})
+          Client{newTable, fundTable} <- startClient ((connectedServer [] parties){commit = const $ const $ pure $ pure expectedError})
           TableCreated{tableId} <- newTable (partyId @MockChain <$> parties)
           fundTable tableId value
      in result === TableFundingFailed (asText expectedError)
@@ -85,7 +98,10 @@ instance Arbitrary KnownParties where
   arbitrary =
     KnownParties
       <$> sublistOf
-        (Party <$> ["bob", "carol", "daniel", "emily", "francis"])
+        (Party <$> knownNames)
+
+knownNames :: [Text]
+knownNames = ["bob", "carol", "daniel", "emily", "francis"]
 
 newtype Committable = Committable [MockCoin]
   deriving newtype (Eq, Show)
@@ -122,5 +138,5 @@ connectedServer :: Monad m => [MockCoin] -> [MockParty] -> Server MockChain m
 connectedServer _coins parties =
   Server
     { initHead = \ps -> pure (pure $ InitDone mockId $ filter (\p -> partyId @MockChain p `elem` ps) parties)
-    , commit = \value -> pure (pure $ CommitDone $ MockCoin value)
+    , commit = \value _ -> pure (pure $ CommitDone $ MockCoin value)
     }

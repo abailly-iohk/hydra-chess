@@ -26,6 +26,8 @@ library
   ghc-options:     -Wall -Werror
   exposed-modules:
     BlackJack.Client
+    BlackJack.Client.Console
+    BlackJack.Client.IO
     BlackJack.Server
 
   build-depends:
@@ -33,6 +35,8 @@ library
     , black-jack-core
     , containers
     , io-classes
+    , megaparsec
+    , mtl
     , QuickCheck
     , random
     , text
@@ -55,7 +59,10 @@ executable black-jack-client
 test-suite tests
   ghc-options:        -threaded -rtsopts -with-rtsopts=-N -Wall -Werror
   hs-source-dirs:     test
-  other-modules:      BlackJack.ClientSpec
+  other-modules:
+    BlackJack.Client.IOSpec
+    BlackJack.ClientSpec
+
   main-is:            Spec.hs
   type:               exitcode-stdio-1.0
   build-depends:
