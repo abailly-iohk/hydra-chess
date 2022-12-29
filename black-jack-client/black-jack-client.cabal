@@ -55,8 +55,10 @@ executable black-jack-client
   -- other-extensions:
   build-depends:
     , aeson
-    , base               ^>=4.14.3.0
+    , base                  ^>=4.14.3.0
     , black-jack-client
+    , optparse-applicative
+    , text
 
   hs-source-dirs:   app
   default-language: Haskell2010
@@ -74,8 +76,10 @@ executable mock-server
     , base                  ^>=4.14.3.0
     , black-jack-client
     , bytestring
+    , containers
     , http-types
     , optparse-applicative
+    , stm
     , text
     , time
     , wai

@@ -1,4 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -10,7 +12,9 @@
 module BlackJack.Server where
 
 import Control.Exception (Exception)
+import Data.Aeson (FromJSON, ToJSON)
 import Data.Text (Text)
+import GHC.Generics (Generic)
 
 data Message = Ping
   deriving (Eq, Show)
@@ -69,3 +73,7 @@ data CommitResult c
 
 deriving instance IsChain c => Show (CommitResult c)
 deriving instance IsChain c => Eq (CommitResult c)
+
+data Host = Host {host :: Text, port :: Int}
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)

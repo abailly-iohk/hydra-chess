@@ -1,6 +1,5 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -9,7 +8,7 @@
 
 module BlackJack.Server.Mock where
 
-import BlackJack.Server (InitResult (..), IsChain (..), Server (..))
+import BlackJack.Server (Host (..), InitResult (..), IsChain (..), Server (..))
 import Control.Exception (Exception, throwIO)
 import Control.Monad (when)
 import Data.Aeson (FromJSON, ToJSON, decode)
@@ -27,13 +26,13 @@ import Network.HTTP.Simple (
  )
 import Test.QuickCheck (Arbitrary (..), getPositive)
 
-withMockServer :: String -> (Server MockChain IO -> IO ()) -> IO ()
-withMockServer myId k =
-  newMockServer (pack myId) >>= k
+withMockServer :: String -> Host -> (Server MockChain IO -> IO ()) -> IO ()
+withMockServer myId myHost k =
+  newMockServer (pack myId) myHost >>= k
 
-newMockServer :: Text -> IO (Server MockChain IO)
-newMockServer myId = do
-  cnx <- connectToServer "localhost" 56789 myId
+newMockServer :: Text -> Host -> IO (Server MockChain IO)
+newMockServer myId myHost = do
+  cnx <- connectToServer "localhost" 56789 myId myHost
   pure $
     Server
       { initHead = \peers -> do
@@ -47,29 +46,27 @@ data MockServerError = MockServerError String
 
 instance Exception MockServerError
 
-type Host = (String, Int)
-
-connectToServer :: String -> Int -> Text -> IO Host
-connectToServer host port myId = do
-  request <- parseRequest $ "http://" <> host <> ": " <> show port <> "/connect/" <> unpack myId
-  response <- httpLBS request
+connectToServer :: String -> Int -> Text -> Host -> IO Host
+connectToServer host port myId myHost = do
+  request <- parseRequest $ "POST http://" <> host <> ":" <> show port <> "/connect/" <> unpack myId
+  response <- httpLBS $ setRequestBodyJSON myHost request
   when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to register with id " <> show myId)
-  pure (host, port)
+  pure $ Host{host = pack host, port}
 
 data HeadId = HeadId {headId :: Text}
   deriving stock (Eq, Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
 sendInit :: Host -> [Text] -> IO HeadId
-sendInit (host, port) peers = do
-  request <- parseRequest $ "POST http://" <> host <> ": " <> show port <> "/init"
+sendInit Host{host, port} peers = do
+  request <- parseRequest $ "POST http://" <> unpack host <> ":" <> show port <> "/init"
   response <- httpJSON $ setRequestBodyJSON peers request
   when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to init head for peers " <> show peers)
   pure $ getResponseBody response
 
 checkInit :: Host -> Text -> IO (InitResult MockChain)
-checkInit (host, port) headId = do
-  request <- parseRequest $ "GET http://" <> host <> ": " <> show port <> "/init/" <> unpack headId
+checkInit Host{host, port} headId = do
+  request <- parseRequest $ "GET http://" <> unpack host <> ":" <> show port <> "/init/" <> unpack headId
   response <- httpLBS request
   case getResponseStatusCode response of
     201 ->
