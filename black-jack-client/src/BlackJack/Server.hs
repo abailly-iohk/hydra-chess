@@ -57,7 +57,13 @@ data Server c m = Server
     -- Returns an action that can be used to check whether or not the commit is done, or
     -- failed.
     commit :: Integer -> Text -> m (m (CommitResult c))
+  , poll :: m (Maybe (FromChain c))
   }
+
+data FromChain c = HeadCreated {headId :: Text, parties :: [Party c]}
+
+deriving instance IsChain c => Show (FromChain c)
+deriving instance IsChain c => Eq (FromChain c)
 
 data InitResult c
   = InitDone {headId :: Text, parties :: [Party c]}

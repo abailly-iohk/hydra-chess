@@ -11,7 +11,7 @@
 module BlackJack.Client where
 
 import BlackJack.Client.IO (Command (..), Err (..), HasIO (..), Output (Bye, Ko, Ok))
-import BlackJack.Server (CommitResult (..), InitResult (..), IsChain (..), Server (..))
+import BlackJack.Server (CommitResult (..), FromChain (..), InitResult (..), IsChain (..), Server (..))
 import Control.Monad.Class.MonadThrow (MonadThrow)
 import Control.Monad.Class.MonadTimer (MonadDelay, threadDelay)
 import Data.Text (Text, pack)
@@ -53,7 +53,10 @@ startClient server = pure $ Client{newTable, fundTable, notify}
       CommitDone c -> pure $ TableFunded c tid
       other -> pure $ TableFundingFailed $ asText other
 
-  notify = pure Nothing
+  notify =
+    poll server >>= \case
+      Just HeadCreated{headId, parties} -> pure $ Just TableCreated{tableId = headId, parties}
+      Nothing -> pure Nothing
 
 asText :: IsChain c => CommitResult c -> Text
 asText CommitDone{coin} = pack $ "commit done with coin " <> show coin

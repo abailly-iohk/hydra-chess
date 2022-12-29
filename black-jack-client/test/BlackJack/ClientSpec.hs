@@ -2,6 +2,7 @@
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
@@ -11,13 +12,14 @@
 module BlackJack.ClientSpec where
 
 import BlackJack.Client (Client (..), Result (..), asText, startClient)
-import BlackJack.Server (CommitResult (CommitDone, NoMatchingCoin), Host (Host), InitResult (..), IsChain (..), Server (..))
+import BlackJack.Server (CommitResult (..), FromChain (..), Host (Host), InitResult (..), IsChain (..), Server (..))
 import BlackJack.Server.Mock (MockChain, MockCoin (MockCoin), MockParty (..))
-import Control.Monad.Class.MonadAsync (concurrently)
+import Control.Monad.Class.MonadAsync (MonadAsync (race_), concurrently)
+import Control.Monad.Class.MonadTimer (threadDelay)
 import Control.Monad.IOSim (runSimOrThrow)
 import Data.Function ((&))
 import Data.Text (Text)
-import Test.Hspec (Spec, describe, it, shouldBe)
+import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (
   Arbitrary (..),
@@ -45,22 +47,33 @@ spec = do
             newTable (partyId @MockChain <$> parties)
 
       result `shouldBe` TableCreationFailed "fail to init"
-    it "is notified when invited to a new table" $ do
-      let result = runSimOrThrow $ do
-            let peers = [alice, bob]
-                server = connectedServer [] peers
-                client1 = do
-                  Client{newTable} <- startClient server
-                  newTable ["bob"]
-                client2 = do
-                  Client{notify} <- startClient server
-                  notify
-            concurrently client1 client2
-      result `shouldBe` (TableCreated [bob] mockId, Just (TableCreated [alice] mockId))
+
+    it "is notified when invited to a new table" $
+      failAfter 10 $ do
+        let res = runSimOrThrow $ do
+              let peers = [alice, bob]
+                  server = (connectedServer [] peers){poll = pure $ Just $ HeadCreated mockId peers}
+                  waitForSomething notif = do
+                    notif >>= \case
+                      Nothing -> threadDelay 1 >> waitForSomething notif
+                      Just r -> pure r
+                  client1 = do
+                    Client{newTable} <- startClient server
+                    newTable ["bob"]
+                  client2 = do
+                    Client{notify} <- startClient server
+                    waitForSomething notify
+              concurrently client1 client2
+        res `shouldBe` (TableCreated [bob] mockId, TableCreated [alice, bob] mockId)
 
   describe "Fund Table" $ do
     prop "commit to head some funds given table created" prop_commit_to_head_when_funding_table
     prop "commit fails when funds do not match existing coins" prop_commit_fail_on_non_matching_coins
+
+failAfter :: Int -> IO () -> IO ()
+failAfter duration =
+  race_
+    (threadDelay (fromIntegral duration) >> expectationFailure ("Timeout fired after " <> show duration <> "s"))
 
 prop_init_head_on_new_table :: KnownParties -> Property
 prop_init_head_on_new_table (KnownParties parties) =
@@ -123,4 +136,5 @@ connectedServer _coins parties =
   Server
     { initHead = \ps -> pure (pure $ InitDone mockId $ filter (\p -> partyId @MockChain p `elem` ps) parties)
     , commit = \value _ -> pure (pure $ CommitDone $ MockCoin value)
+    , poll = pure $ Just $ HeadCreated mockId parties
     }

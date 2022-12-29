@@ -39,6 +39,7 @@ newMockServer myParty = do
           HeadId{headId} <- sendInit cnx peers
           pure $ checkInit cnx headId
       , commit = error "undefined"
+      , poll = error "undefined"
       }
 
 data MockServerError = MockServerError String
@@ -61,8 +62,7 @@ sendInit :: Host -> [Text] -> IO HeadId
 sendInit Host{host, port} peers = do
   request <- parseRequest $ "POST http://" <> unpack host <> ":" <> show port <> "/init"
   response <- httpJSON $ setRequestBodyJSON peers request
-  when (getResponseStatusCode response /= 200) $
-    throwIO $ MockServerError ("Failed to init head for peers " <> show peers)
+  when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to init head for peers " <> show peers)
   pure $ getResponseBody response
 
 checkInit :: Host -> Text -> IO (InitResult MockChain)
