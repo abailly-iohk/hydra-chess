@@ -5,8 +5,9 @@ module BlackJack.Client.ConsoleSpec where
 
 import BlackJack.Client.Console (readInput)
 import BlackJack.Client.IO (Command (..))
-import BlackJack.ClientSpec (KnownParties (KnownParties), MockChain)
+import BlackJack.ClientSpec (KnownParties (KnownParties))
 import BlackJack.Server (partyId)
+import BlackJack.Server.Mock (MockChain)
 import qualified Data.Text as Text
 import Test.Hspec (Spec, it, shouldBe)
 import Test.Hspec.QuickCheck (prop)

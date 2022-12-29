@@ -11,10 +11,10 @@ module BlackJack.ClientSpec where
 
 import BlackJack.Client (Client (..), Result (..), asText, startClient)
 import BlackJack.Server (CommitResult (CommitDone, NoMatchingCoin), InitResult (..), IsChain (..), Server (..))
+import BlackJack.Server.Mock (MockChain, MockCoin (MockCoin), MockParty (Party))
 import Control.Monad.Class.MonadAsync (concurrently)
 import Control.Monad.IOSim (runSimOrThrow)
 import Data.Function ((&))
-import Data.Monoid (Sum (..))
 import Data.Text (Text)
 import Test.Hspec (Spec, describe, it, shouldBe)
 import Test.Hspec.QuickCheck (prop)
@@ -109,27 +109,6 @@ newtype Committable = Committable [MockCoin]
 instance Arbitrary Committable where
   arbitrary = Committable . getNonEmpty <$> arbitrary
   shrink (Committable coins) = Committable <$> filter (not . null) (shrink coins)
-
-data MockChain = MockChain
-
-newtype MockCoin = MockCoin Integer
-  deriving newtype (Eq, Show)
-  deriving (Semigroup, Monoid) via Sum Integer
-
-instance Arbitrary MockCoin where
-  arbitrary = MockCoin . getPositive <$> arbitrary
-  shrink (MockCoin c) = MockCoin <$> shrink c
-
-newtype MockParty = Party Text
-  deriving newtype (Eq, Show)
-
-instance IsChain MockChain where
-  type Party MockChain = MockParty
-  type Coin MockChain = MockCoin
-
-  partyId (Party s) = s
-
-  coinValue (MockCoin c) = c
 
 mockId :: Text
 mockId = "1234"

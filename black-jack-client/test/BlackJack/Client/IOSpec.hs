@@ -4,7 +4,7 @@ module BlackJack.Client.IOSpec where
 
 import BlackJack.Client (Client (..), Result (..), runClient)
 import BlackJack.Client.IO (Command (..), Output (..), withInput)
-import BlackJack.ClientSpec (MockChain)
+import BlackJack.Server.Mock (MockChain)
 import Test.Hspec (Spec, it, shouldBe)
 
 spec :: Spec
