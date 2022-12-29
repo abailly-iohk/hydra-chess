@@ -26,13 +26,13 @@ import Network.HTTP.Simple (
  )
 import Test.QuickCheck (Arbitrary (..), getPositive)
 
-withMockServer :: String -> Host -> (Server MockChain IO -> IO ()) -> IO ()
-withMockServer myId myHost k =
-  newMockServer (pack myId) myHost >>= k
+withMockServer :: MockParty -> (Server MockChain IO -> IO ()) -> IO ()
+withMockServer myParty k =
+  newMockServer myParty >>= k
 
-newMockServer :: Text -> Host -> IO (Server MockChain IO)
-newMockServer myId myHost = do
-  cnx <- connectToServer "localhost" 56789 myId myHost
+newMockServer :: MockParty -> IO (Server MockChain IO)
+newMockServer myParty = do
+  cnx <- connectToServer "localhost" 56789 myParty
   pure $
     Server
       { initHead = \peers -> do
@@ -46,11 +46,11 @@ data MockServerError = MockServerError String
 
 instance Exception MockServerError
 
-connectToServer :: String -> Int -> Text -> Host -> IO Host
-connectToServer host port myId myHost = do
-  request <- parseRequest $ "POST http://" <> host <> ":" <> show port <> "/connect/" <> unpack myId
-  response <- httpLBS $ setRequestBodyJSON myHost request
-  when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to register with id " <> show myId)
+connectToServer :: String -> Int -> MockParty -> IO Host
+connectToServer host port myParty = do
+  request <- parseRequest $ "POST http://" <> host <> ":" <> show port <> "/connect/" <> unpack (pid myParty)
+  response <- httpLBS $ setRequestBodyJSON myParty request
+  when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to register with id " <> show myParty)
   pure $ Host{host = pack host, port}
 
 data HeadId = HeadId {headId :: Text}
@@ -61,7 +61,8 @@ sendInit :: Host -> [Text] -> IO HeadId
 sendInit Host{host, port} peers = do
   request <- parseRequest $ "POST http://" <> unpack host <> ":" <> show port <> "/init"
   response <- httpJSON $ setRequestBodyJSON peers request
-  when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to init head for peers " <> show peers)
+  when (getResponseStatusCode response /= 200) $
+    throwIO $ MockServerError ("Failed to init head for peers " <> show peers)
   pure $ getResponseBody response
 
 checkInit :: Host -> Text -> IO (InitResult MockChain)
@@ -91,14 +92,14 @@ instance Arbitrary MockCoin where
   arbitrary = MockCoin . getPositive <$> arbitrary
   shrink (MockCoin c) = MockCoin <$> shrink c
 
-newtype MockParty = Party Text
-  deriving newtype (Eq, Show)
-  deriving newtype (ToJSON, FromJSON)
+data MockParty = Party {host :: Host, pid :: Text}
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)
 
 instance IsChain MockChain where
   type Party MockChain = MockParty
   type Coin MockChain = MockCoin
 
-  partyId (Party s) = s
+  partyId Party{pid} = pid
 
   coinValue (MockCoin c) = c

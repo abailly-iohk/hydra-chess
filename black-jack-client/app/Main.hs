@@ -1,3 +1,4 @@
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
 module Main where
@@ -5,7 +6,7 @@ module Main where
 import BlackJack.Client (runClient, startClient)
 import BlackJack.Client.Console ()
 import BlackJack.Server (Host (..))
-import BlackJack.Server.Mock (withMockServer)
+import BlackJack.Server.Mock (MockParty (..), pid, withMockServer)
 import Control.Monad ((>=>))
 import Data.Text (pack)
 import Options.Applicative (
@@ -76,4 +77,4 @@ main = do
   hSetBuffering stdout NoBuffering
   hSetBuffering stderr NoBuffering
   Options{myId, myHost} <- execParser blackJackClientInfo
-  withMockServer myId myHost $ startClient >=> runClient
+  withMockServer Party{pid = pack myId, host = myHost} $ startClient >=> runClient

@@ -10,7 +10,7 @@
 
 module BlackJack.Client where
 
-import BlackJack.Client.IO (Command (..), Err (..), HasIO (..), Output (Bye))
+import BlackJack.Client.IO (Command (..), Err (..), HasIO (..), Output (Bye, Ko, Ok))
 import BlackJack.Server (CommitResult (..), InitResult (..), IsChain (..), Server (..))
 import Control.Monad.Class.MonadThrow (MonadThrow)
 import Control.Monad.Class.MonadTimer (MonadDelay, threadDelay)
@@ -59,7 +59,7 @@ asText :: IsChain c => CommitResult c -> Text
 asText CommitDone{coin} = pack $ "commit done with coin " <> show coin
 asText NoMatchingCoin{value} = pack $ "no matching coins for value " <> show value
 
-runClient :: HasIO m => Client c m -> m ()
+runClient :: (HasIO m, IsChain c) => Client c m -> m ()
 runClient client = loop
  where
   loop = do
@@ -70,5 +70,11 @@ runClient client = loop
       Right Quit -> output Bye
       Right cmd -> handleCommand client cmd >>= output >> loop
 
-handleCommand :: HasIO m => Client c m -> Command -> m Output
-handleCommand _client = error "not implemented"
+handleCommand :: (HasIO m, IsChain c) => Client c m -> Command -> m Output
+handleCommand Client{newTable} = \case
+  NewTable peers ->
+    newTable peers >>= \case
+      ok@TableCreated{} -> pure . Ok . pack . show $ ok
+      TableCreationFailed{failureReason} -> pure $ Ko failureReason
+      _ -> error "undefined"
+  Quit -> pure Bye

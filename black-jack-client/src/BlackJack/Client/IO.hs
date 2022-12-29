@@ -16,7 +16,10 @@ data Command
   | Quit
   deriving (Eq, Show)
 
-data Output = Bye
+data Output
+  = Bye
+  | Ok Text
+  | Ko Text
   deriving (Eq, Show)
 
 data Err = EOF | Err Text

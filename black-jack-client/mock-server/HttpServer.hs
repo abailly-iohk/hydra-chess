@@ -5,11 +5,13 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module HttpServer where
 
 import BlackJack.Server (Host)
-import Control.Concurrent.STM (TVar, atomically, modifyTVar', newTVarIO)
+import BlackJack.Server.Mock (MockParty)
+import Control.Concurrent.STM (TVar, atomically, modifyTVar', newTVarIO, readTVarIO)
 import Control.Monad ((>=>))
 import Data.Aeson (FromJSON, ToJSON, Value (Object), decode, eitherDecode, encode, toJSON)
 import Data.Aeson.KeyMap (insert)
@@ -51,7 +53,7 @@ httpServer host port =
     app req $ \res -> do
       result <- send res
       end <- GHC.Clock.getMonotonicTime
-      let time = end - start / 1_000_000_000
+      let time = (end - start) * 1_000
       let status = statusCode $ responseStatus res
       doLog HttpResponse{status, time}
       pure result
@@ -67,7 +69,7 @@ httpServer host port =
       & Warp.setBeforeMainLoop (doLog HttpServerListening{host = pack host, port})
 
 data Chain = Chain
-  { knownHosts :: Map Text Host
+  { knownHosts :: Map Text MockParty
   }
   deriving stock (Eq, Show)
 
@@ -75,19 +77,27 @@ app :: TVar Chain -> Application
 app state req send =
   route (requestMethod req) (pathInfo req)
  where
-  route "POST" ["connect", hostId] = handleConnect state hostId
-  route "POST" ["init"] = error "not implemented"
+  route "POST" ["connect", hostId] = handleConnect hostId
+  route "POST" ["init"] = handleInit
   route "GET" ["init", headId] = error "not implemented"
   route "GET" _ = send $ responseLBS notFound404 [] ""
   route method _ = send $ responseLBS methodNotAllowed405 [] ""
 
-  handleConnect state hostId = do
+  handleConnect hostId = do
     decoded <- eitherDecode <$> strictRequestBody req
     case decoded of
       Left err -> send $ responseLBS badRequest400 [] "Invalid host info body"
       Right hostInfo -> do
         atomically $ modifyTVar' state $ \chain@Chain{knownHosts} -> chain{knownHosts = Map.insert hostId hostInfo knownHosts}
         send $ responseLBS ok200 [] ""
+
+  handleInit = do
+    decoded <- eitherDecode <$> strictRequestBody req
+    case decoded of
+      Left err -> send $ responseLBS badRequest400 [] "Invalid peers body"
+      Right (peers :: [MockParty]) -> do
+        Chain{knownHosts} <- readTVarIO state
+        send $ responseLBS ok200 [] $ encode $ Map.elems $ Map.filter (`elem` peers) knownHosts
 
 doLog :: (ToJSON a) => a -> IO ()
 doLog l = do

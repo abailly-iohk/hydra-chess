@@ -1,5 +1,6 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -10,8 +11,8 @@
 module BlackJack.ClientSpec where
 
 import BlackJack.Client (Client (..), Result (..), asText, startClient)
-import BlackJack.Server (CommitResult (CommitDone, NoMatchingCoin), InitResult (..), IsChain (..), Server (..))
-import BlackJack.Server.Mock (MockChain, MockCoin (MockCoin), MockParty (Party))
+import BlackJack.Server (CommitResult (CommitDone, NoMatchingCoin), Host (Host), InitResult (..), IsChain (..), Server (..))
+import BlackJack.Server.Mock (MockChain, MockCoin (MockCoin), MockParty (..))
 import Control.Monad.Class.MonadAsync (concurrently)
 import Control.Monad.IOSim (runSimOrThrow)
 import Data.Function ((&))
@@ -46,7 +47,7 @@ spec = do
       result `shouldBe` TableCreationFailed "fail to init"
     it "is notified when invited to a new table" $ do
       let result = runSimOrThrow $ do
-            let peers = [Party "alice", Party "bob"]
+            let peers = [alice, bob]
                 server = connectedServer [] peers
                 client1 = do
                   Client{newTable} <- startClient server
@@ -55,7 +56,7 @@ spec = do
                   Client{notify} <- startClient server
                   notify
             concurrently client1 client2
-      result `shouldBe` (TableCreated [Party "bob"] mockId, Just (TableCreated [Party "alice"] mockId))
+      result `shouldBe` (TableCreated [bob] mockId, Just (TableCreated [alice] mockId))
 
   describe "Fund Table" $ do
     prop "commit to head some funds given table created" prop_commit_to_head_when_funding_table
@@ -97,11 +98,15 @@ newtype KnownParties = KnownParties [MockParty]
 instance Arbitrary KnownParties where
   arbitrary =
     KnownParties
-      <$> sublistOf
-        (Party <$> knownNames)
+      <$> sublistOf [bob, carol, daniel, emily, francis]
 
-knownNames :: [Text]
-knownNames = ["bob", "carol", "daniel", "emily", "francis"]
+alice, bob, carol, daniel, emily, francis :: MockParty
+alice = Party{host = Host "1.2.3.4" 1234, pid = "alice"}
+bob = Party{host = Host "1.2.3.5" 2345, pid = "bob"}
+carol = Party{host = Host "1.2.3.6" 2345, pid = "carol"}
+daniel = Party{host = Host "1.2.3.7" 2345, pid = "daniel"}
+emily = Party{host = Host "1.2.3.8" 2345, pid = "emily"}
+francis = Party{host = Host "1.2.3.9" 2345, pid = "francis"}
 
 newtype Committable = Committable [MockCoin]
   deriving newtype (Eq, Show)
