@@ -10,7 +10,7 @@
 
 module BlackJack.Client where
 
-import BlackJack.Client.IO (Command (..), EOF (EOF), HasIO (..), Output (Bye))
+import BlackJack.Client.IO (Command (..), Err (..), HasIO (..), Output (Bye))
 import BlackJack.Server (CommitResult (..), InitResult (..), IsChain (..), Server (..))
 import Control.Monad.Class.MonadThrow (MonadThrow)
 import Control.Monad.Class.MonadTimer (MonadDelay, threadDelay)
@@ -66,6 +66,7 @@ runClient client = loop
     prompt
     input >>= \case
       Left EOF -> pure ()
+      Left (Err _) -> loop
       Right Quit -> output Bye
       Right cmd -> handleCommand client cmd >>= output >> loop
 

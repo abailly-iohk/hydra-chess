@@ -19,12 +19,12 @@ data Command
 data Output = Bye
   deriving (Eq, Show)
 
-data EOF = EOF
+data Err = EOF | Err Text
   deriving (Eq, Show)
 
 class Monad m => HasIO m where
   output :: Output -> m ()
-  input :: m (Either EOF Command)
+  input :: m (Either Err Command)
   prompt :: m ()
 
 -- * Pure IO
