@@ -14,9 +14,13 @@ module BlackJack.Server where
 
 import Control.Exception (Exception)
 import Data.Aeson (FromJSON, ToJSON)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base16 as Hex
 import Data.String (IsString)
 import Data.Text (Text)
+import Data.Text.Encoding (decodeUtf8)
 import GHC.Generics (Generic)
+import Test.QuickCheck (Arbitrary (arbitrary), vectorOf)
 
 data Message = Ping
   deriving (Eq, Show)
@@ -53,6 +57,9 @@ class
 
 newtype HeadId = HeadId {headId :: Text}
   deriving newtype (Eq, Show, Ord, IsString, ToJSON, FromJSON)
+
+instance Arbitrary HeadId where
+  arbitrary = HeadId . decodeUtf8 . Hex.encode . BS.pack <$> vectorOf 16 arbitrary
 
 -- | A handle to some underlying server for a single Head.
 data Server c m = Server

@@ -8,7 +8,7 @@
 
 module BlackJack.Server.Mock where
 
-import BlackJack.Server (HeadId, Host (..), Indexed, IsChain (..), Server (..))
+import BlackJack.Server (HeadId (HeadId), Host (..), Indexed, IsChain (..), Server (..))
 import Control.Exception (Exception, throwIO)
 import Control.Monad (when)
 import Data.Aeson (FromJSON, ToJSON)
@@ -35,7 +35,7 @@ newMockServer myParty = do
   pure $
     Server
       { initHead = sendInit cnx
-      , commit = error "undefined"
+      , commit = sendCommit cnx (pid myParty)
       , poll = pollEvents cnx
       }
 
@@ -57,6 +57,23 @@ sendInit Host{host, port} peers = do
   response <- httpJSON $ setRequestBodyJSON peers request
   when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to init head for peers " <> show peers)
   pure $ getResponseBody response
+
+sendCommit :: Host -> Text -> Integer -> HeadId -> IO ()
+sendCommit Host{host, port} myId amount (HeadId headId) = do
+  request <-
+    parseRequest $
+      "POST http://"
+        <> unpack host
+        <> ":"
+        <> show port
+        <> "/commit/"
+        <> unpack headId
+        <> "/"
+        <> unpack myId
+        <> "/"
+        <> show amount
+  response <- httpLBS request
+  when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to commit for peers " <> show myId)
 
 pollEvents :: Host -> Integer -> Integer -> IO (Indexed MockChain)
 pollEvents Host{host, port} index num = do

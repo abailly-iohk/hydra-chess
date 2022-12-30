@@ -9,8 +9,8 @@
 
 module HttpServer where
 
-import BlackJack.Server (FromChain (HeadCreated), HeadId (HeadId), Host, Indexed (..))
-import BlackJack.Server.Mock (MockChain, MockParty)
+import BlackJack.Server (FromChain (FundCommitted, HeadCreated), HeadId (..), Host, Indexed (..), headId)
+import BlackJack.Server.Mock (MockChain, MockCoin (MockCoin), MockParty (Party), pid)
 import Control.Concurrent.STM (TVar, atomically, modifyTVar', newTVarIO, readTVar, readTVarIO, writeTVar)
 import Control.Monad (replicateM, (>=>))
 import Data.Aeson (FromJSON, ToJSON, Value (Object), decode, eitherDecode, encode, toJSON)
@@ -19,6 +19,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.Foldable (toList)
 import Data.Function ((&))
+import qualified Data.List as List
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
@@ -73,7 +74,10 @@ httpServer host port =
       & Warp.setServerName "mock-chain"
       & Warp.setBeforeMainLoop (doLog HttpServerListening{host = pack host, port})
 
-data HeadState = Initialising [MockParty]
+data HeadState = Initialising
+  { parties :: [MockParty]
+  , committed :: Map Text Integer
+  }
   deriving (Eq, Show)
 
 data Chain = Chain
@@ -89,6 +93,7 @@ app state req send =
  where
   route "POST" ["connect", hostId] = handleConnect hostId
   route "POST" ["init"] = handleInit
+  route "POST" ["commit", headId, partyId, amount] = handleCommit (HeadId headId) partyId (read $ unpack amount)
   route "GET" ["events", idx, num] = handleEvents (read $ unpack idx) (read $ unpack num)
   route "GET" _ = send $ responseLBS notFound404 [] ""
   route method _ = send $ responseLBS methodNotAllowed405 [] ""
@@ -112,11 +117,32 @@ app state req send =
           let headPeers = mapMaybe (`Map.lookup` knownHosts) peers
               chain' =
                 chain
-                  { heads = Map.insert newHeadId (Initialising headPeers) heads
+                  { heads = Map.insert newHeadId (Initialising headPeers mempty) heads
                   , events = events |> HeadCreated newHeadId headPeers
                   }
           writeTVar state chain'
         send $ responseLBS ok200 [] $ encode newHeadId
+
+  handleCommit hid partyId amount = do
+    res <- atomically $ do
+      chain@Chain{heads, events} <- readTVar state
+      let head = Map.lookup hid heads
+      case head of
+        Nothing -> pure $ Left $ "cannot find headId " <> headId hid
+        Just h -> do
+          let party = List.find (\p -> pid p == partyId) $ parties h
+          case party of
+            Nothing -> pure $ Left $ "cannot find party " <> partyId
+            Just p@Party{} -> do
+              let head' = h{committed = Map.insert partyId amount (committed h)}
+                  chain' =
+                    chain
+                      { heads = Map.insert hid head' heads
+                      , events = events |> FundCommitted hid p (MockCoin amount)
+                      }
+              writeTVar state chain'
+              pure $ Right ()
+    send $ responseLBS (either (const badRequest400) (const ok200) res) [] ""
 
   handleEvents idx num = do
     Chain{events} <- readTVarIO state

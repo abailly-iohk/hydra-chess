@@ -11,7 +11,7 @@ module BlackJack.ClientSpec where
 
 import BlackJack.Client (runClient)
 import BlackJack.Client.IO (Command (..), Err (..), HasIO (..), Output (..))
-import BlackJack.Server (FromChain (..), Host (Host), IsChain (..), Server (..))
+import BlackJack.Server (FromChain (..), Host (Host), Indexed (Indexed), IsChain (..), Server (..))
 import BlackJack.Server.Mock (MockChain, MockCoin, MockParty (..))
 import Control.Concurrent.Class.MonadSTM (MonadSTM, atomically, modifyTVar', newTVarIO, readTVar, readTVarIO, writeTVar)
 import Control.Monad.Class.MonadAsync (MonadAsync (race_))
@@ -37,7 +37,7 @@ spec = do
       failAfter 10 $ do
         let res = runSimOrThrow $ do
               let peers = [alice, bob]
-                  server = connectedServer{poll = pure [HeadCreated @MockChain mockId peers]}
+                  server = connectedServer{poll = \_ _ -> pure $ Indexed 1 [HeadCreated @MockChain mockId peers]}
               withIOSimIO [] $ runClient server
         res `shouldBe` ((), [Ok (pack $ show $ HeadCreated @MockChain mockId [alice, bob])])
   describe "Fund Table" $ do
@@ -71,7 +71,7 @@ prop_commit_to_head_when_funding_table (KnownParties peers) (Committable coins) 
   forAll (elements coins) $ \c ->
     let value = coinValue @MockChain c
         result = runSimOrThrow $ do
-          let server = connectedServer{poll = pure [HeadCreated @MockChain mockId peers]}
+          let server = connectedServer{poll = \_ _ -> pure $ Indexed 0 [HeadCreated @MockChain mockId peers]}
           withIOSimIO [NewTable (pid <$> peers), FundTable mockId value] $ runClient server
      in Ok "committed" `elem` snd result
 
@@ -106,5 +106,5 @@ connectedServer =
   Server
     { initHead = \_ -> pure mockId
     , commit = \_ _ -> pure ()
-    , poll = pure []
+    , poll = \_ _ -> pure $ Indexed 0 []
     }

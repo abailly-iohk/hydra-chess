@@ -34,7 +34,9 @@ library
   build-depends:
     , aeson
     , base
+    , base16-bytestring
     , black-jack-core
+    , bytestring
     , containers
     , http-client
     , http-conduit

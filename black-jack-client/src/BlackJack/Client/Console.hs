@@ -4,7 +4,7 @@
 
 module BlackJack.Client.Console where
 
-import BlackJack.Client.IO (Command (NewTable, Quit), Err (..), HasIO (..))
+import BlackJack.Client.IO (Command (..), Err (..), HasIO (..))
 import Control.Applicative ((<|>))
 import Control.Exception (IOException, handle)
 import Data.Bifunctor (first)
@@ -40,7 +40,7 @@ readInput :: Text -> Either Text Command
 readInput = first (pack . show) . parse inputParser ""
 
 inputParser :: Parser Command
-inputParser = quitParser <|> newTableParser
+inputParser = quitParser <|> newTableParser <|> fundTableParser
 
 quitParser :: Parser Command
 quitParser = (try (string "q") <|> string "quit") $> Quit
@@ -50,6 +50,11 @@ newTableParser = do
   string "newTable" >> spaceConsumer
   NewTable <$> sepBy identifier space
 
+fundTableParser :: Parser Command
+fundTableParser = do
+  string "fundTable" >> spaceConsumer
+  FundTable <$> (identifier <* spaceConsumer) <*> L.decimal
+  
 identifier :: Parser Text
 identifier = pack <$> ((:) <$> alphaNumChar <*> many alphaNumChar)
 
