@@ -48,6 +48,7 @@ library
     , text
 
 executable black-jack-client
+  ghc-options:      -Wall -Werror
   main-is:          Main.hs
 
   -- Modules included in this executable, other than Main.
@@ -67,6 +68,7 @@ executable black-jack-client
   default-language: Haskell2010
 
 executable mock-server
+  ghc-options:      -Wall -Werror
   main-is:          Main.hs
 
   -- Modules included in this executable, other than Main.

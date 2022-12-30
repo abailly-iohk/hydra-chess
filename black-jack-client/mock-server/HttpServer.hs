@@ -142,7 +142,7 @@ app state req send =
       let head = Map.lookup hid heads
       case head of
         Nothing -> pure $ Left $ "cannot find headId " <> headId hid
-        Just h -> do
+        Just h@Initialising{} -> do
           let party = List.find (\p -> pid p == partyId) $ parties h
           case party of
             Nothing -> pure $ Left $ "cannot find party " <> partyId
@@ -166,6 +166,7 @@ app state req send =
                       }
               writeTVar state chain'
               pure $ Right ()
+        Just _ -> pure $ Right () -- TODO: really ignore?
     send $ responseLBS (either (const badRequest400) (const ok200) res) [] ""
 
   handlePlay hid partyId num = do
