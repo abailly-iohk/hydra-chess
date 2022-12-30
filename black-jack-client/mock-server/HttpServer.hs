@@ -85,7 +85,7 @@ app state req send =
  where
   route "POST" ["connect", hostId] = handleConnect hostId
   route "POST" ["init"] = handleInit
-  route "GET" ["events", _idx] = error "not implemented"
+  route "GET" ["events", idx] = handleEvents idx
   route "GET" _ = send $ responseLBS notFound404 [] ""
   route method _ = send $ responseLBS methodNotAllowed405 [] ""
 
@@ -109,6 +109,9 @@ app state req send =
               chain' = chain{heads = Map.insert newHeadId (Initialising headPeers) heads}
           writeTVar state chain'
         send $ responseLBS ok200 [] $ encode newHeadId
+
+  handleEvents ids = do
+    send $ responseLBS ok200 [] "[]"
 
 mkNewHeadId :: IO HeadId
 mkNewHeadId = HeadId . pack . fmap toChar <$> replicateM 32 randomNibble

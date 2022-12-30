@@ -4,7 +4,7 @@
 module Main where
 
 import BlackJack.Client (runClient, startClient)
-import BlackJack.Client.Console ()
+import BlackJack.Client.Console (mkImpureIO)
 import BlackJack.Server (Host (..))
 import BlackJack.Server.Mock (MockParty (..), pid, withMockServer)
 import Control.Monad ((>=>))
@@ -77,4 +77,4 @@ main = do
   hSetBuffering stdout NoBuffering
   hSetBuffering stderr NoBuffering
   Options{myId, myHost} <- execParser blackJackClientInfo
-  withMockServer Party{pid = pack myId, host = myHost} $ startClient >=> runClient
+  withMockServer Party{pid = pack myId, host = myHost} $ flip runClient mkImpureIO

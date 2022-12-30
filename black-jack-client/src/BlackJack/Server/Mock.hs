@@ -60,7 +60,7 @@ sendInit Host{host, port} peers = do
 
 pollEvents :: Host -> IO [FromChain MockChain]
 pollEvents Host{host, port} = do
-  request <- parseRequest $ "GET http://" <> unpack host <> ":" <> show port <> "/events"
+  request <- parseRequest $ "GET http://" <> unpack host <> ":" <> show port <> "/events/0"
   getResponseBody <$> httpJSON request
 
 data MockChain = MockChain

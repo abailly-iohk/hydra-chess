@@ -12,7 +12,7 @@
 module BlackJack.ClientSpec where
 
 import BlackJack.Client (Client (..), runClient, startClient)
-import BlackJack.Client.IO (Command, Err (EOF), HasIO (HasIO, input, output, prompt), Output (Ok))
+import BlackJack.Client.IO (Command (..), Err (..), HasIO (..), Output (..))
 import BlackJack.Server (FromChain (..), Host (Host), IsChain (..), Server (..), ServerException (ServerException))
 import BlackJack.Server.Mock (MockChain, MockCoin, MockParty (..))
 import Control.Concurrent.Class.MonadSTM (MonadSTM, atomically, modifyTVar', newTVarIO, readTVar, readTVarIO, writeTVar)
