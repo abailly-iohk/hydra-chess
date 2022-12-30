@@ -50,18 +50,18 @@ startClient server = pure $ Client{newTable, fundTable, notify}
       [] -> pure []
       _ -> error "not implemented"
 
-runClient :: (HasIO m, IsChain c) => Client c m -> m ()
-runClient client = loop
+runClient :: (IsChain c, Monad m) => Client c m -> HasIO m -> m ()
+runClient client io = loop
  where
   loop = do
-    prompt
-    input >>= \case
+    prompt io
+    input io >>= \case
       Left EOF -> pure ()
-      Left (Err err) -> output (Ko err) >> loop
-      Right Quit -> output Bye >> pure ()
-      Right cmd -> handleCommand client cmd >>= output >> loop
+      Left (Err err) -> output io (Ko err) >> loop
+      Right Quit -> output io Bye >> pure ()
+      Right cmd -> handleCommand client cmd >>= output io >> loop
 
-handleCommand :: (HasIO m, IsChain c) => Client c m -> Command -> m Output
+handleCommand :: (IsChain c, Monad m) => Client c m -> Command -> m Output
 handleCommand Client{newTable} = \case
   NewTable peers ->
     newTable peers <&> (\HeadId{headId} -> Ok . ("head initialised with id " <>) $ headId)

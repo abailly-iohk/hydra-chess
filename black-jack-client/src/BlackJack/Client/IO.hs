@@ -28,10 +28,11 @@ data Output
 data Err = EOF | Err Text
   deriving (Eq, Show)
 
-class Monad m => HasIO m where
-  output :: Output -> m ()
-  input :: m (Either Err Command)
-  prompt :: m ()
+data HasIO m = HasIO
+  { output :: Output -> m ()
+  , input :: m (Either Err Command)
+  , prompt :: m ()
+  }
 
 -- * Pure IO
 
@@ -40,23 +41,22 @@ data PureIO = PureIO
   , outputText :: [Output]
   }
 
-newtype Pure m a = Pure {runPure :: StateT PureIO m a}
-  deriving newtype (Functor, Applicative, Monad, MonadState PureIO, MonadTrans)
-
-instance Monad m => HasIO (Pure m) where
-  input = do
-    ins <- gets inputText
-    case ins of
-      [] -> pure $ Left EOF
-      (t : ts) -> modify (\e -> e{inputText = ts}) >> pure (Right t)
-
-  output t = modify $ \e -> e{outputText = t : outputText e}
-  prompt = pure ()
+mkPureIO :: (MonadState PureIO m) => HasIO m
+mkPureIO =
+  HasIO
+    { input = do
+        ins <- gets inputText
+        case ins of
+          [] -> pure $ Left EOF
+          (t : ts) -> modify (\e -> e{inputText = ts}) >> pure (Right t)
+    , output = \t -> modify $ \e -> e{outputText = t : outputText e}
+    , prompt = pure ()
+    }
 
 withInput ::
   Monad m =>
   [Command] ->
-  Pure m a ->
+  StateT PureIO m a ->
   m (a, [Output])
 withInput stream act =
-  second outputText <$> runStateT (runPure act) (PureIO stream [])
+  second outputText <$> runStateT act (PureIO stream [])

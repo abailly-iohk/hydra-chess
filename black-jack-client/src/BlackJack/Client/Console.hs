@@ -19,14 +19,17 @@ import qualified Text.Megaparsec.Char.Lexer as L
 
 type Parser = Parsec Void Text
 
-instance HasIO IO where
-  input = handle eofException $ do
-    inp <- readInput <$> Text.getLine
-    case inp of
-      Left err -> pure $ Left $ Err err
-      Right cmd -> pure $ Right cmd
-  output = print
-  prompt = putStr "> "
+mkImpureIO :: HasIO IO
+mkImpureIO =
+  HasIO
+    { input = handle eofException $ do
+        inp <- readInput <$> Text.getLine
+        case inp of
+          Left err -> pure $ Left $ Err err
+          Right cmd -> pure $ Right cmd
+    , output = print
+    , prompt = putStr "> "
+    }
 
 eofException :: IOException -> IO (Either Err Command)
 eofException e
