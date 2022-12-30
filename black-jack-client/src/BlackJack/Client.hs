@@ -11,10 +11,12 @@
 module BlackJack.Client where
 
 import BlackJack.Client.IO (Command (..), Err (..), HasIO (..), Output (Bye, Ko, Ok))
-import BlackJack.Server (CommitResult (..), FromChain (..), InitResult (..), IsChain (..), Server (..))
+import BlackJack.Server (FromChain (..), HeadId (HeadId), IsChain (..), Server (..))
+import qualified BlackJack.Server as Server
 import Control.Monad.Class.MonadThrow (MonadThrow)
-import Control.Monad.Class.MonadTimer (MonadDelay, threadDelay)
-import Data.Text (Text, pack)
+import Control.Monad.Class.MonadTimer (MonadDelay)
+import Data.Functor ((<&>))
+import Data.Text (Text)
 
 data Result c
   = TableCreated {parties :: [Party c], tableId :: Text}
@@ -26,9 +28,9 @@ deriving instance IsChain c => Eq (Result c)
 deriving instance IsChain c => Show (Result c)
 
 data Client c m = Client
-  { newTable :: [Text] -> m (Result c)
-  , fundTable :: Text -> Integer -> m (Result c)
-  , notify :: m (Maybe (Result c))
+  { newTable :: [Text] -> m HeadId
+  , fundTable :: HeadId -> Integer -> m ()
+  , notify :: m [Result c]
   }
 
 startClient ::
@@ -38,29 +40,15 @@ startClient ::
   m (Client c m)
 startClient server = pure $ Client{newTable, fundTable, notify}
  where
-  newTable ps = do
-    result <- initHead server ps
-    let loop =
-          result >>= \case
-            InitDone{headId, parties} -> pure $ TableCreated{parties, tableId = headId}
-            InitPending -> threadDelay 1 >> loop
-            InitFailed{reason} -> pure $ TableCreationFailed{failureReason = reason}
-    loop
+  newTable ps = initHead server ps
 
-  fundTable tid fund = do
-    result <- commit server fund tid
-    result >>= \case
-      CommitDone c -> pure $ TableFunded c tid
-      other -> pure $ TableFundingFailed $ asText other
+  fundTable tid fund = commit server fund tid
 
   notify =
     poll server >>= \case
-      Just HeadCreated{headId, parties} -> pure $ Just TableCreated{tableId = headId, parties}
-      Nothing -> pure Nothing
-
-asText :: IsChain c => CommitResult c -> Text
-asText CommitDone{coin} = pack $ "commit done with coin " <> show coin
-asText NoMatchingCoin{value} = pack $ "no matching coins for value " <> show value
+      HeadCreated{headId, parties} : _ -> pure [TableCreated{tableId = headId, parties}]
+      [] -> pure []
+      _ -> error "not implemented"
 
 runClient :: (HasIO m, IsChain c) => Client c m -> m ()
 runClient client = loop
@@ -69,15 +57,12 @@ runClient client = loop
     prompt
     input >>= \case
       Left EOF -> pure ()
-      Left (Err _) -> loop
-      Right Quit -> output Bye
+      Left (Err err) -> output (Ko err) >> loop
+      Right Quit -> output Bye >> pure ()
       Right cmd -> handleCommand client cmd >>= output >> loop
 
 handleCommand :: (HasIO m, IsChain c) => Client c m -> Command -> m Output
 handleCommand Client{newTable} = \case
   NewTable peers ->
-    newTable peers >>= \case
-      ok@TableCreated{} -> pure . Ok . pack . show $ ok
-      TableCreationFailed{failureReason} -> pure $ Ko failureReason
-      _ -> error "undefined"
+    newTable peers <&> (\HeadId{headId} -> Ok . ("head initialised with id " <>) $ headId)
   Quit -> pure Bye

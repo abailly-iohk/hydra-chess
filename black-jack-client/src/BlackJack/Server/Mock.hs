@@ -8,11 +8,10 @@
 
 module BlackJack.Server.Mock where
 
-import BlackJack.Server (Host (..), InitResult (..), IsChain (..), Server (..))
+import BlackJack.Server (FromChain, HeadId, Host (..), IsChain (..), Server (..))
 import Control.Exception (Exception, throwIO)
 import Control.Monad (when)
-import Data.Aeson (FromJSON, ToJSON, decode)
-import Data.Maybe (fromMaybe)
+import Data.Aeson (FromJSON, ToJSON)
 import Data.Semigroup (Sum (..))
 import Data.Text (Text, pack, unpack)
 import GHC.Generics (Generic)
@@ -35,11 +34,9 @@ newMockServer myParty = do
   cnx <- connectToServer "localhost" 56789 myParty
   pure $
     Server
-      { initHead = \peers -> do
-          HeadId{headId} <- sendInit cnx peers
-          pure $ checkInit cnx headId
+      { initHead = sendInit cnx
       , commit = error "undefined"
-      , poll = error "undefined"
+      , poll = pollEvents cnx
       }
 
 data MockServerError = MockServerError String
@@ -54,10 +51,6 @@ connectToServer host port myParty = do
   when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to register with id " <> show myParty)
   pure $ Host{host = pack host, port}
 
-data HeadId = HeadId {headId :: Text}
-  deriving stock (Eq, Show, Generic)
-  deriving anyclass (ToJSON, FromJSON)
-
 sendInit :: Host -> [Text] -> IO HeadId
 sendInit Host{host, port} peers = do
   request <- parseRequest $ "POST http://" <> unpack host <> ":" <> show port <> "/init"
@@ -65,22 +58,10 @@ sendInit Host{host, port} peers = do
   when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to init head for peers " <> show peers)
   pure $ getResponseBody response
 
-checkInit :: Host -> Text -> IO (InitResult MockChain)
-checkInit Host{host, port} headId = do
-  request <- parseRequest $ "GET http://" <> unpack host <> ":" <> show port <> "/init/" <> unpack headId
-  response <- httpLBS request
-  case getResponseStatusCode response of
-    201 ->
-      pure $
-        InitDone headId $
-          fromMaybe (error $ "failed to decode list of peers: " <> show (getResponseBody response)) $
-            decode (getResponseBody response)
-    202 -> pure InitPending
-    _ ->
-      pure $
-        InitFailed $
-          fromMaybe (error $ "failed to decode response: " <> show (getResponseBody response)) $
-            decode (getResponseBody response)
+pollEvents :: Host -> IO [FromChain MockChain]
+pollEvents Host{host, port} = do
+  request <- parseRequest $ "GET http://" <> unpack host <> ":" <> show port <> "/events"
+  getResponseBody <$> httpJSON request
 
 data MockChain = MockChain
 

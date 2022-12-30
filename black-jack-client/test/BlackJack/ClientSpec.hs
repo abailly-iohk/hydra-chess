@@ -11,15 +11,16 @@
 
 module BlackJack.ClientSpec where
 
-import BlackJack.Client (Client (..), Result (..), asText, startClient)
-import BlackJack.Server (CommitResult (..), FromChain (..), Host (Host), InitResult (..), IsChain (..), Server (..))
-import BlackJack.Server.Mock (MockChain, MockCoin (MockCoin), MockParty (..))
+import BlackJack.Client (Client (..), Result (..), startClient)
+import BlackJack.Server (FromChain (..), Host (Host), IsChain (..), Server (..), ServerException (ServerException))
+import BlackJack.Server.Mock (MockChain, MockCoin, MockParty (..))
 import Control.Monad.Class.MonadAsync (MonadAsync (race_), concurrently)
+import Control.Monad.Class.MonadThrow (MonadThrow (throwIO), evaluate)
 import Control.Monad.Class.MonadTimer (threadDelay)
 import Control.Monad.IOSim (runSimOrThrow)
 import Data.Function ((&))
-import Data.Text (Text)
-import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe)
+import Data.String (IsString)
+import Test.Hspec (Spec, anyException, describe, expectationFailure, it, shouldBe, shouldThrow)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (
   Arbitrary (..),
@@ -42,29 +43,29 @@ spec = do
       KnownParties parties <- generate arbitrary
 
       let result = runSimOrThrow $ do
-            let failingServer = (connectedServer [] parties){initHead = const $ pure (pure $ InitFailed "fail to init")}
+            let failingServer = connectedServer{initHead = const $ pure mockId}
             Client{newTable} <- startClient failingServer
             newTable (partyId @MockChain <$> parties)
 
-      result `shouldBe` TableCreationFailed "fail to init"
+      result `shouldBe` mockId
 
     it "is notified when invited to a new table" $
       failAfter 10 $ do
         let res = runSimOrThrow $ do
               let peers = [alice, bob]
-                  server = (connectedServer [] peers){poll = pure $ Just $ HeadCreated mockId peers}
-                  waitForSomething notif = do
-                    notif >>= \case
-                      Nothing -> threadDelay 1 >> waitForSomething notif
-                      Just r -> pure r
+                  server = connectedServer{poll = pure [HeadCreated @MockChain mockId peers]}
                   client1 = do
                     Client{newTable} <- startClient server
                     newTable ["bob"]
                   client2 = do
                     Client{notify} <- startClient server
-                    waitForSomething notify
+                    let waitForSomething = do
+                          notify >>= \case
+                            [] -> threadDelay 1 >> waitForSomething
+                            r -> pure r
+                    waitForSomething
               concurrently client1 client2
-        res `shouldBe` (TableCreated [bob] mockId, TableCreated [alice, bob] mockId)
+        res `shouldBe` (mockId, [TableCreated [alice, bob] mockId])
 
   describe "Fund Table" $ do
     prop "commit to head some funds given table created" prop_commit_to_head_when_funding_table
@@ -79,9 +80,9 @@ prop_init_head_on_new_table :: KnownParties -> Property
 prop_init_head_on_new_table (KnownParties parties) =
   forAll (sublistOf parties) $ \peers ->
     let result = runSimOrThrow $ do
-          Client{newTable} <- startClient (connectedServer [] parties)
+          Client{newTable} <- startClient connectedServer
           newTable (partyId @MockChain <$> peers)
-     in result == TableCreated peers mockId
+     in result == mockId
           & counterexample ("Result: " <> show result)
           & counterexample ("Peers: " <> show peers)
 
@@ -90,20 +91,19 @@ prop_commit_to_head_when_funding_table (KnownParties parties) (Committable coins
   forAll (elements coins) $ \coin ->
     let value = coinValue @MockChain coin
         result = runSimOrThrow $ do
-          Client{newTable, fundTable} <- startClient (connectedServer coins parties)
-          TableCreated{tableId} <- newTable (partyId @MockChain <$> parties)
+          Client{newTable, fundTable} <- startClient connectedServer
+          tableId <- newTable (partyId @MockChain <$> parties)
           fundTable tableId value
-     in result === TableFunded coin mockId
+     in result === ()
 
 prop_commit_fail_on_non_matching_coins :: KnownParties -> Property
 prop_commit_fail_on_non_matching_coins (KnownParties parties) =
   forAll arbitrary $ \(getPositive -> value) ->
-    let expectedError = NoMatchingCoin value []
-        result = runSimOrThrow $ do
-          Client{newTable, fundTable} <- startClient ((connectedServer [] parties){commit = const $ const $ pure $ pure expectedError})
-          TableCreated{tableId} <- newTable (partyId @MockChain <$> parties)
+    let result = runSimOrThrow $ do
+          Client{newTable, fundTable} <- startClient (connectedServer{commit = \_ _ -> throwIO (ServerException "error")})
+          tableId <- newTable (partyId @MockChain <$> parties)
           fundTable tableId value
-     in result === TableFundingFailed (asText expectedError)
+     in evaluate result `shouldThrow` anyException
 
 newtype KnownParties = KnownParties [MockParty]
   deriving newtype (Eq, Show)
@@ -128,13 +128,13 @@ instance Arbitrary Committable where
   arbitrary = Committable . getNonEmpty <$> arbitrary
   shrink (Committable coins) = Committable <$> filter (not . null) (shrink coins)
 
-mockId :: Text
+mockId :: IsString a => a
 mockId = "1234"
 
-connectedServer :: Monad m => [MockCoin] -> [MockParty] -> Server MockChain m
-connectedServer _coins parties =
+connectedServer :: Monad m => Server MockChain m
+connectedServer =
   Server
-    { initHead = \ps -> pure (pure $ InitDone mockId $ filter (\p -> partyId @MockChain p `elem` ps) parties)
-    , commit = \value _ -> pure (pure $ CommitDone $ MockCoin value)
-    , poll = pure $ Just $ HeadCreated mockId parties
+    { initHead = \_ -> pure mockId
+    , commit = \_ _ -> pure ()
+    , poll = pure []
     }

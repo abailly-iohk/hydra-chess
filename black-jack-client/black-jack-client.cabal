@@ -79,6 +79,7 @@ executable mock-server
     , containers
     , http-types
     , optparse-applicative
+    , random
     , stm
     , text
     , time

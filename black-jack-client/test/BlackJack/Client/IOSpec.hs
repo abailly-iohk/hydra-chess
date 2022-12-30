@@ -2,8 +2,9 @@
 
 module BlackJack.Client.IOSpec where
 
-import BlackJack.Client (Client (..), Result (..), runClient)
+import BlackJack.Client (Client (..), runClient)
 import BlackJack.Client.IO (Command (..), Output (..), withInput)
+import BlackJack.Server (HeadId)
 import BlackJack.Server.Mock (MockChain)
 import Test.Hspec (Spec, it, shouldBe)
 
@@ -15,7 +16,10 @@ spec = it "Quit exits from input loop" $ do
 mockClient :: Monad m => Client MockChain m
 mockClient =
   Client
-    { newTable = const $ pure (TableCreated [] "1234")
-    , fundTable = \_ _ -> pure (TableFunded mempty "1234")
-    , notify = pure Nothing
+    { newTable = const $ pure mockHeadId
+    , fundTable = \_ _ -> pure ()
+    , notify = pure []
     }
+
+mockHeadId :: HeadId
+mockHeadId = "1234"

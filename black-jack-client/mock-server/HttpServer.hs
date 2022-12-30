@@ -9,10 +9,10 @@
 
 module HttpServer where
 
-import BlackJack.Server (Host)
+import BlackJack.Server (HeadId (HeadId), Host)
 import BlackJack.Server.Mock (MockParty)
-import Control.Concurrent.STM (TVar, atomically, modifyTVar', newTVarIO, readTVarIO)
-import Control.Monad ((>=>))
+import Control.Concurrent.STM (TVar, atomically, modifyTVar', newTVarIO, readTVar, readTVarIO, writeTVar)
+import Control.Monad (replicateM, (>=>))
 import Data.Aeson (FromJSON, ToJSON, Value (Object), decode, eitherDecode, encode, toJSON)
 import Data.Aeson.KeyMap (insert)
 import qualified Data.ByteString as BS
@@ -20,6 +20,7 @@ import qualified Data.ByteString.Lazy as LBS
 import Data.Function ((&))
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Maybe (mapMaybe)
 import Data.String (IsString (fromString))
 import Data.Text (Text, pack)
 import qualified Data.Text as Text
@@ -31,6 +32,7 @@ import GHC.Generics (Generic)
 import Network.HTTP.Types (badRequest400, methodNotAllowed405, notFound404, ok200, statusCode)
 import Network.Wai (Application, Middleware, ResponseReceived, pathInfo, requestBody, requestMethod, responseLBS, responseStatus, strictRequestBody)
 import qualified Network.Wai.Handler.Warp as Warp
+import System.Random.Stateful (applyAtomicGen, globalStdGen, uniformR)
 
 data HttpLog
   = HttpServerListening {host :: Text, port :: Int}
@@ -40,7 +42,7 @@ data HttpLog
   deriving anyclass (ToJSON, FromJSON)
 
 httpServer host port =
-  newTVarIO (Chain mempty) >>= Warp.runSettings settings . logRequest . app
+  newTVarIO (Chain mempty mempty) >>= Warp.runSettings settings . logRequest . app
  where
   logRequest :: Middleware
   logRequest app req send = do
@@ -68,8 +70,12 @@ httpServer host port =
       & Warp.setServerName "mock-chain"
       & Warp.setBeforeMainLoop (doLog HttpServerListening{host = pack host, port})
 
+data HeadState = Initialising [MockParty]
+  deriving (Eq, Show)
+
 data Chain = Chain
   { knownHosts :: Map Text MockParty
+  , heads :: Map HeadId HeadState
   }
   deriving stock (Eq, Show)
 
@@ -79,7 +85,7 @@ app state req send =
  where
   route "POST" ["connect", hostId] = handleConnect hostId
   route "POST" ["init"] = handleInit
-  route "GET" ["init", headId] = error "not implemented"
+  route "GET" ["events", _idx] = error "not implemented"
   route "GET" _ = send $ responseLBS notFound404 [] ""
   route method _ = send $ responseLBS methodNotAllowed405 [] ""
 
@@ -95,9 +101,37 @@ app state req send =
     decoded <- eitherDecode <$> strictRequestBody req
     case decoded of
       Left err -> send $ responseLBS badRequest400 [] "Invalid peers body"
-      Right (peers :: [MockParty]) -> do
-        Chain{knownHosts} <- readTVarIO state
-        send $ responseLBS ok200 [] $ encode $ Map.elems $ Map.filter (`elem` peers) knownHosts
+      Right (peers :: [Text]) -> do
+        newHeadId <- mkNewHeadId
+        atomically $ do
+          chain@Chain{heads, knownHosts} <- readTVar state
+          let headPeers = mapMaybe (`Map.lookup` knownHosts) peers
+              chain' = chain{heads = Map.insert newHeadId (Initialising headPeers) heads}
+          writeTVar state chain'
+        send $ responseLBS ok200 [] $ encode newHeadId
+
+mkNewHeadId :: IO HeadId
+mkNewHeadId = HeadId . pack . fmap toChar <$> replicateM 32 randomNibble
+ where
+  randomNibble = applyAtomicGen (uniformR (0x0, 0xF)) globalStdGen
+  toChar :: Int -> Char
+  toChar 0 = '0'
+  toChar 1 = '1'
+  toChar 2 = '2'
+  toChar 3 = '3'
+  toChar 4 = '4'
+  toChar 5 = '5'
+  toChar 6 = '6'
+  toChar 7 = '7'
+  toChar 8 = '8'
+  toChar 9 = '9'
+  toChar 10 = 'a'
+  toChar 11 = 'b'
+  toChar 12 = 'c'
+  toChar 13 = 'd'
+  toChar 14 = 'e'
+  toChar 15 = 'f'
+  toChar _ = error "unexpected value"
 
 doLog :: (ToJSON a) => a -> IO ()
 doLog l = do
