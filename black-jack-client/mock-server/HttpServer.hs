@@ -10,8 +10,8 @@
 
 module HttpServer where
 
-import BlackJack.Game (BlackJack, newGame)
-import BlackJack.Server (FromChain (FundCommitted, HeadCreated, HeadOpened), HeadId (..), Host, Indexed (..), headId)
+import BlackJack.Game (BlackJack, Outcome (GameContinue, GameEnds), Payoffs, decodePlayerId, newGame, play, possibleActions, possibleActionsFor)
+import BlackJack.Server (FromChain (FundCommitted, GameChanged, GameEnded, HeadCreated, HeadOpened), HeadId (..), Host, Indexed (..), headId)
 import BlackJack.Server.Mock (MockChain, MockCoin (MockCoin), MockParty (Party), pid)
 import Control.Concurrent.STM (TVar, atomically, modifyTVar', newTVarIO, readTVar, readTVarIO, writeTVar)
 import Control.Monad (replicateM, (>=>))
@@ -85,6 +85,10 @@ data HeadState
       { parties :: [MockParty]
       , game :: BlackJack
       }
+  | Finished
+      { parties :: [MockParty]
+      , payoffs :: Payoffs
+      }
   deriving (Eq, Show)
 
 data Chain = Chain
@@ -100,8 +104,9 @@ app state req send =
  where
   route "POST" ["connect", hostId] = handleConnect hostId
   route "POST" ["init"] = handleInit
-  route "POST" ["commit", headId, partyId, amount] = handleCommit (HeadId headId) partyId (read $ unpack amount)
-  route "GET" ["events", idx, num] = handleEvents (read $ unpack idx) (read $ unpack num)
+  route "POST" ["commit", headId, partyId, amount] = handleCommit (HeadId headId) partyId (readNumber amount)
+  route "POST" ["play", headId, partyId, num] = handlePlay (HeadId headId) partyId (readNumber num)
+  route "GET" ["events", idx, num] = handleEvents (readNumber idx) (readNumber num)
   route "GET" _ = send $ responseLBS notFound404 [] ""
   route method _ = send $ responseLBS methodNotAllowed405 [] ""
 
@@ -131,7 +136,7 @@ app state req send =
         send $ responseLBS ok200 [] $ encode newHeadId
 
   handleCommit hid partyId amount = do
-    let seed = read (read $ "0x" <> unpack (headId hid))
+    let seed = fromInteger $ readNumber $ "0x" <> headId hid
     res <- atomically $ do
       chain@Chain{heads, events} <- readTVar state
       let head = Map.lookup hid heads
@@ -143,15 +148,17 @@ app state req send =
             Nothing -> pure $ Left $ "cannot find party " <> partyId
             Just p@Party{} -> do
               let head' = h{committed = Map.insert partyId amount (committed h)}
+                  game = newGame (length (parties head')) seed
+                  plays = possibleActions game
                   openHead =
                     if length (committed head') == length (parties head')
-                      then HeadOpened hid <| mempty
+                      then HeadOpened hid game plays <| mempty
                       else mempty
                   newEvents = FundCommitted @MockChain hid p (MockCoin amount) <| openHead
                   head'' =
                     if null openHead
                       then head'
-                      else Open (parties head') $ newGame (length (parties head')) seed
+                      else Open (parties head') game
                   chain' =
                     chain
                       { heads = Map.insert hid head'' heads
@@ -159,6 +166,36 @@ app state req send =
                       }
               writeTVar state chain'
               pure $ Right ()
+    send $ responseLBS (either (const badRequest400) (const ok200) res) [] ""
+
+  handlePlay hid partyId num = do
+    res <- atomically $ do
+      chain@Chain{heads, events} <- readTVar state
+      let head = Map.lookup hid heads
+      case head of
+        Nothing -> pure $ Left $ "cannot find headId " <> headId hid
+        Just h@Open{parties, game} -> do
+          let party = List.findIndex (\p -> pid p == partyId) parties
+          case party of
+            Nothing -> pure $ Left $ "cannot find party " <> partyId
+            Just numPlayer -> do
+              let playerId = decodePlayerId numPlayer
+                  acts = possibleActionsFor playerId game
+              if num >= length acts
+                then pure $ Left $ "invalid play for player " <> partyId
+                else do
+                  let p = acts !! num
+                      outcome = play game p
+                      chain' = case outcome of
+                        GameEnds dealerCards payoffs ->
+                          let event = GameEnded hid dealerCards payoffs
+                           in chain{heads = Map.insert hid (Finished parties payoffs) heads, events = events |> event}
+                        GameContinue game' ->
+                          let event = GameChanged hid game' (possibleActions game')
+                           in chain{heads = Map.insert hid (h{game = game'}) heads, events = events |> event}
+                  writeTVar state chain'
+                  pure $ Right ()
+        Just _ -> pure $ Left $ pack $ "game with id " <> show hid <> " is not opened"
     send $ responseLBS (either (const badRequest400) (const ok200) res) [] ""
 
   handleEvents idx num = do
@@ -169,6 +206,12 @@ app state req send =
             , events = toList $ Seq.take num $ Seq.drop idx events
             }
     send $ responseLBS ok200 [] $ encode indexed
+
+readNumber :: (Read a, Num a) => Text -> a
+readNumber v =
+  case reads (unpack v) of
+    [(a, [])] -> a
+    _ -> error $ "fail to read from " <> unpack v
 
 mkNewHeadId :: IO HeadId
 mkNewHeadId = HeadId . pack . fmap toChar <$> replicateM 32 randomNibble

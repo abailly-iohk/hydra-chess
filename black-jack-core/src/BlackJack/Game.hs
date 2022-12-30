@@ -12,7 +12,7 @@
 module BlackJack.Game where
 
 import Control.Monad ((>=>))
-import Data.Aeson (FromJSON, FromJSONKey, ToJSON, ToJSONKey, object, toJSON, withArray, withObject, withText, (.:), (.=))
+import Data.Aeson (FromJSON, FromJSONKey (fromJSONKey), FromJSONKeyFunction (FromJSONKeyText), ToJSON, ToJSONKey, object, toJSON, withArray, withObject, withText, (.:), (.=))
 import Data.Aeson.KeyMap ()
 import Data.Aeson.Types (FromJSON (parseJSON), ToJSONKey (toJSONKey), toJSONKeyText)
 import Data.Foldable (toList)
@@ -210,8 +210,10 @@ nextPlayer player players =
 playerIds :: Int -> Int -> [PlayerId]
 playerIds lb ub = PlayerId <$> [lb .. ub]
 
+type Payoffs = Map PlayerId Int
+
 data Outcome
-  = GameEnds [Card] (Map PlayerId Int) -- bets
+  = GameEnds [Card] Payoffs
   | GameContinue BlackJack
   deriving (Eq, Show)
 
@@ -383,10 +385,16 @@ data PlayerId
 
 instance ToJSONKey PlayerId where
   toJSONKey = toJSONKeyText $ \case
-    PlayerId p -> Text.pack ("player_" <> show p)
-    Dealer -> "dealer"
+    PlayerId p -> Text.pack (show p)
+    Dealer -> "0"
 
-instance FromJSONKey PlayerId
+instance FromJSONKey PlayerId where
+  fromJSONKey = FromJSONKeyText (readPlayerId . Text.unpack)
+   where
+    readPlayerId s = case reads s of
+      [(0, [])] -> Dealer
+      [(n, [])] -> PlayerId n
+      _ -> error $ "player id must be 0 for dealer, or 1 and above, found: " <> s
 
 instance ToJSON PlayerId where
   toJSON = \case
@@ -407,6 +415,10 @@ instance FromJSON PlayerId where
       "Dealer" -> pure Dealer
       "PlayerId" -> PlayerId <$> o .: "playerId"
       other -> fail $ "Unknown tag " <> show other
+
+decodePlayerId :: Int -> PlayerId
+decodePlayerId 0 = Dealer
+decodePlayerId n = PlayerId n
 
 -- NOTE: Only used to simplify definition for numbers
 instance Num PlayerId where

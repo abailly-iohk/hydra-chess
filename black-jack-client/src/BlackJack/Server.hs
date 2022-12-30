@@ -12,7 +12,7 @@
 
 module BlackJack.Server where
 
-import BlackJack.Game (BlackJack, Play)
+import BlackJack.Game (BlackJack, Card, Payoffs, Play)
 import Control.Exception (Exception)
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.ByteString as BS
@@ -73,6 +73,10 @@ data Server c m = Server
     -- amount funded.
     -- Might throw a `ServerException` if something goes wrong.
     commit :: Integer -> HeadId -> m ()
+  , -- | When the game is opened, do one play identified by its index in the list
+    -- of `possibleActions`.
+    -- Might throw a `ServerException` if the play is invalid.
+    play :: HeadId -> Int -> m ()
   , -- | Poll server for latest `FromChain` messages available.
     -- Takes the first event to retrieve and the maximum number of elements to send back.
     -- It will return 0 or more messages, depending on what's available, and the index
@@ -85,6 +89,7 @@ data FromChain c
   | FundCommitted {headId :: HeadId, party :: Party c, coin :: Coin c}
   | HeadOpened {headId :: HeadId, game :: BlackJack, plays :: [Play]}
   | GameChanged {headId :: HeadId, game :: BlackJack, plays :: [Play]}
+  | GameEnded {headId :: HeadId, dealerCards :: [Card], payoffs :: Payoffs}
   deriving (Generic)
 
 deriving instance IsChain c => Show (FromChain c)

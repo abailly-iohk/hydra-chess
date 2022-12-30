@@ -40,7 +40,7 @@ readInput :: Text -> Either Text Command
 readInput = first (pack . show) . parse inputParser ""
 
 inputParser :: Parser Command
-inputParser = quitParser <|> newTableParser <|> fundTableParser
+inputParser = quitParser <|> newTableParser <|> fundTableParser <|> playParser
 
 quitParser :: Parser Command
 quitParser = (try (string "q") <|> string "quit") $> Quit
@@ -54,7 +54,12 @@ fundTableParser :: Parser Command
 fundTableParser = do
   string "fundTable" >> spaceConsumer
   FundTable <$> (identifier <* spaceConsumer) <*> L.decimal
-  
+
+playParser :: Parser Command
+playParser = do
+  string "play" >> spaceConsumer
+  Play <$> (identifier <* spaceConsumer) <*> L.decimal
+
 identifier :: Parser Text
 identifier = pack <$> ((:) <$> alphaNumChar <*> many alphaNumChar)
 

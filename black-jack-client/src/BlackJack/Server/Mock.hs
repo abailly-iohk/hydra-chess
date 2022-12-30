@@ -37,6 +37,7 @@ newMockServer myParty = do
       { initHead = sendInit cnx
       , commit = sendCommit cnx (pid myParty)
       , poll = pollEvents cnx
+      , play = playGame cnx (pid myParty)
       }
 
 data MockServerError = MockServerError String
@@ -74,6 +75,12 @@ sendCommit Host{host, port} myId amount (HeadId headId) = do
         <> show amount
   response <- httpLBS request
   when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to commit for peers " <> show myId)
+
+playGame :: Host -> Text -> HeadId -> Int -> IO ()
+playGame Host{host, port} myId (HeadId hid) playIndex = do
+  request <- parseRequest $ "POST http://" <> unpack host <> ":" <> show port <> "/play/" <> unpack hid <> "/" <> unpack myId <> "/" <> show playIndex
+  response <- httpLBS request
+  when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to play " <> show playIndex <> " for player " <> show myId)
 
 pollEvents :: Host -> Integer -> Integer -> IO (Indexed MockChain)
 pollEvents Host{host, port} index num = do
