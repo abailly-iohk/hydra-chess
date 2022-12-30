@@ -59,6 +59,7 @@ executable black-jack-client
     , aeson
     , base                  ^>=4.14.3.0
     , black-jack-client
+    , black-jack-core
     , optparse-applicative
     , text
 
@@ -77,6 +78,7 @@ executable mock-server
     , aeson
     , base                  ^>=4.14.3.0
     , black-jack-client
+    , black-jack-core
     , bytestring
     , containers
     , http-types

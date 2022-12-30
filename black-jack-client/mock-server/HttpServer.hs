@@ -10,6 +10,7 @@
 
 module HttpServer where
 
+import BlackJack.Game (BlackJack, newGame)
 import BlackJack.Server (FromChain (FundCommitted, HeadCreated, HeadOpened), HeadId (..), Host, Indexed (..), headId)
 import BlackJack.Server.Mock (MockChain, MockCoin (MockCoin), MockParty (Party), pid)
 import Control.Concurrent.STM (TVar, atomically, modifyTVar', newTVarIO, readTVar, readTVarIO, writeTVar)
@@ -75,10 +76,15 @@ httpServer host port =
       & Warp.setServerName "mock-chain"
       & Warp.setBeforeMainLoop (doLog HttpServerListening{host = pack host, port})
 
-data HeadState = Initialising
-  { parties :: [MockParty]
-  , committed :: Map Text Integer
-  }
+data HeadState
+  = Initialising
+      { parties :: [MockParty]
+      , committed :: Map Text Integer
+      }
+  | Open
+      { parties :: [MockParty]
+      , game :: BlackJack
+      }
   deriving (Eq, Show)
 
 data Chain = Chain
@@ -125,6 +131,7 @@ app state req send =
         send $ responseLBS ok200 [] $ encode newHeadId
 
   handleCommit hid partyId amount = do
+    let seed = read (read $ "0x" <> unpack (headId hid))
     res <- atomically $ do
       chain@Chain{heads, events} <- readTVar state
       let head = Map.lookup hid heads
@@ -136,14 +143,18 @@ app state req send =
             Nothing -> pure $ Left $ "cannot find party " <> partyId
             Just p@Party{} -> do
               let head' = h{committed = Map.insert partyId amount (committed h)}
-                  newEvents =
-                    FundCommitted @MockChain hid p (MockCoin amount)
-                      <| if length (committed head') == length (parties head')
-                        then HeadOpened hid <| mempty
-                        else mempty
+                  openHead =
+                    if length (committed head') == length (parties head')
+                      then HeadOpened hid <| mempty
+                      else mempty
+                  newEvents = FundCommitted @MockChain hid p (MockCoin amount) <| openHead
+                  head'' =
+                    if null openHead
+                      then head'
+                      else Open (parties head') $ newGame (length (parties head')) seed
                   chain' =
                     chain
-                      { heads = Map.insert hid head' heads
+                      { heads = Map.insert hid head'' heads
                       , events = events <> newEvents
                       }
               writeTVar state chain'
