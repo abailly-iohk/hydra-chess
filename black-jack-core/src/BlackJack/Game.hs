@@ -4,16 +4,23 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module BlackJack.Game where
 
+import Control.Monad ((>=>))
+import Data.Aeson (FromJSON, FromJSONKey, ToJSON, ToJSONKey, object, toJSON, withArray, withObject, withText, (.:), (.=))
+import Data.Aeson.KeyMap ()
+import Data.Aeson.Types (FromJSON (parseJSON), ToJSONKey (toJSONKey), toJSONKeyText)
+import Data.Foldable (toList)
 import Data.List (nub, sortBy)
 import Data.Map (Map, size)
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
+import qualified Data.Text as Text
 import GHC.Generics (Generic)
 import System.Random (StdGen, Uniform, mkStdGen, uniform)
 import Test.QuickCheck (Arbitrary (..), elements, suchThat)
@@ -45,6 +52,7 @@ dealerActions dealerHand =
 
 dealerValues :: DealerHand -> [Int]
 dealerValues (DealerHand (Hidden c, cards)) = handValues (c : cards)
+dealerValues (DealerHand (None, _)) = error "should not happen"
 
 runPlays :: [Play] -> BlackJack -> Outcome
 runPlays plays initialGame =
@@ -127,7 +135,7 @@ dealInitialCards bets seed =
         { numPlayers = length bets
         , dealerHand = mkDealerHand cs
         , next = 1
-        , gen = seed''
+        , gen = RGen seed''
         , players = Map.mapWithKey player playerHands
         }
 
@@ -151,6 +159,35 @@ data Play
   | Stand PlayerId
   | Hit PlayerId
   deriving (Eq, Ord, Show)
+
+instance ToJSON Play where
+  toJSON Quit = object ["play" .= ("Quit" :: Text.Text)]
+  toJSON (Bet p) =
+    object
+      [ "play" .= ("Bet" :: Text.Text)
+      , "player" .= p
+      ]
+  toJSON (Stand p) =
+    object
+      [ "play" .= ("Stand" :: Text.Text)
+      , "player" .= p
+      ]
+  toJSON (Hit p) =
+    object
+      [ "play" .= ("Hit" :: Text.Text)
+      , "player" .= p
+      ]
+
+instance FromJSON Play where
+  parseJSON = withObject "Play" $ \o -> do
+    o .: "play" >>= withText "play" (parsePlay o)
+   where
+    parsePlay o = \case
+      "Quit" -> pure Quit
+      "Bet" -> Bet <$> o .: "player"
+      "Hit" -> Hit <$> o .: "player"
+      "Stand" -> Stand <$> o .: "player"
+      other -> fail $ "uknown play type " <> show other
 
 isHit :: Play -> Bool
 isHit (Hit _) = True
@@ -186,6 +223,21 @@ data Color = Heart | Spade | Diamond | Club
   deriving stock (Eq, Show, Generic)
   deriving anyclass (Uniform)
 
+instance ToJSON Color where
+  toJSON = \case
+    Heart -> "\x2661"
+    Spade -> "\x2660"
+    Diamond -> "\x2662"
+    Club -> "\x2663"
+
+instance FromJSON Color where
+  parseJSON = \case
+    "\x2661" -> pure Heart
+    "\x2660" -> pure Spade
+    "\x2662" -> pure Diamond
+    "\x2663" -> pure Club
+    other -> fail $ "unknown color " <> show other
+
 instance Arbitrary Color where
   arbitrary = elements [Heart, Spade, Diamond, Club]
 
@@ -206,6 +258,39 @@ data Face
   deriving stock (Eq, Ord, Enum, Show, Generic)
   deriving anyclass (Uniform)
 
+instance ToJSON Face where
+  toJSON = \case
+    Two -> "2"
+    Three -> "3"
+    Four -> "4"
+    Five -> "5"
+    Six -> "6"
+    Seven -> "7"
+    Eight -> "8"
+    Nine -> "9"
+    Ten -> "10"
+    Jack -> "J"
+    Queen -> "Q"
+    King -> "K"
+    Ace -> "A"
+
+instance FromJSON Face where
+  parseJSON = withText "Face" $ \case
+    "2" -> pure Two
+    "3" -> pure Three
+    "4" -> pure Four
+    "5" -> pure Five
+    "6" -> pure Six
+    "7" -> pure Seven
+    "8" -> pure Eight
+    "9" -> pure Nine
+    "10" -> pure Ten
+    "J" -> pure Jack
+    "Q" -> pure Queen
+    "K" -> pure King
+    "A" -> pure Ace
+    other -> fail $ "unknown face " <> show other
+
 instance Arbitrary Face where
   arbitrary = elements $ enumFromTo Two Ace
   shrink face = filter (< face) $ enumFromTo Two Ace
@@ -213,6 +298,13 @@ instance Arbitrary Face where
 data Card = Card {color :: Color, face :: Face}
   deriving stock (Eq, Show, Generic)
   deriving anyclass (Uniform)
+
+instance ToJSON Card where
+  toJSON (Card col fac) = toJSON [toJSON col, toJSON fac]
+
+instance FromJSON Card where
+  parseJSON = withArray "card" $ \(toList -> [v, v']) ->
+    Card <$> parseJSON v <*> parseJSON v'
 
 instance Arbitrary Card where
   arbitrary = Card <$> arbitrary <*> arbitrary
@@ -246,6 +338,16 @@ isBlackJack cards = length cards == 2 && 21 `elem` handValues cards
 newtype DealerHand = DealerHand (Hidden Card, [Card])
   deriving (Eq, Show)
 
+instance ToJSON DealerHand where
+  toJSON (DealerHand (_, cards)) = toJSON cards
+
+instance FromJSON DealerHand where
+  parseJSON =
+    withArray "cards" $
+      ( traverse parseJSON
+          >=> (\cs -> pure (DealerHand (None, toList cs)))
+      )
+
 instance Arbitrary DealerHand where
   arbitrary =
     arbitrary >>= fmap mkDealerHand . go . (: [])
@@ -264,19 +366,47 @@ mkDealerHand _ = error "dealer hand needs at least one card"
 
 reveal :: DealerHand -> [Card]
 reveal (DealerHand (Hidden c, cs)) = c : cs
+reveal (DealerHand (None, _)) = error "should never happen"
 
 actionsFor :: PlayerId -> [Card] -> [Play]
 actionsFor player hand
   | minimum (handValues hand) >= 21 = [Stand player]
   | otherwise = [Hit player, Stand player]
 
-newtype Hidden c = Hidden c
+data Hidden c = Hidden c | None
   deriving (Eq, Show)
 
 data PlayerId
   = PlayerId {playerId :: Int}
   | Dealer
   deriving stock (Eq, Ord, Show)
+
+instance ToJSONKey PlayerId where
+  toJSONKey = toJSONKeyText $ \case
+    PlayerId p -> Text.pack ("player_" <> show p)
+    Dealer -> "dealer"
+
+instance FromJSONKey PlayerId
+
+instance ToJSON PlayerId where
+  toJSON = \case
+    PlayerId p ->
+      object
+        [ "tag" .= ("PlayerId" :: Text.Text)
+        , "playerId" .= p
+        ]
+    Dealer ->
+      object
+        ["tag" .= ("Dealer" :: Text.Text)]
+
+instance FromJSON PlayerId where
+  parseJSON = withObject "PlayerId" $ \o ->
+    o .: "tag" >>= withText "id" (parsePlayerId o)
+   where
+    parsePlayerId o = \case
+      "Dealer" -> pure Dealer
+      "PlayerId" -> PlayerId <$> o .: "playerId"
+      other -> fail $ "Unknown tag " <> show other
 
 -- NOTE: Only used to simplify definition for numbers
 instance Num PlayerId where
@@ -292,6 +422,29 @@ data Player
   | Standing {hand :: [Card], bets :: Int}
   deriving (Eq, Show)
 
+instance ToJSON Player where
+  toJSON (Playing cas bets) =
+    object
+      [ "tag" .= ("Playing" :: Text.Text)
+      , "hand" .= cas
+      , "bet" .= bets
+      ]
+  toJSON (Standing cas n) =
+    object
+      [ "tag" .= ("Standing" :: Text.Text)
+      , "hand" .= cas
+      , "bet" .= n
+      ]
+
+instance FromJSON Player where
+  parseJSON = withObject "Player" $ \o -> do
+    o .: "tag" >>= withText "tag" (parsePlayer o)
+   where
+    parsePlayer o = \case
+      "Playing" -> Playing <$> o .: "hand" <*> o .: "bet"
+      "Standing" -> Standing <$> o .: "hand" <*> o .: "bet"
+      other -> fail $ "unkonwn tag " <> show other
+
 stand :: Player -> Player
 stand Playing{hand, bets} = Standing{hand, bets}
 stand p = p
@@ -299,6 +452,15 @@ stand p = p
 isStanding :: Player -> Bool
 isStanding Playing{} = False
 isStanding Standing{} = True
+
+data RGen = RGen StdGen | NoGen
+  deriving (Eq, Show)
+
+instance ToJSON RGen where
+  toJSON _ = "<<seed>>"
+
+instance FromJSON RGen where
+  parseJSON = const $ pure NoGen
 
 data BlackJack
   = Setup
@@ -308,32 +470,33 @@ data BlackJack
       }
   | BlackJack
       { numPlayers :: Int
-      , gen :: StdGen
+      , gen :: RGen
       , next :: PlayerId
       , dealerHand :: DealerHand
       , players :: Map PlayerId Player
       }
-  deriving (Eq, Show)
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)
 
 playerHand :: PlayerId -> BlackJack -> [Card]
 playerHand _ Setup{} = []
 playerHand p BlackJack{players} = maybe [] hand $ Map.lookup p players
 
 dealOneCardTo :: PlayerId -> BlackJack -> BlackJack
-dealOneCardTo player game@BlackJack{gen, players} =
+dealOneCardTo player game@BlackJack{gen = RGen gen, players} =
   let hand = playerHand player game
       (gen', newHand) = dealOneCard (gen, hand)
    in game
-        { gen = gen'
+        { gen = RGen gen'
         , players = Map.update (\p@Playing{} -> Just p{hand = newHand}) player players
         }
-dealOneCardTo _ Setup{} = error "should never happen"
+dealOneCardTo _ _ = error "should never happen"
 
 dealOneCardToDealer :: BlackJack -> BlackJack
-dealOneCardToDealer game@BlackJack{gen, dealerHand = (DealerHand (h, cs))} =
+dealOneCardToDealer game@BlackJack{gen = RGen gen, dealerHand = (DealerHand (h, cs))} =
   let (gen', cs') = dealOneCard (gen, cs)
-   in game{gen = gen', dealerHand = DealerHand (h, cs')}
-dealOneCardToDealer Setup{} = error "should never happen"
+   in game{gen = RGen gen', dealerHand = DealerHand (h, cs')}
+dealOneCardToDealer _ = error "should never happen"
 
 newGame :: Int -> Int -> BlackJack
 newGame numPlayers seed = Setup numPlayers seed mempty
@@ -343,7 +506,7 @@ mkGame numPlayers next seed hands =
   let (seed', cs) = dealCards 2 (mkStdGen seed)
    in BlackJack
         { numPlayers
-        , gen = seed'
+        , gen = RGen seed'
         , next
         , dealerHand = mkDealerHand cs
         , players = Map.fromList $ mkPlayer <$> hands

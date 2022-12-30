@@ -12,6 +12,7 @@
 
 module BlackJack.Server where
 
+import BlackJack.Game (BlackJack, Play)
 import Control.Exception (Exception)
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.ByteString as BS
@@ -82,7 +83,8 @@ data Server c m = Server
 data FromChain c
   = HeadCreated {headId :: HeadId, parties :: [Party c]}
   | FundCommitted {headId :: HeadId, party :: Party c, coin :: Coin c}
-  | HeadOpened {headId :: HeadId}
+  | HeadOpened {headId :: HeadId, game :: BlackJack, plays :: [Play]}
+  | GameChanged {headId :: HeadId, game :: BlackJack, plays :: [Play]}
   deriving (Generic)
 
 deriving instance IsChain c => Show (FromChain c)

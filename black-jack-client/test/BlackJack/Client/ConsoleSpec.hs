@@ -26,3 +26,6 @@ spec = do
 
   prop "parses 'fundTable' command" $ \(HeadId headId) (Positive (Small n)) ->
     readInput ("fundTable " <> headId <> " " <> Text.pack (show n)) `shouldBe` Right (FundTable headId n)
+
+  prop "parses 'play' command" $ \(HeadId headId) (Positive (Small n)) ->
+    readInput ("play " <> headId <> " " <> Text.pack (show n)) `shouldBe` Right (Play headId n)

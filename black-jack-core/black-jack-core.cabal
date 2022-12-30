@@ -30,10 +30,12 @@ library
     BlackJack.Pretty
 
   build-depends:
+    , aeson
     , base
     , containers
     , QuickCheck
     , random
+    , text
 
 executable black-jack
   main-is:          Main.hs
