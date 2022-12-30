@@ -6,10 +6,11 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
 module HttpServer where
 
-import BlackJack.Server (FromChain (FundCommitted, HeadCreated), HeadId (..), Host, Indexed (..), headId)
+import BlackJack.Server (FromChain (FundCommitted, HeadCreated, HeadOpened), HeadId (..), Host, Indexed (..), headId)
 import BlackJack.Server.Mock (MockChain, MockCoin (MockCoin), MockParty (Party), pid)
 import Control.Concurrent.STM (TVar, atomically, modifyTVar', newTVarIO, readTVar, readTVarIO, writeTVar)
 import Control.Monad (replicateM, (>=>))
@@ -23,7 +24,7 @@ import qualified Data.List as List
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
-import Data.Sequence (Seq, (|>))
+import Data.Sequence (Seq, (<|), (|>))
 import qualified Data.Sequence as Seq
 import Data.String (IsString (fromString))
 import Data.Text (Text, pack, unpack)
@@ -135,10 +136,15 @@ app state req send =
             Nothing -> pure $ Left $ "cannot find party " <> partyId
             Just p@Party{} -> do
               let head' = h{committed = Map.insert partyId amount (committed h)}
+                  newEvents =
+                    FundCommitted @MockChain hid p (MockCoin amount)
+                      <| if length (committed head') == length (parties head')
+                        then HeadOpened hid <| mempty
+                        else mempty
                   chain' =
                     chain
                       { heads = Map.insert hid head' heads
-                      , events = events |> FundCommitted hid p (MockCoin amount)
+                      , events = events <> newEvents
                       }
               writeTVar state chain'
               pure $ Right ()

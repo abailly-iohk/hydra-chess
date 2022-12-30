@@ -82,6 +82,7 @@ data Server c m = Server
 data FromChain c
   = HeadCreated {headId :: HeadId, parties :: [Party c]}
   | FundCommitted {headId :: HeadId, party :: Party c, coin :: Coin c}
+  | HeadOpened {headId :: HeadId}
   deriving (Generic)
 
 deriving instance IsChain c => Show (FromChain c)
