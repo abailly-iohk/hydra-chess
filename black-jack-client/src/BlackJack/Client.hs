@@ -13,7 +13,6 @@ module BlackJack.Client where
 import BlackJack.Client.IO (Command (..), Err (..), HasIO (..), Output (Bye, Ko, Ok))
 import BlackJack.Server (FromChain (..), HeadId (HeadId), IsChain (..), Server (..))
 import qualified BlackJack.Server as Server
-import Control.Monad.Class.MonadThrow (MonadThrow)
 import Control.Monad.Class.MonadTimer (MonadDelay)
 import Data.Functor ((<&>))
 import Data.Text (Text)
@@ -35,7 +34,7 @@ data Client c m = Client
 
 startClient ::
   forall c m.
-  (IsChain c, Monad m, MonadDelay m, MonadThrow m) =>
+  (IsChain c, Monad m, MonadDelay m) =>
   Server c m ->
   m (Client c m)
 startClient server = pure $ Client{newTable, fundTable, notify}
@@ -50,8 +49,8 @@ startClient server = pure $ Client{newTable, fundTable, notify}
       [] -> pure []
       _ -> error "not implemented"
 
-runClient :: (IsChain c, Monad m) => Client c m -> HasIO m -> m ()
-runClient client io = loop
+runClient :: (IsChain c, Monad m) => Server c m -> HasIO m -> m ()
+runClient server io = loop
  where
   loop = do
     prompt io
@@ -59,10 +58,10 @@ runClient client io = loop
       Left EOF -> pure ()
       Left (Err err) -> output io (Ko err) >> loop
       Right Quit -> output io Bye >> pure ()
-      Right cmd -> handleCommand client cmd >>= output io >> loop
+      Right cmd -> handleCommand server cmd >>= output io >> loop
 
-handleCommand :: (IsChain c, Monad m) => Client c m -> Command -> m Output
-handleCommand Client{newTable} = \case
+handleCommand :: (IsChain c, Monad m) => Server c m -> Command -> m Output
+handleCommand Server{initHead} = \case
   NewTable peers ->
-    newTable peers <&> (\HeadId{headId} -> Ok . ("head initialised with id " <>) $ headId)
+    initHead peers <&> (\HeadId{headId} -> Ok . ("head initialised with id " <>) $ headId)
   Quit -> pure Bye

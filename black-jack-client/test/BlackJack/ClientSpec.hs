@@ -1,8 +1,6 @@
-{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
@@ -11,10 +9,11 @@
 
 module BlackJack.ClientSpec where
 
-import BlackJack.Client (Client (..), Result (..), startClient)
+import BlackJack.Client (Client (..), runClient, startClient)
+import BlackJack.Client.IO (Output (Ok), mkPureIO, withInput)
 import BlackJack.Server (FromChain (..), Host (Host), IsChain (..), Server (..), ServerException (ServerException))
 import BlackJack.Server.Mock (MockChain, MockCoin, MockParty (..))
-import Control.Monad.Class.MonadAsync (MonadAsync (race_), concurrently)
+import Control.Monad.Class.MonadAsync (MonadAsync (race_))
 import Control.Monad.Class.MonadThrow (MonadThrow (throwIO), evaluate)
 import Control.Monad.Class.MonadTimer (threadDelay)
 import Control.Monad.IOSim (runSimOrThrow)
@@ -54,19 +53,9 @@ spec = do
         let res = runSimOrThrow $ do
               let peers = [alice, bob]
                   server = connectedServer{poll = pure [HeadCreated @MockChain mockId peers]}
-                  client1 = do
-                    Client{newTable} <- startClient server
-                    newTable ["bob"]
-                  client2 = do
-                    Client{notify} <- startClient server
-                    let waitForSomething = do
-                          notify >>= \case
-                            [] -> threadDelay 1 >> waitForSomething
-                            r -> pure r
-                    waitForSomething
-              concurrently client1 client2
-        res `shouldBe` (mockId, [TableCreated [alice, bob] mockId])
-
+                  client2 = withInput [] $ runClient server mkPureIO
+              client2
+        res `shouldBe` ((), [Ok ""])
   describe "Fund Table" $ do
     prop "commit to head some funds given table created" prop_commit_to_head_when_funding_table
     prop "commit fails when funds do not match existing coins" prop_commit_fail_on_non_matching_coins
