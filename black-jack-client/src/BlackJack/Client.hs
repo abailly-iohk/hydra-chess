@@ -11,9 +11,9 @@
 module BlackJack.Client where
 
 import BlackJack.Client.IO (Command (..), Err (..), HasIO (..), Output (Bye, Ko, Ok))
-import BlackJack.Server (HeadId (HeadId), IsChain (..), Server (..))
+import BlackJack.Server (HeadId (HeadId), Indexed (..), IsChain (..), Server (..))
 import qualified BlackJack.Server as Server
-import Control.Monad (forM_, forever, unless)
+import Control.Monad (forM_, unless)
 import Control.Monad.Class.MonadAsync (MonadAsync, race_)
 import Control.Monad.Class.MonadTimer (MonadDelay, threadDelay)
 import Data.Functor ((<&>))
@@ -29,12 +29,14 @@ deriving instance IsChain c => Eq (Result c)
 deriving instance IsChain c => Show (Result c)
 
 runClient :: (IsChain c, MonadAsync m, MonadDelay m) => Server c m -> HasIO m -> m ()
-runClient server io = race_ loop notify
+runClient server io = race_ loop (notify 0)
  where
-  notify = forever $ do
-    es <- poll server
-    unless (null es) $ forM_ es (output io . Ok . pack . show)
-    threadDelay 1
+  notify fromIndex = do
+    Indexed{lastIndex, events} <- poll server fromIndex (fromIndex + 10)
+    unless (null events) $ forM_ events (output io . Ok . pack . show)
+    let newIndex = fromIndex + fromIntegral (length events)
+    unless (lastIndex > newIndex) $ threadDelay 1
+    notify newIndex
 
   loop = do
     prompt io

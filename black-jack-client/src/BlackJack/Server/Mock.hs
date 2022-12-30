@@ -8,7 +8,7 @@
 
 module BlackJack.Server.Mock where
 
-import BlackJack.Server (FromChain, HeadId, Host (..), IsChain (..), Server (..))
+import BlackJack.Server (HeadId, Host (..), Indexed, IsChain (..), Server (..))
 import Control.Exception (Exception, throwIO)
 import Control.Monad (when)
 import Data.Aeson (FromJSON, ToJSON)
@@ -58,9 +58,9 @@ sendInit Host{host, port} peers = do
   when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to init head for peers " <> show peers)
   pure $ getResponseBody response
 
-pollEvents :: Host -> IO [FromChain MockChain]
-pollEvents Host{host, port} = do
-  request <- parseRequest $ "GET http://" <> unpack host <> ":" <> show port <> "/events/0"
+pollEvents :: Host -> Integer -> Integer -> IO (Indexed MockChain)
+pollEvents Host{host, port} index num = do
+  request <- parseRequest $ "GET http://" <> unpack host <> ":" <> show port <> "/events/" <> show index <> "/" <> show num
   getResponseBody <$> httpJSON request
 
 data MockChain = MockChain

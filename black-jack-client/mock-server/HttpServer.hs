@@ -9,20 +9,23 @@
 
 module HttpServer where
 
-import BlackJack.Server (HeadId (HeadId), Host)
-import BlackJack.Server.Mock (MockParty)
+import BlackJack.Server (FromChain (HeadCreated), HeadId (HeadId), Host, Indexed (..))
+import BlackJack.Server.Mock (MockChain, MockParty)
 import Control.Concurrent.STM (TVar, atomically, modifyTVar', newTVarIO, readTVar, readTVarIO, writeTVar)
 import Control.Monad (replicateM, (>=>))
 import Data.Aeson (FromJSON, ToJSON, Value (Object), decode, eitherDecode, encode, toJSON)
 import Data.Aeson.KeyMap (insert)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
+import Data.Foldable (toList)
 import Data.Function ((&))
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
+import Data.Sequence (Seq, (|>))
+import qualified Data.Sequence as Seq
 import Data.String (IsString (fromString))
-import Data.Text (Text, pack)
+import Data.Text (Text, pack, unpack)
 import qualified Data.Text as Text
 import Data.Text.Encoding (decodeUtf8)
 import Data.Text.Lazy (toStrict)
@@ -42,7 +45,7 @@ data HttpLog
   deriving anyclass (ToJSON, FromJSON)
 
 httpServer host port =
-  newTVarIO (Chain mempty mempty) >>= Warp.runSettings settings . logRequest . app
+  newTVarIO (Chain mempty mempty mempty) >>= Warp.runSettings settings . logRequest . app
  where
   logRequest :: Middleware
   logRequest app req send = do
@@ -76,6 +79,7 @@ data HeadState = Initialising [MockParty]
 data Chain = Chain
   { knownHosts :: Map Text MockParty
   , heads :: Map HeadId HeadState
+  , events :: Seq (FromChain MockChain)
   }
   deriving stock (Eq, Show)
 
@@ -85,7 +89,7 @@ app state req send =
  where
   route "POST" ["connect", hostId] = handleConnect hostId
   route "POST" ["init"] = handleInit
-  route "GET" ["events", idx] = handleEvents idx
+  route "GET" ["events", idx, num] = handleEvents (read $ unpack idx) (read $ unpack num)
   route "GET" _ = send $ responseLBS notFound404 [] ""
   route method _ = send $ responseLBS methodNotAllowed405 [] ""
 
@@ -104,14 +108,24 @@ app state req send =
       Right (peers :: [Text]) -> do
         newHeadId <- mkNewHeadId
         atomically $ do
-          chain@Chain{heads, knownHosts} <- readTVar state
+          chain@Chain{heads, knownHosts, events} <- readTVar state
           let headPeers = mapMaybe (`Map.lookup` knownHosts) peers
-              chain' = chain{heads = Map.insert newHeadId (Initialising headPeers) heads}
+              chain' =
+                chain
+                  { heads = Map.insert newHeadId (Initialising headPeers) heads
+                  , events = events |> HeadCreated newHeadId headPeers
+                  }
           writeTVar state chain'
         send $ responseLBS ok200 [] $ encode newHeadId
 
-  handleEvents ids = do
-    send $ responseLBS ok200 [] "[]"
+  handleEvents idx num = do
+    Chain{events} <- readTVarIO state
+    let indexed =
+          Indexed
+            { lastIndex = fromIntegral $ length events
+            , events = toList $ Seq.take num $ Seq.drop idx events
+            }
+    send $ responseLBS ok200 [] $ encode indexed
 
 mkNewHeadId :: IO HeadId
 mkNewHeadId = HeadId . pack . fmap toChar <$> replicateM 32 randomNibble

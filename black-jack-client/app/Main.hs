@@ -3,7 +3,7 @@
 
 module Main where
 
-import BlackJack.Client (runClient, startClient)
+import BlackJack.Client (runClient)
 import BlackJack.Client.Console (mkImpureIO)
 import BlackJack.Server (Host (..))
 import BlackJack.Server.Mock (MockParty (..), pid, withMockServer)

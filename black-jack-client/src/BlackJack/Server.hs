@@ -66,19 +66,29 @@ data Server c m = Server
     -- Might throw a `ServerException` if something goes wrong.
     commit :: Integer -> HeadId -> m ()
   , -- | Poll server for latest `FromChain` messages available.
-    -- It will return 0 or more messages, depending on what's available.
-    poll :: m [FromChain c]
+    -- Takes the first event to retrieve and the maximum number of elements to send back.
+    -- It will return 0 or more messages, depending on what's available, and the index
+    -- of the last known message.
+    poll :: Integer -> Integer -> m (Indexed c)
   }
 
 data FromChain c
-  = HeadCreated {headId :: Text, parties :: [Party c]}
-  | FundCommitted {headId :: Text, party :: Party c, coin :: Coin c}
+  = HeadCreated {headId :: HeadId, parties :: [Party c]}
+  | FundCommitted {headId :: HeadId, party :: Party c, coin :: Coin c}
   deriving (Generic)
 
 deriving instance IsChain c => Show (FromChain c)
 deriving instance IsChain c => Eq (FromChain c)
 deriving instance IsChain c => ToJSON (FromChain c)
 deriving instance IsChain c => FromJSON (FromChain c)
+
+data Indexed c = Indexed {lastIndex :: Integer, events :: [FromChain c]}
+  deriving (Generic)
+
+deriving instance IsChain c => Show (Indexed c)
+deriving instance IsChain c => Eq (Indexed c)
+deriving instance IsChain c => ToJSON (Indexed c)
+deriving instance IsChain c => FromJSON (Indexed c)
 
 data Host = Host {host :: Text, port :: Int}
   deriving stock (Eq, Show, Generic)
