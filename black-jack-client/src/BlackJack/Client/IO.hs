@@ -1,11 +1,14 @@
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# OPTIONS_GHC -Wno-unused-imports #-}
 
 module BlackJack.Client.IO where
 
-import Control.Monad.State (MonadState, State, execState, gets, modify, runState)
+import Control.Monad.State (MonadState, State, StateT, execState, gets, modify, runState, runStateT)
+import Control.Monad.Trans (MonadTrans)
 import Data.Bifunctor (second)
 import Data.Text (Text, pack)
 import Data.Void (Void)
@@ -37,10 +40,10 @@ data PureIO = PureIO
   , outputText :: [Output]
   }
 
-newtype Pure a = Pure {runPure :: State PureIO a}
-  deriving (Functor, Applicative, Monad, MonadState PureIO)
+newtype Pure m a = Pure {runPure :: StateT PureIO m a}
+  deriving newtype (Functor, Applicative, Monad, MonadState PureIO, MonadTrans)
 
-instance HasIO Pure where
+instance Monad m => HasIO (Pure m) where
   input = do
     ins <- gets inputText
     case ins of
@@ -51,6 +54,9 @@ instance HasIO Pure where
   prompt = pure ()
 
 withInput ::
-  [Command] -> Pure a -> (a, [Output])
+  Monad m =>
+  [Command] ->
+  Pure m a ->
+  m (a, [Output])
 withInput stream act =
-  second outputText $ runState (runPure act) (PureIO stream [])
+  second outputText <$> runStateT (runPure act) (PureIO stream [])
