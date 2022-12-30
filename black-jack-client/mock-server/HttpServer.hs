@@ -10,7 +10,7 @@
 
 module HttpServer where
 
-import BlackJack.Game (BlackJack, Outcome (GameContinue, GameEnds), Payoffs, decodePlayerId, newGame, play, possibleActions, possibleActionsFor)
+import BlackJack.Game (BlackJack, Outcome (GameContinue, GameEnds), Payoffs, decodePlayerId, forPlayer, newGame, play, possibleActions, possibleActionsFor)
 import BlackJack.Server (FromChain (FundCommitted, GameChanged, GameEnded, HeadCreated, HeadOpened), HeadId (..), Host, Indexed (..), headId)
 import BlackJack.Server.Mock (MockChain, MockCoin (MockCoin), MockParty (Party), pid)
 import Control.Concurrent.STM (TVar, atomically, modifyTVar', newTVarIO, readTVar, readTVarIO, writeTVar)
@@ -148,7 +148,7 @@ app state req send =
             Nothing -> pure $ Left $ "cannot find party " <> partyId
             Just p@Party{} -> do
               let head' = h{committed = Map.insert partyId amount (committed h)}
-                  game = newGame (length (parties head')) seed
+                  game = newGame (length (parties head') - 1) seed
                   plays = possibleActions game
                   openHead =
                     if length (committed head') == length (parties head')
@@ -180,21 +180,25 @@ app state req send =
             Nothing -> pure $ Left $ "cannot find party " <> partyId
             Just numPlayer -> do
               let playerId = decodePlayerId numPlayer
-                  acts = possibleActionsFor playerId game
+                  acts = possibleActions game
               if num >= length acts
                 then pure $ Left $ "invalid play for player " <> partyId
                 else do
                   let p = acts !! num
-                      outcome = play game p
-                      chain' = case outcome of
-                        GameEnds dealerCards payoffs ->
-                          let event = GameEnded hid dealerCards payoffs
-                           in chain{heads = Map.insert hid (Finished parties payoffs) heads, events = events |> event}
-                        GameContinue game' ->
-                          let event = GameChanged hid game' (possibleActions game')
-                           in chain{heads = Map.insert hid (h{game = game'}) heads, events = events |> event}
-                  writeTVar state chain'
-                  pure $ Right ()
+                  if forPlayer p == playerId
+                    then do
+                      let outcome = play game p
+                          chain' =
+                            case outcome of
+                              GameEnds dealerCards payoffs ->
+                                let event = GameEnded hid dealerCards payoffs
+                                 in chain{heads = Map.insert hid (Finished parties payoffs) heads, events = events |> event}
+                              GameContinue game' ->
+                                let event = GameChanged hid game' (possibleActions game')
+                                 in chain{heads = Map.insert hid (h{game = game'}) heads, events = events |> event}
+                      writeTVar state chain'
+                      pure $ Right ()
+                    else pure $ Left $ "invalid play " <> pack (show p) <> " for player " <> partyId
         Just _ -> pure $ Left $ pack $ "game with id " <> show hid <> " is not opened"
     send $ responseLBS (either (const badRequest400) (const ok200) res) [] ""
 
