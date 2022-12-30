@@ -16,6 +16,7 @@ import Prelude hiding (getLine, print)
 
 data Command
   = NewTable [Text]
+  | FundTable Text Integer
   | Quit
   deriving (Eq, Show)
 
