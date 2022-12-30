@@ -94,7 +94,6 @@ test-suite tests
   hs-source-dirs:     test
   other-modules:
     BlackJack.Client.ConsoleSpec
-    BlackJack.Client.IOSpec
     BlackJack.ClientSpec
 
   main-is:            Spec.hs

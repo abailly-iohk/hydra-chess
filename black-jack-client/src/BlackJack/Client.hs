@@ -13,9 +13,11 @@ module BlackJack.Client where
 import BlackJack.Client.IO (Command (..), Err (..), HasIO (..), Output (Bye, Ko, Ok))
 import BlackJack.Server (FromChain (..), HeadId (HeadId), IsChain (..), Server (..))
 import qualified BlackJack.Server as Server
-import Control.Monad.Class.MonadTimer (MonadDelay)
+import Control.Monad (forM_)
+import Control.Monad.Class.MonadAsync (MonadAsync, race_)
+import Control.Monad.Class.MonadTimer (MonadDelay, threadDelay)
 import Data.Functor ((<&>))
-import Data.Text (Text)
+import Data.Text (Text, pack)
 
 data Result c
   = TableCreated {parties :: [Party c], tableId :: Text}
@@ -49,9 +51,15 @@ startClient server = pure $ Client{newTable, fundTable, notify}
       [] -> pure []
       _ -> error "not implemented"
 
-runClient :: (IsChain c, Monad m) => Server c m -> HasIO m -> m ()
-runClient server io = loop
+runClient :: (IsChain c, MonadAsync m, MonadDelay m) => Server c m -> HasIO m -> m ()
+runClient server io = race_ loop notify
  where
+  notify = do
+    es <- poll server
+    if null es
+      then threadDelay 1
+      else forM_ es (output io . Ok . pack . show)
+
   loop = do
     prompt io
     input io >>= \case

@@ -1,8 +1,10 @@
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -10,15 +12,17 @@
 module BlackJack.ClientSpec where
 
 import BlackJack.Client (Client (..), runClient, startClient)
-import BlackJack.Client.IO (Output (Ok), mkPureIO, withInput)
+import BlackJack.Client.IO (Command, Err (EOF), HasIO (HasIO, input, output, prompt), Output (Ok))
 import BlackJack.Server (FromChain (..), Host (Host), IsChain (..), Server (..), ServerException (ServerException))
 import BlackJack.Server.Mock (MockChain, MockCoin, MockParty (..))
+import Control.Concurrent.Class.MonadSTM (MonadSTM, atomically, modifyTVar', newTVarIO, readTVar, readTVarIO, writeTVar)
 import Control.Monad.Class.MonadAsync (MonadAsync (race_))
 import Control.Monad.Class.MonadThrow (MonadThrow (throwIO), evaluate)
 import Control.Monad.Class.MonadTimer (threadDelay)
 import Control.Monad.IOSim (runSimOrThrow)
 import Data.Function ((&))
 import Data.String (IsString)
+import Data.Text (pack)
 import Test.Hspec (Spec, anyException, describe, expectationFailure, it, shouldBe, shouldThrow)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (
@@ -53,12 +57,30 @@ spec = do
         let res = runSimOrThrow $ do
               let peers = [alice, bob]
                   server = connectedServer{poll = pure [HeadCreated @MockChain mockId peers]}
-                  client2 = withInput [] $ runClient server mkPureIO
+                  client2 = withIOSimIO [] $ runClient server
               client2
-        res `shouldBe` ((), [Ok ""])
+        res `shouldBe` ((), [Ok (pack $ show $ HeadCreated @MockChain mockId [alice, bob])])
   describe "Fund Table" $ do
     prop "commit to head some funds given table created" prop_commit_to_head_when_funding_table
     prop "commit fails when funds do not match existing coins" prop_commit_fail_on_non_matching_coins
+
+withIOSimIO :: forall m a. MonadSTM m => [Command] -> (HasIO m -> m a) -> m (a, [Output])
+withIOSimIO cmds act = do
+  inputs <- newTVarIO cmds
+  outputs <- newTVarIO []
+  let io =
+        HasIO
+          { input =
+              atomically $
+                readTVar inputs >>= \case
+                  [] -> pure $ Left EOF
+                  (t : ts) -> writeTVar inputs ts >> pure (Right t)
+          , output = \o -> atomically $ modifyTVar' outputs (o :)
+          , prompt = pure ()
+          }
+  res <- act io
+  outs <- reverse <$> readTVarIO outputs
+  pure (res, outs)
 
 failAfter :: Int -> IO () -> IO ()
 failAfter duration =
