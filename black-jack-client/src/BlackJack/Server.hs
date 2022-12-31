@@ -87,7 +87,8 @@ data Server c m = Server
 data FromChain c
   = HeadCreated {headId :: HeadId, parties :: [Party c]}
   | FundCommitted {headId :: HeadId, party :: Party c, coin :: Coin c}
-  | HeadOpened {headId :: HeadId, game :: BlackJack, plays :: [Play]}
+  | HeadOpened {headId :: HeadId}
+  | GameStarted {headId :: HeadId, game :: BlackJack, plays :: [Play]}
   | GameChanged {headId :: HeadId, game :: BlackJack, plays :: [Play]}
   | GameEnded {headId :: HeadId, dealerCards :: [Card], payoffs :: Payoffs}
   deriving (Generic)

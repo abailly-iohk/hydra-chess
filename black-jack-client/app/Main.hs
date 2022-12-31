@@ -7,7 +7,6 @@ import BlackJack.Client (runClient)
 import BlackJack.Client.Console (mkImpureIO)
 import BlackJack.Server (Host (..))
 import BlackJack.Server.Mock (MockParty (..), pid, withMockServer)
-import Control.Monad ((>=>))
 import Data.Text (pack)
 import Options.Applicative (
   Parser,

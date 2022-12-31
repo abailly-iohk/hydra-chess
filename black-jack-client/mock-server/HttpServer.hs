@@ -170,7 +170,7 @@ app state req send =
                   plays = possibleActions game
                   openHead =
                     if length (committed head') == length (peers head')
-                      then HeadOpened head game plays <| mempty
+                      then HeadOpened head <| GameStarted head game plays <| mempty
                       else mempty
                   newEvents = FundCommitted @MockChain head p (MockCoin amount) <| openHead
                   head'' =
