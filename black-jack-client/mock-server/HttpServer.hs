@@ -10,12 +10,25 @@
 
 module HttpServer where
 
-import BlackJack.Game (BlackJack, Outcome (GameContinue, GameEnds), Payoffs, decodePlayerId, forPlayer, newGame, play, possibleActions, possibleActionsFor)
-import BlackJack.Server (FromChain (FundCommitted, GameChanged, GameEnded, HeadCreated, HeadOpened), HeadId (..), Host, Indexed (..), headId)
+import BlackJack.Game (
+  BlackJack,
+  Outcome (GameContinue, GameEnds),
+  Payoffs,
+  decodePlayerId,
+  forPlayer,
+  newGame,
+  play,
+  possibleActions,
+ )
+import BlackJack.Server (
+  FromChain (..),
+  HeadId (..),
+  Indexed (..),
+ )
 import BlackJack.Server.Mock (MockChain, MockCoin (MockCoin), MockParty (Party), pid)
 import Control.Concurrent.STM (TVar, atomically, modifyTVar', newTVarIO, readTVar, readTVarIO, writeTVar)
-import Control.Monad (replicateM, (>=>))
-import Data.Aeson (FromJSON, ToJSON, Value (Object), decode, eitherDecode, encode, toJSON)
+import Control.Monad (replicateM)
+import Data.Aeson (FromJSON, ToJSON, Value (Object), eitherDecode, encode, toJSON)
 import Data.Aeson.KeyMap (insert)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
@@ -30,15 +43,23 @@ import qualified Data.Sequence as Seq
 import Data.String (IsString (fromString))
 import Data.Text (Text, pack, unpack)
 import qualified Data.Text as Text
-import Data.Text.Encoding (decodeUtf8)
-import Data.Text.Lazy (toStrict)
+import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import Data.Time (getCurrentTime)
 import qualified GHC.Clock
 import GHC.Generics (Generic)
 import Network.HTTP.Types (badRequest400, methodNotAllowed405, notFound404, ok200, statusCode)
-import Network.Wai (Application, Middleware, ResponseReceived, pathInfo, requestBody, requestMethod, responseLBS, responseStatus, strictRequestBody)
+import Network.Wai (
+  Application,
+  Middleware,
+  pathInfo,
+  requestMethod,
+  responseLBS,
+  responseStatus,
+  strictRequestBody,
+ )
 import qualified Network.Wai.Handler.Warp as Warp
 import System.Random.Stateful (applyAtomicGen, globalStdGen, uniformR)
+import Prelude hiding (head)
 
 data HttpLog
   = HttpServerListening {host :: Text, port :: Int}
@@ -47,27 +68,25 @@ data HttpLog
   deriving stock (Eq, Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
+httpServer :: String -> Int -> IO ()
 httpServer host port =
   newTVarIO (Chain mempty mempty mempty) >>= Warp.runSettings settings . logRequest . app
  where
   logRequest :: Middleware
-  logRequest app req send = do
+  logRequest k req send = do
     start <- GHC.Clock.getMonotonicTime
     doLog
       HttpRequest
         { path = "/" <> Text.intercalate "/" (pathInfo req)
         , method = decodeUtf8 (requestMethod req)
         }
-    app req $ \res -> do
+    k req $ \res -> do
       result <- send res
       end <- GHC.Clock.getMonotonicTime
       let time = (end - start) * 1_000
       let status = statusCode $ responseStatus res
       doLog HttpResponse{status, time}
       pure result
-   where
-    method = decodeUtf8 (requestMethod req)
-    path = pathInfo req
 
   settings =
     Warp.defaultSettings
@@ -78,15 +97,15 @@ httpServer host port =
 
 data HeadState
   = Initialising
-      { parties :: [MockParty]
+      { peers :: [MockParty]
       , committed :: Map Text Integer
       }
   | Open
-      { parties :: [MockParty]
+      { peers :: [MockParty]
       , game :: BlackJack
       }
   | Finished
-      { parties :: [MockParty]
+      { peers :: [MockParty]
       , payoffs :: Payoffs
       }
   deriving (Eq, Show)
@@ -108,12 +127,12 @@ app state req send =
   route "POST" ["play", headId, partyId, num] = handlePlay (HeadId headId) partyId (readNumber num)
   route "GET" ["events", idx, num] = handleEvents (readNumber idx) (readNumber num)
   route "GET" _ = send $ responseLBS notFound404 [] ""
-  route method _ = send $ responseLBS methodNotAllowed405 [] ""
+  route _ _ = send $ responseLBS methodNotAllowed405 [] ""
 
   handleConnect hostId = do
     decoded <- eitherDecode <$> strictRequestBody req
     case decoded of
-      Left err -> send $ responseLBS badRequest400 [] "Invalid host info body"
+      Left err -> send $ responseLBS badRequest400 [] ("Invalid host info body: " <> LBS.fromStrict (encodeUtf8 $ pack err))
       Right hostInfo -> do
         atomically $ modifyTVar' state $ \chain@Chain{knownHosts} -> chain{knownHosts = Map.insert hostId hostInfo knownHosts}
         send $ responseLBS ok200 [] ""
@@ -121,7 +140,7 @@ app state req send =
   handleInit = do
     decoded <- eitherDecode <$> strictRequestBody req
     case decoded of
-      Left err -> send $ responseLBS badRequest400 [] "Invalid peers body"
+      Left err -> send $ responseLBS badRequest400 [] ("Invalid peers body: " <> LBS.fromStrict (encodeUtf8 $ pack err))
       Right (peers :: [Text]) -> do
         newHeadId <- mkNewHeadId
         atomically $ do
@@ -135,33 +154,32 @@ app state req send =
           writeTVar state chain'
         send $ responseLBS ok200 [] $ encode newHeadId
 
-  handleCommit hid partyId amount = do
-    let seed = fromInteger $ readNumber $ "0x" <> headId hid
+  handleCommit head@(HeadId hid) partyId amount = do
+    let seed = fromInteger $ readNumber $ "0x" <> hid
     res <- atomically $ do
       chain@Chain{heads, events} <- readTVar state
-      let head = Map.lookup hid heads
-      case head of
-        Nothing -> pure $ Left $ "cannot find headId " <> headId hid
+      case Map.lookup head heads of
+        Nothing -> pure $ Left $ "cannot find headId " <> hid
         Just h@Initialising{} -> do
-          let party = List.find (\p -> pid p == partyId) $ parties h
+          let party = List.find (\p -> pid p == partyId) $ peers h
           case party of
             Nothing -> pure $ Left $ "cannot find party " <> partyId
             Just p@Party{} -> do
               let head' = h{committed = Map.insert partyId amount (committed h)}
-                  game = newGame (length (parties head') - 1) seed
+                  game = newGame (length (peers head') - 1) seed
                   plays = possibleActions game
                   openHead =
-                    if length (committed head') == length (parties head')
-                      then HeadOpened hid game plays <| mempty
+                    if length (committed head') == length (peers head')
+                      then HeadOpened head game plays <| mempty
                       else mempty
-                  newEvents = FundCommitted @MockChain hid p (MockCoin amount) <| openHead
+                  newEvents = FundCommitted @MockChain head p (MockCoin amount) <| openHead
                   head'' =
                     if null openHead
                       then head'
-                      else Open (parties head') game
+                      else Open (peers head') game
                   chain' =
                     chain
-                      { heads = Map.insert hid head'' heads
+                      { heads = Map.insert head head'' heads
                       , events = events <> newEvents
                       }
               writeTVar state chain'
@@ -169,14 +187,13 @@ app state req send =
         Just _ -> pure $ Right () -- TODO: really ignore?
     send $ responseLBS (either (const badRequest400) (const ok200) res) [] ""
 
-  handlePlay hid partyId num = do
+  handlePlay head@(HeadId hid) partyId num = do
     res <- atomically $ do
       chain@Chain{heads, events} <- readTVar state
-      let head = Map.lookup hid heads
-      case head of
-        Nothing -> pure $ Left $ "cannot find headId " <> headId hid
-        Just h@Open{parties, game} -> do
-          let party = List.findIndex (\p -> pid p == partyId) parties
+      case Map.lookup head heads of
+        Nothing -> pure $ Left $ "cannot find headId " <> hid
+        Just Open{peers, game} -> do
+          let party = List.findIndex (\p -> pid p == partyId) peers
           case party of
             Nothing -> pure $ Left $ "cannot find party " <> partyId
             Just numPlayer -> do
@@ -192,11 +209,11 @@ app state req send =
                           chain' =
                             case outcome of
                               GameEnds dealerCards payoffs ->
-                                let event = GameEnded hid dealerCards payoffs
-                                 in chain{heads = Map.insert hid (Finished parties payoffs) heads, events = events |> event}
+                                let event = GameEnded head dealerCards payoffs
+                                 in chain{heads = Map.insert head (Finished peers payoffs) heads, events = events |> event}
                               GameContinue game' ->
-                                let event = GameChanged hid game' (possibleActions game')
-                                 in chain{heads = Map.insert hid (h{game = game'}) heads, events = events |> event}
+                                let event = GameChanged head game' (possibleActions game')
+                                 in chain{heads = Map.insert head (Open{game = game', peers}) heads, events = events |> event}
                       writeTVar state chain'
                       pure $ Right ()
                     else pure $ Left $ "invalid play " <> pack (show p) <> " for player " <> partyId
