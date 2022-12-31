@@ -72,7 +72,7 @@ newGameParser = do
 stopParser :: Parser Command
 stopParser = do
   string "stop" >> spaceConsumer
-  NewGame <$> (identifier <* spaceConsumer)
+  Stop <$> (identifier <* spaceConsumer)
 
 identifier :: Parser Text
 identifier = pack <$> ((:) <$> alphaNumChar <*> many alphaNumChar)

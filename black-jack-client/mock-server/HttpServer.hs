@@ -129,7 +129,7 @@ app state req send =
   route "POST" ["commit", headId, partyId, amount] = handleCommit (HeadId headId) partyId (readNumber amount)
   route "POST" ["play", headId, partyId, num] = handlePlay (HeadId headId) partyId (readNumber num)
   route "POST" ["start", headId] = handleRestart (HeadId headId)
-  --route "POST" ["close", headId] = handleClose (HeadId headId)
+  route "POST" ["close", headId] = handleClose (HeadId headId)
   route "GET" ["events", idx, num] = handleEvents (readNumber idx) (readNumber num)
   route "GET" _ = send $ responseLBS notFound404 [] ""
   route _ _ = send $ responseLBS methodNotAllowed405 [] ""
@@ -264,13 +264,25 @@ app state req send =
         Just _ -> pure $ Left $ pack $ "game with id " <> show hid <> " is not finished"
     send $ responseLBS (either (const badRequest400) (const ok200) res) [] ""
 
-  -- handleClose head@(HeadId hid) = do
-  --   res <- atomically $ do
-  --     chain@Chain{heads, events} <- readTVar state
-  --     case Map.lookup head heads of
-  --       Nothing -> pure $ Left $ "cannot find headId " <> hid
-  --       Just Open{} ->
-  --   send $ responseLBS ok200 [] $ encode newHeadId
+  -- TODO what happens with contestation?
+  -- we close with the latest gains which includes the bets in the current game,
+  -- this is obviously a great way for the dealer to gain money!
+  handleClose head@(HeadId hid) = do
+    res <- atomically $ do
+      chain@Chain{heads, events} <- readTVar state
+      case Map.lookup head heads of
+        Nothing -> pure $ Left $ "cannot find headId " <> hid
+        Just Open{peers, gains} -> do
+          let event = HeadClosed head gains
+              chain' =
+                chain
+                  { heads = Map.insert head (Closing{peers, payoffs = gains}) heads
+                  , events = events |> event
+                  }
+          writeTVar state chain'
+          pure $ Right ()
+        Just _ -> pure $ Left $ pack $ "game with id " <> show hid <> " is not running"
+    send $ responseLBS (either (const badRequest400) (const ok200) res) [] ""
 
   handleEvents idx num = do
     Chain{events} <- readTVarIO state
