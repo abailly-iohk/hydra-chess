@@ -1,4 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -40,7 +39,7 @@ readInput :: Text -> Either Text Command
 readInput = first (pack . show) . parse inputParser ""
 
 inputParser :: Parser Command
-inputParser = quitParser <|> newTableParser <|> fundTableParser <|> playParser
+inputParser = quitParser <|> newTableParser <|> fundTableParser <|> playParser <|> newGameParser
 
 quitParser :: Parser Command
 quitParser = (try (string "q") <|> string "quit") $> Quit
@@ -59,6 +58,11 @@ playParser :: Parser Command
 playParser = do
   string "play" >> spaceConsumer
   Play <$> (identifier <* spaceConsumer) <*> L.decimal
+
+newGameParser :: Parser Command
+newGameParser = do
+  string "newGame" >> spaceConsumer
+  NewGame <$> (identifier <* spaceConsumer)
 
 identifier :: Parser Text
 identifier = pack <$> ((:) <$> alphaNumChar <*> many alphaNumChar)

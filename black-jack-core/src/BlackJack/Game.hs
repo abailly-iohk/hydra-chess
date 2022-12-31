@@ -345,7 +345,8 @@ instance ToJSON DealerHand where
 
 instance FromJSON DealerHand where
   parseJSON =
-    withArray "cards" $
+    withArray
+      "cards"
       ( traverse parseJSON
           >=> (\cs -> pure (DealerHand (None, toList cs)))
       )

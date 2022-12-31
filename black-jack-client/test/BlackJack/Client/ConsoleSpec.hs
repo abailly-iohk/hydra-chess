@@ -29,3 +29,6 @@ spec = do
 
   prop "parses 'play' command" $ \(HeadId headId) (Positive (Small n)) ->
     readInput ("play " <> headId <> " " <> Text.pack (show n)) `shouldBe` Right (Play headId n)
+
+  prop "parses 'newGame' command" $ \(HeadId headId) ->
+    readInput ("newGame " <> headId) `shouldBe` Right (NewGame headId)

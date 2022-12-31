@@ -108,4 +108,5 @@ connectedServer =
     , commit = \_ _ -> pure ()
     , poll = \_ _ -> pure $ Indexed 0 []
     , play = \_ _ -> pure ()
+    , newGame = \_ -> pure ()
     }

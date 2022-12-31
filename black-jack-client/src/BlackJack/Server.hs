@@ -26,7 +26,7 @@ import Test.QuickCheck (Arbitrary (arbitrary), vectorOf)
 data Message = Ping
   deriving (Eq, Show)
 
-data ServerException = ServerException {reason :: Text}
+newtype ServerException = ServerException {reason :: Text}
   deriving (Eq, Show)
 
 instance Exception ServerException
@@ -77,6 +77,10 @@ data Server c m = Server
     -- of `possibleActions`.
     -- Might throw a `ServerException` if the play is invalid.
     play :: HeadId -> Int -> m ()
+  , -- | When the game has ended, restarts a new one with initial state and possible
+    -- playes.
+    -- Might throw a `ServerException` if the play is invalid.
+    newGame :: HeadId -> m ()
   , -- | Poll server for latest `FromChain` messages available.
     -- Takes the first event to retrieve and the maximum number of elements to send back.
     -- It will return 0 or more messages, depending on what's available, and the index

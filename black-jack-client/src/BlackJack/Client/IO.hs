@@ -18,6 +18,7 @@ data Command
   = NewTable [Text]
   | FundTable Text Integer
   | Play Text Int
+  | NewGame Text
   | Quit
   deriving (Eq, Show)
 

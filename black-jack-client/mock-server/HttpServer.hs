@@ -58,7 +58,7 @@ import Network.Wai (
   strictRequestBody,
  )
 import qualified Network.Wai.Handler.Warp as Warp
-import System.Random.Stateful (applyAtomicGen, globalStdGen, uniformR)
+import System.Random.Stateful (applyAtomicGen, globalStdGen, uniform, uniformR)
 import Prelude hiding (head)
 
 data HttpLog
@@ -125,6 +125,7 @@ app state req send =
   route "POST" ["init"] = handleInit
   route "POST" ["commit", headId, partyId, amount] = handleCommit (HeadId headId) partyId (readNumber amount)
   route "POST" ["play", headId, partyId, num] = handlePlay (HeadId headId) partyId (readNumber num)
+  route "POST" ["start", headId] = handleRestart (HeadId headId)
   route "GET" ["events", idx, num] = handleEvents (readNumber idx) (readNumber num)
   route "GET" _ = send $ responseLBS notFound404 [] ""
   route _ _ = send $ responseLBS methodNotAllowed405 [] ""
@@ -220,6 +221,23 @@ app state req send =
         Just _ -> pure $ Left $ pack $ "game with id " <> show hid <> " is not opened"
     send $ responseLBS (either (const badRequest400) (const ok200) res) [] ""
 
+  handleRestart head@(HeadId hid) = do
+    seed <- randomSeed -- TODO get the seed from the previous game
+    res <- atomically $ do
+      chain@Chain{heads, events} <- readTVar state
+      case Map.lookup head heads of
+        Nothing -> pure $ Left $ "cannot find headId " <> hid
+        -- TODO do something with payoffs
+        Just Finished{peers} -> do
+          let game = newGame (length peers - 1) seed
+              acts = possibleActions game
+              event = GameStarted head game acts
+              chain' = chain{heads = Map.insert head (Open peers game) heads, events = events |> event}
+          writeTVar state chain'
+          pure $ Right ()
+        Just _ -> pure $ Left $ pack $ "game with id " <> show hid <> " is not finished"
+    send $ responseLBS (either (const badRequest400) (const ok200) res) [] ""
+
   handleEvents idx num = do
     Chain{events} <- readTVarIO state
     let indexed =
@@ -234,6 +252,9 @@ readNumber v =
   case reads (unpack v) of
     [(a, [])] -> a
     _ -> error $ "fail to read from " <> unpack v
+
+randomSeed :: IO Int
+randomSeed = applyAtomicGen uniform globalStdGen
 
 mkNewHeadId :: IO HeadId
 mkNewHeadId = HeadId . pack . fmap toChar <$> replicateM 32 randomNibble

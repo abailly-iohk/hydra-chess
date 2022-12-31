@@ -38,9 +38,10 @@ newMockServer myParty = do
       , commit = sendCommit cnx (pid myParty)
       , poll = pollEvents cnx
       , play = playGame cnx (pid myParty)
+      , newGame = restartGame cnx
       }
 
-data MockServerError = MockServerError String
+newtype MockServerError = MockServerError String
   deriving (Eq, Show)
 
 instance Exception MockServerError
@@ -81,6 +82,12 @@ playGame Host{host, port} myId (HeadId hid) playIndex = do
   request <- parseRequest $ "POST http://" <> unpack host <> ":" <> show port <> "/play/" <> unpack hid <> "/" <> unpack myId <> "/" <> show playIndex
   response <- httpLBS request
   when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to play " <> show playIndex <> " for player " <> show myId)
+
+restartGame :: Host -> HeadId -> IO ()
+restartGame Host{host, port} (HeadId hid) = do
+  request <- parseRequest $ "POST http://" <> unpack host <> ":" <> show port <> "/start/" <> unpack hid
+  response <- httpLBS request
+  when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to restart game " <> unpack hid)
 
 pollEvents :: Host -> Integer -> Integer -> IO (Indexed MockChain)
 pollEvents Host{host, port} index num = do
