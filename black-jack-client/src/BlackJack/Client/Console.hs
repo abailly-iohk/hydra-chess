@@ -39,7 +39,12 @@ readInput :: Text -> Either Text Command
 readInput = first (pack . show) . parse inputParser ""
 
 inputParser :: Parser Command
-inputParser = quitParser <|> newTableParser <|> fundTableParser <|> playParser <|> newGameParser
+inputParser =
+  quitParser <|> newTableParser
+    <|> fundTableParser
+    <|> playParser
+    <|> newGameParser
+    <|> stopParser
 
 quitParser :: Parser Command
 quitParser = (try (string "q") <|> string "quit") $> Quit
@@ -62,6 +67,11 @@ playParser = do
 newGameParser :: Parser Command
 newGameParser = do
   string "newGame" >> spaceConsumer
+  NewGame <$> (identifier <* spaceConsumer)
+
+stopParser :: Parser Command
+stopParser = do
+  string "stop" >> spaceConsumer
   NewGame <$> (identifier <* spaceConsumer)
 
 identifier :: Parser Text

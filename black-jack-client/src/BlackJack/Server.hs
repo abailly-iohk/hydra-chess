@@ -17,6 +17,7 @@ import Control.Exception (Exception)
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as Hex
+import Data.Map (Map)
 import Data.String (IsString)
 import Data.Text (Text)
 import Data.Text.Encoding (decodeUtf8)
@@ -81,6 +82,10 @@ data Server c m = Server
     -- playes.
     -- Might throw a `ServerException` if the play is invalid.
     newGame :: HeadId -> m ()
+  , -- | Close the given head, effectively stopping the game and committing back
+    -- payoffs on-chain.
+    -- Might throw a `ServerException` if the play is invalid.
+    closeHead :: HeadId -> m ()
   , -- | Poll server for latest `FromChain` messages available.
     -- Takes the first event to retrieve and the maximum number of elements to send back.
     -- It will return 0 or more messages, depending on what's available, and the index
@@ -94,7 +99,7 @@ data FromChain c
   | HeadOpened {headId :: HeadId}
   | GameStarted {headId :: HeadId, game :: BlackJack, plays :: [Play]}
   | GameChanged {headId :: HeadId, game :: BlackJack, plays :: [Play]}
-  | GameEnded {headId :: HeadId, dealerCards :: [Card], payoffs :: Payoffs}
+  | GameEnded {headId :: HeadId, dealerCards :: [Card], payoffs :: Payoffs, gains :: Map Text Int}
   deriving (Generic)
 
 deriving instance IsChain c => Show (FromChain c)

@@ -32,3 +32,6 @@ spec = do
 
   prop "parses 'newGame' command" $ \(HeadId headId) ->
     readInput ("newGame " <> headId) `shouldBe` Right (NewGame headId)
+    
+  prop "parses 'stop' command" $ \(HeadId headId) ->
+    readInput ("stop " <> headId) `shouldBe` Right (Stop headId)

@@ -39,6 +39,7 @@ newMockServer myParty = do
       , poll = pollEvents cnx
       , play = playGame cnx (pid myParty)
       , newGame = restartGame cnx
+      , closeHead = sendClose cnx
       }
 
 newtype MockServerError = MockServerError String
@@ -88,6 +89,12 @@ restartGame Host{host, port} (HeadId hid) = do
   request <- parseRequest $ "POST http://" <> unpack host <> ":" <> show port <> "/start/" <> unpack hid
   response <- httpLBS request
   when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to restart game " <> unpack hid)
+
+sendClose :: Host -> HeadId -> IO ()
+sendClose Host{host, port} (HeadId hid) = do
+  request <- parseRequest $ "POST http://" <> unpack host <> ":" <> show port <> "/close/" <> unpack hid
+  response <- httpLBS request
+  when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to close head " <> unpack hid)
 
 pollEvents :: Host -> Integer -> Integer -> IO (Indexed MockChain)
 pollEvents Host{host, port} index num = do

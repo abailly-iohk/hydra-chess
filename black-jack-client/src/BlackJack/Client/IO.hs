@@ -19,6 +19,7 @@ data Command
   | FundTable Text Integer
   | Play Text Int
   | NewGame Text
+  | Stop Text
   | Quit
   deriving (Eq, Show)
 

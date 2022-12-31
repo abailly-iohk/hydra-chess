@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -11,9 +12,10 @@
 module HttpServer where
 
 import BlackJack.Game (
-  BlackJack,
   Outcome (GameContinue, GameEnds),
   Payoffs,
+  Play (Bet),
+  PlayerId (Dealer, PlayerId),
   decodePlayerId,
   forPlayer,
   newGame,
@@ -98,15 +100,16 @@ httpServer host port =
 data HeadState
   = Initialising
       { peers :: [MockParty]
-      , committed :: Map Text Integer
+      , committed :: Map Text Int
       }
   | Open
       { peers :: [MockParty]
-      , game :: BlackJack
+      , gains :: Map Text Int
+      , outcome :: Outcome
       }
-  | Finished
+  | Closing
       { peers :: [MockParty]
-      , payoffs :: Payoffs
+      , payoffs :: Map Text Int
       }
   deriving (Eq, Show)
 
@@ -126,6 +129,7 @@ app state req send =
   route "POST" ["commit", headId, partyId, amount] = handleCommit (HeadId headId) partyId (readNumber amount)
   route "POST" ["play", headId, partyId, num] = handlePlay (HeadId headId) partyId (readNumber num)
   route "POST" ["start", headId] = handleRestart (HeadId headId)
+  --route "POST" ["close", headId] = handleClose (HeadId headId)
   route "GET" ["events", idx, num] = handleEvents (readNumber idx) (readNumber num)
   route "GET" _ = send $ responseLBS notFound404 [] ""
   route _ _ = send $ responseLBS methodNotAllowed405 [] ""
@@ -173,11 +177,16 @@ app state req send =
                     if length (committed head') == length (peers head')
                       then HeadOpened head <| GameStarted head game plays <| mempty
                       else mempty
-                  newEvents = FundCommitted @MockChain head p (MockCoin amount) <| openHead
+                  newEvents = FundCommitted @MockChain head p (MockCoin $ fromIntegral amount) <| openHead
                   head'' =
                     if null openHead
                       then head'
-                      else Open (peers head') game
+                      else
+                        Open
+                          { peers = peers head'
+                          , outcome = GameContinue game
+                          , gains = committed head'
+                          }
                   chain' =
                     chain
                       { heads = Map.insert head head'' heads
@@ -193,7 +202,7 @@ app state req send =
       chain@Chain{heads, events} <- readTVar state
       case Map.lookup head heads of
         Nothing -> pure $ Left $ "cannot find headId " <> hid
-        Just Open{peers, game} -> do
+        Just Open{peers, gains, outcome = GameContinue game} -> do
           let party = List.findIndex (\p -> pid p == partyId) peers
           case party of
             Nothing -> pure $ Left $ "cannot find party " <> partyId
@@ -207,14 +216,31 @@ app state req send =
                   if forPlayer p == playerId
                     then do
                       let outcome = play game p
-                          chain' =
+                          (event, newState) =
                             case outcome of
                               GameEnds dealerCards payoffs ->
-                                let event = GameEnded head dealerCards payoffs
-                                 in chain{heads = Map.insert head (Finished peers payoffs) heads, events = events |> event}
+                                let gains' = applyGains gains peers payoffs
+                                 in ( GameEnded head dealerCards payoffs gains'
+                                    , Open{peers, gains = gains', outcome}
+                                    )
                               GameContinue game' ->
-                                let event = GameChanged head game' (possibleActions game')
-                                 in chain{heads = Map.insert head (Open{game = game', peers}) heads, events = events |> event}
+                                let dealerId = pid $ List.head peers
+                                    open = case p of
+                                      Bet _ ->
+                                        Open
+                                          { outcome
+                                          , peers
+                                          , gains = Map.adjust (+ 100) dealerId $ Map.adjust (+ (-100)) partyId gains
+                                          }
+                                      _ -> Open{outcome, peers, gains}
+                                 in (GameChanged head game' (possibleActions game'), open)
+
+                          chain' =
+                            chain
+                              { heads = Map.insert head newState heads
+                              , events = events |> event
+                              }
+
                       writeTVar state chain'
                       pure $ Right ()
                     else pure $ Left $ "invalid play " <> pack (show p) <> " for player " <> partyId
@@ -228,15 +254,23 @@ app state req send =
       case Map.lookup head heads of
         Nothing -> pure $ Left $ "cannot find headId " <> hid
         -- TODO do something with payoffs
-        Just Finished{peers} -> do
+        Just Open{peers, gains} -> do
           let game = newGame (length peers - 1) seed
               acts = possibleActions game
               event = GameStarted head game acts
-              chain' = chain{heads = Map.insert head (Open peers game) heads, events = events |> event}
+              chain' = chain{heads = Map.insert head (Open{peers, outcome = GameContinue game, gains}) heads, events = events |> event}
           writeTVar state chain'
           pure $ Right ()
         Just _ -> pure $ Left $ pack $ "game with id " <> show hid <> " is not finished"
     send $ responseLBS (either (const badRequest400) (const ok200) res) [] ""
+
+  -- handleClose head@(HeadId hid) = do
+  --   res <- atomically $ do
+  --     chain@Chain{heads, events} <- readTVar state
+  --     case Map.lookup head heads of
+  --       Nothing -> pure $ Left $ "cannot find headId " <> hid
+  --       Just Open{} ->
+  --   send $ responseLBS ok200 [] $ encode newHeadId
 
   handleEvents idx num = do
     Chain{events} <- readTVarIO state
@@ -246,6 +280,17 @@ app state req send =
             , events = toList $ Seq.take num $ Seq.drop idx events
             }
     send $ responseLBS ok200 [] $ encode indexed
+
+applyGains :: Map Text Int -> [MockParty] -> Payoffs -> Map Text Int
+applyGains gains peers payoffs =
+  let won = sum payoffs
+      playerToParty =
+        pid . \case
+          (PlayerId n) -> peers !! n
+          Dealer -> List.head peers
+      payoffsToParty = Map.mapKeys playerToParty payoffs
+   in Map.adjust (+ (- won)) (playerToParty Dealer) $
+        Map.unionWith (+) gains payoffsToParty
 
 readNumber :: (Read a, Num a) => Text -> a
 readNumber v =

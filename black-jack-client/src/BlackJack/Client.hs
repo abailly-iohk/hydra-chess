@@ -47,7 +47,7 @@ runClient server io = race_ loop (notify 0)
       Right cmd -> handleCommand server cmd >>= output io >> loop
 
 handleCommand :: (IsChain c, Monad m) => Server c m -> Command -> m Output
-handleCommand Server{initHead, commit, play, newGame} = \case
+handleCommand Server{initHead, commit, play, closeHead, newGame} = \case
   NewTable peers ->
     initHead peers <&> (\HeadId{headId} -> Ok . ("head initialised with id " <>) $ headId)
   FundTable tableId amount ->
@@ -56,4 +56,6 @@ handleCommand Server{initHead, commit, play, newGame} = \case
     play (HeadId tableId) n >> pure (Ok "played")
   NewGame tableId ->
     newGame (HeadId tableId) >> pure (Ok "new game")
+  Stop tableId ->
+    closeHead (HeadId tableId) >> pure (Ok "closed")
   Quit -> pure Bye
