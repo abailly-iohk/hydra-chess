@@ -2,7 +2,7 @@
 
 An experiment to build a distributed and decentralised Black Jack game on top of Cardano Layer 2, [Hydra](https://hydra.family).
 
-> :warn: **This project is a work-in-progress and experimental, it's not meant to be use for real playing on mainnet**
+> :warning: **This project is a work-in-progress and experimental, it's not meant to be use for real playing on mainnet**
 
 ## Status
 
