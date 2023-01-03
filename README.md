@@ -9,6 +9,7 @@ An experiment to build a distributed and decentralised Black Jack game on top of
 * [x] Basic rules [in Haskell](./black-jack-core/src/BlackJack/Game.hs) (should be easy to port to [Plutus](https://docs.cardano.org/plutus/learn-about-plutus))
 * [x] Barebones Console based interface
 * [x] Mock server simulating lifecycle on Hydra (for testing purpose)
+* [ ] Proper "randomness"
 * [ ] Hydra server (requires implementing multi-head hydra)
 * [ ] Web UI
 
@@ -21,6 +22,28 @@ The ability to play games in a safe and decentralised way is one possible use ca
 * [Black Jack](https://en.wikipedia.org/wiki/Blackjack) is totally uninteresting as far as game goes, with very limited strategy and decisions for the players
 * Yet, it has rules, allow multiple players to participate in a single game, emphasized betting and monetary gains, and most importantly has an important element of _randomness_ which is particularly tricky to implement on a deterministic execution engine
 * It's simpler than Poker
+
+# Randomness
+
+* By convention the party initiating the Head is the _dealer_ and represents the _Bank_: It is responsible for paying off the players' gains and dealing the cards while the game is running
+* The _dealer_ plays mechanically, following the "Hit at 16, Stand at 17" rule
+* It suffices the players to be ignorant of the cards distribution for the game to be "interesting"
+* To generate a _seed_ for a PRNG,
+  * The dealer generates a pair of VRF keys
+  * At initialisation time, it generates a _nonce_ which is encrypted using the VRF signing key and committed on-chain along with the VRF proof
+  * The nonce is privately XORed with the UTxO references of the players' committed outputs once they are knonw (eg. when the Head is opened)
+  * This is the starting seed for the game which is updated using standard PRNG when dealing cards
+* The current seed is always posted encrypted (with proof) alongside the game's state while the Game is running
+* When the head is closed, the initial nonce is revealed and the whole sequence of seeds can be verified using the VRF proof
+
+* This seed
+
+## Links
+
+* [VRF on Cardano](https://hackernoon.com/generating-randomness-in-blockchain-verifiable-random-function-ft1534ud)
+* [VRF on Polkadot](https://wiki.polkadot.network/docs/learn-randomness)
+* [RANDAO on Ethereum](https://soliditydeveloper.com/prevrandao)
+* Some discussion on [randomness for games on blockchain](https://blog.logrocket.com/build-random-number-generator-blockchain/)
 
 # Build
 
