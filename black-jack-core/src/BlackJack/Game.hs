@@ -12,7 +12,16 @@
 module BlackJack.Game where
 
 import Control.Monad ((>=>))
-import Data.Aeson (FromJSON, FromJSONKey (fromJSONKey), FromJSONKeyFunction (FromJSONKeyText), ToJSON, ToJSONKey, object, toJSON, withArray, withObject, withText, (.:), (.=))
+import Data.Aeson (
+  FromJSON,
+  FromJSONKey (fromJSONKey),
+  FromJSONKeyFunction (FromJSONKeyText),
+  ToJSON,
+  ToJSONKey,
+  toJSON,
+  withArray,
+  withText,
+ )
 import Data.Aeson.KeyMap ()
 import Data.Aeson.Types (FromJSON (parseJSON), ToJSONKey (toJSONKey), toJSONKeyText)
 import Data.Foldable (toList)
@@ -280,14 +289,7 @@ instance Arbitrary Face where
 
 data Card = Card {color :: Color, face :: Face}
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (Uniform)
-
-instance ToJSON Card where
-  toJSON (Card col fac) = toJSON [toJSON col, toJSON fac]
-
-instance FromJSON Card where
-  parseJSON = withArray "card" $ \(toList -> [v, v']) ->
-    Card <$> parseJSON v <*> parseJSON v'
+  deriving anyclass (Uniform, ToJSON, FromJSON)
 
 instance Arbitrary Card where
   arbitrary = Card <$> arbitrary <*> arbitrary
@@ -363,7 +365,8 @@ data Hidden c = Hidden c | None
 data PlayerId
   = PlayerId {playerId :: Int}
   | Dealer
-  deriving stock (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)
 
 instance ToJSONKey PlayerId where
   toJSONKey = toJSONKeyText $ \case
@@ -377,26 +380,6 @@ instance FromJSONKey PlayerId where
       [(0, [])] -> Dealer
       [(n, [])] -> PlayerId n
       _ -> error $ "player id must be 0 for dealer, or 1 and above, found: " <> s
-
-instance ToJSON PlayerId where
-  toJSON = \case
-    PlayerId p ->
-      object
-        [ "tag" .= ("PlayerId" :: Text.Text)
-        , "playerId" .= p
-        ]
-    Dealer ->
-      object
-        ["tag" .= ("Dealer" :: Text.Text)]
-
-instance FromJSON PlayerId where
-  parseJSON = withObject "PlayerId" $ \o ->
-    o .: "tag" >>= withText "id" (parsePlayerId o)
-   where
-    parsePlayerId o = \case
-      "Dealer" -> pure Dealer
-      "PlayerId" -> PlayerId <$> o .: "playerId"
-      other -> fail $ "Unknown tag " <> show other
 
 decodePlayerId :: Int -> PlayerId
 decodePlayerId 0 = Dealer
