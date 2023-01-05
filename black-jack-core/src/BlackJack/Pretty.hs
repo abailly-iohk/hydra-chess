@@ -56,6 +56,7 @@ displayPlayer (pid, p) =
 displayPlayerState :: Player -> [Char]
 displayPlayerState (Playing cas n) = "(" <> show n <> ") " <> displayPlayerHand cas
 displayPlayerState (Standing cas n) = "[" <> show n <> "] " <> displayPlayerHand cas
+displayPlayerState (Hitting cas n) = "{" <> show n <> "} " <> displayPlayerHand cas
 
 displayPlayerHand :: [Card] -> String
 displayPlayerHand cards = unwords (show (handValues cards) : (displayCard <$> cards))

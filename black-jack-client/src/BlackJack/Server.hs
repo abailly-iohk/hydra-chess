@@ -83,7 +83,8 @@ data Server c m = Server
     -- Might throw a `ServerException` if the play is invalid.
     newGame :: HeadId -> m ()
   , -- | Close the given head, effectively stopping the game and committing back
-    -- payoffs on-chain.
+    -- payoffs on-chain. Fanout will be posted automatically at end of contestation
+    -- period.
     -- Might throw a `ServerException` if the play is invalid.
     closeHead :: HeadId -> m ()
   , -- | Poll server for latest `FromChain` messages available.

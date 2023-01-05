@@ -39,7 +39,6 @@ import Test.QuickCheck (
   tabulate,
   vectorOf,
   (===),
-  (==>),
  )
 
 spec :: Spec
@@ -51,8 +50,9 @@ spec = parallel $ do
     prop "has possible actions when setting up" prop_possible_actions_for_all_players_when_setting_up
     prop "has possible actions when playing" prop_possible_actions_for_one_player_when_playing
     prop "advance to next player or dealer when standing" prop_advance_next_player_when_standing
-    prop "don't advance to next player or dealer when hitting" prop_dont_advance_next_player_when_hitting
-    prop "is dealt a new card when hits" prop_deals_new_card_when_hit
+    prop "advance to dealer when hitting" prop_advance_to_dealer_when_hitting
+    prop "advance to player after dealing card" prop_advance_to_player_after_dealing_card
+    prop "is dealt a new card by dealer when hits" prop_deals_new_card_when_hitting
   describe "dealer" $ do
     prop "plays after last player" prop_dealer_plays_after_last_player
     prop "keeps playing when hitting " prop_dealer_keeps_playing_when_hitting
@@ -143,11 +143,22 @@ prop_advance_next_player_when_standing (RunningGame game) =
    in next game `notElem` (forPlayer <$> possibleActions game')
         & counterexample ("updated game: " <> show game')
 
-prop_dont_advance_next_player_when_hitting :: RunningGame 2 -> Property
-prop_dont_advance_next_player_when_hitting (RunningGame game) =
+prop_advance_to_dealer_when_hitting :: RunningGame 2 -> Property
+prop_advance_to_dealer_when_hitting (RunningGame game) =
   let GameContinue game' = play game (Hit $ next game)
-   in next game `elem` (forPlayer <$> possibleActions game')
+      actions = possibleActions game'
+   in next game' == Dealer && actions == [DealCard $ next game]
         & counterexample ("updated game: " <> show game')
+        & counterexample ("actions: " <> show actions)
+
+prop_advance_to_player_after_dealing_card :: RunningGame 2 -> Property
+prop_advance_to_player_after_dealing_card (RunningGame game) =
+  forAll (onePlayerHitting game) $ \(pid, game') ->
+    let GameContinue game'' = play game' (DealCard pid)
+        actions = possibleActions game''
+     in next game'' == pid
+          & counterexample ("updated game: " <> show game'')
+          & counterexample ("actions: " <> show actions)
 
 prop_dealer_plays_after_last_player :: RunningGame 2 -> Property
 prop_dealer_plays_after_last_player (RunningGame game) =
@@ -171,24 +182,30 @@ prop_game_ends_after_dealer_stands (RunningGame game) =
    in isEndGame outcome
         & counterexample ("outcome: " <> show outcome)
 
-prop_dealer_hits_at_16_stand_at_17 :: DealerHand -> Property
-prop_dealer_hits_at_16_stand_at_17 hand =
-  let acts = dealerActions hand
+prop_dealer_hits_at_16_stand_at_17 :: RunningGame 1 -> DealerHand -> Property
+prop_dealer_hits_at_16_stand_at_17 (RunningGame game) hand =
+  let acts = dealerActions (players game) hand
    in acts == [Hit Dealer] || acts == [Stand Dealer]
         & counterexample ("Actions: " <> show acts)
         & tabulate "Actions" (concat $ take 1 . words . show <$> acts)
         & coverTable "Actions" [("Hit", 30), ("Stand", 70)]
         & checkCoverage
 
-prop_deals_new_card_when_hit :: RunningGame 2 -> Property
-prop_deals_new_card_when_hit (RunningGame game) =
-  forAll (genPlay game) $ \p ->
-    let GameContinue game' = play game p
-        cardsBefore = playerHand (forPlayer p) game
-        cardsAfter = playerHand (forPlayer p) game'
-     in isHit p ==> length cardsAfter == length cardsBefore + 1
+prop_deals_new_card_when_hitting :: RunningGame 2 -> Property
+prop_deals_new_card_when_hitting (RunningGame game) =
+  forAll (onePlayerHitting game) $ \(p, game') ->
+    let GameContinue game'' = play game' $ head $ possibleActions game'
+        cardsBefore = playerHand p game'
+        cardsAfter = playerHand p game''
+     in length cardsAfter == length cardsBefore + 1
           & counterexample ("Before: " <> show cardsBefore)
           & counterexample ("After: " <> show cardsAfter)
+
+onePlayerHitting :: BlackJack -> Gen (PlayerId, BlackJack)
+onePlayerHitting game@BlackJack{numPlayers, players} = do
+  pid <- PlayerId <$> choose (1, numPlayers)
+  pure (pid, game{next = Dealer, players = Map.update (Just . hitting) pid players})
+onePlayerHitting Setup{} = error "not implemented"
 
 prop_hand_values_ignore_duplicates :: [Card] -> Property
 prop_hand_values_ignore_duplicates hand =

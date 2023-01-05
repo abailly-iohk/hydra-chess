@@ -17,6 +17,7 @@ import Data.Aeson.KeyMap ()
 import Data.Aeson.Types (FromJSON (parseJSON), ToJSONKey (toJSONKey), toJSONKeyText)
 import Data.Foldable (toList)
 import Data.List (nub, sortBy)
+import qualified Data.List as List
 import Data.Map (Map, size)
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
@@ -43,12 +44,15 @@ possibleActionsFor player BlackJack{dealerHand, players} =
       Just Playing{hand} -> actionsFor player hand
       Just Standing{} -> [Stand player]
       _ -> error $ "Invalid player number " <> show player
-    Dealer -> dealerActions dealerHand
+    Dealer -> dealerActions players dealerHand
 
-dealerActions :: DealerHand -> [Play]
-dealerActions dealerHand =
-  let value = minimum $ dealerValues dealerHand
-   in if value < 17 then [Hit Dealer] else [Stand Dealer]
+dealerActions :: Map PlayerId Player -> DealerHand -> [Play]
+dealerActions players dealerHand =
+  case List.find (isHitting . snd) $ Map.toList players of
+    Just (pid, _) -> [DealCard pid]
+    Nothing ->
+      let value = minimum $ dealerValues dealerHand
+       in if value < 17 then [Hit Dealer] else [Stand Dealer]
 
 dealerValues :: DealerHand -> [Int]
 dealerValues (DealerHand (Hidden c, cards)) = handValues (c : cards)
@@ -63,12 +67,12 @@ runPlays plays initialGame =
   doPlay _ outcome = outcome
 
 play :: BlackJack -> Play -> Outcome
-play game@BlackJack{} (Hit player) =
+play game@BlackJack{players} (Hit player) =
   case player of
     Dealer ->
       GameContinue $ dealOneCardToDealer game
     PlayerId{} ->
-      GameContinue $ dealOneCardTo player game
+      GameContinue $ game{next = Dealer, players = Map.update (Just . hitting) player players}
 play game@BlackJack{next, dealerHand, players} (Stand player) =
   case player of
     Dealer ->
@@ -76,9 +80,11 @@ play game@BlackJack{next, dealerHand, players} (Stand player) =
     PlayerId{} ->
       let game' =
             game
-              { players = Map.update (Just . stand) player players
+              { players = Map.update (Just . standing) player players
               }
        in GameContinue $ game'{next = nextPlayer next players}
+play game@BlackJack{} (DealCard player) =
+  GameContinue $ dealOneCardTo player game{next = player}
 play BlackJack{dealerHand} Quit = GameEnds (reveal dealerHand) mempty
 play game@BlackJack{next, players} _ = GameContinue $ game{next = nextPlayer next players}
 play Setup{} Quit = GameEnds [] mempty
@@ -97,6 +103,7 @@ payoff :: DealerHand -> Player -> Int
 payoff (reveal -> dealerHand) = \case
   (Playing cas n) -> computePayoff cas n
   (Standing cas n) -> computePayoff cas n
+  (Hitting cas n) -> computePayoff cas n
  where
   computePayoff cas n =
     case result cas dealerHand of
@@ -156,38 +163,11 @@ dealOneCard (g, cards) =
 data Play
   = Quit
   | Bet PlayerId
+  | DealCard PlayerId -- contrary to other constructors this says to which player the card should be dealt
   | Stand PlayerId
   | Hit PlayerId
-  deriving (Eq, Ord, Show)
-
-instance ToJSON Play where
-  toJSON Quit = object ["play" .= ("Quit" :: Text.Text)]
-  toJSON (Bet p) =
-    object
-      [ "play" .= ("Bet" :: Text.Text)
-      , "player" .= p
-      ]
-  toJSON (Stand p) =
-    object
-      [ "play" .= ("Stand" :: Text.Text)
-      , "player" .= p
-      ]
-  toJSON (Hit p) =
-    object
-      [ "play" .= ("Hit" :: Text.Text)
-      , "player" .= p
-      ]
-
-instance FromJSON Play where
-  parseJSON = withObject "Play" $ \o -> do
-    o .: "play" >>= withText "play" (parsePlay o)
-   where
-    parsePlay o = \case
-      "Quit" -> pure Quit
-      "Bet" -> Bet <$> o .: "player"
-      "Hit" -> Hit <$> o .: "player"
-      "Stand" -> Stand <$> o .: "player"
-      other -> fail $ "uknown play type " <> show other
+  deriving stock (Eq, Ord, Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)
 
 isHit :: Play -> Bool
 isHit (Hit _) = True
@@ -195,6 +175,7 @@ isHit _ = False
 
 forPlayer :: Play -> PlayerId
 forPlayer Quit = 0 -- TODO: does not make sense
+forPlayer DealCard{} = Dealer
 forPlayer (Bet n) = n
 forPlayer (Stand n) = n
 forPlayer (Hit n) = n
@@ -433,38 +414,27 @@ instance Num PlayerId where
 data Player
   = Playing {hand :: [Card], bets :: Int}
   | Standing {hand :: [Card], bets :: Int}
-  deriving (Eq, Show)
+  | Hitting {hand :: [Card], bets :: Int}
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)
 
-instance ToJSON Player where
-  toJSON (Playing cas bets) =
-    object
-      [ "tag" .= ("Playing" :: Text.Text)
-      , "hand" .= cas
-      , "bet" .= bets
-      ]
-  toJSON (Standing cas n) =
-    object
-      [ "tag" .= ("Standing" :: Text.Text)
-      , "hand" .= cas
-      , "bet" .= n
-      ]
+standing :: Player -> Player
+standing Playing{hand, bets} = Standing{hand, bets}
+standing p = p
 
-instance FromJSON Player where
-  parseJSON = withObject "Player" $ \o -> do
-    o .: "tag" >>= withText "tag" (parsePlayer o)
-   where
-    parsePlayer o = \case
-      "Playing" -> Playing <$> o .: "hand" <*> o .: "bet"
-      "Standing" -> Standing <$> o .: "hand" <*> o .: "bet"
-      other -> fail $ "unkonwn tag " <> show other
-
-stand :: Player -> Player
-stand Playing{hand, bets} = Standing{hand, bets}
-stand p = p
+hitting :: Player -> Player
+hitting Playing{hand, bets} = Hitting{hand, bets}
+hitting p = p
 
 isStanding :: Player -> Bool
 isStanding Playing{} = False
 isStanding Standing{} = True
+isStanding Hitting{} = False
+
+isHitting :: Player -> Bool
+isHitting Playing{} = False
+isHitting Standing{} = False
+isHitting Hitting{} = True
 
 data RGen = RGen StdGen | NoGen
   deriving (Eq, Show)
@@ -501,7 +471,7 @@ dealOneCardTo player game@BlackJack{gen = RGen gen, players} =
       (gen', newHand) = dealOneCard (gen, hand)
    in game
         { gen = RGen gen'
-        , players = Map.update (\p@Playing{} -> Just p{hand = newHand}) player players
+        , players = Map.update (\p@Hitting{} -> Just p{hand = newHand}) player players
         }
 dealOneCardTo _ _ = error "should never happen"
 
