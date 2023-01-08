@@ -33,19 +33,21 @@ library
     BlackJack.Game
     BlackJack.Pretty
     BlackJack.Contract
+    BlackJack.Contract.Game
 
   build-depends:
-    , aeson
-    , base
-    , containers
-    , QuickCheck
-    , random
-    , text
-    , plutus-core
-    , plutus-ledger-api
-    , plutus-tx
-    , plutus-tx-plugin
-    , template-haskell
+                  QuickCheck
+                , aeson
+                , base
+                , base16-bytestring
+                , containers
+                , plutus-core
+                , plutus-ledger-api
+                , plutus-tx
+                , plutus-tx-plugin
+                , random
+                , template-haskell
+                , text
 
 executable black-jack
   main-is:          Main.hs
