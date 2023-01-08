@@ -1,6 +1,6 @@
 module BlackJack.Pretty where
 
-import BlackJack.Game (
+import BlackJack.Contract.Game (
   BlackJack (..),
   Card (..),
   Color (..),
@@ -11,15 +11,15 @@ import BlackJack.Game (
   PlayerId,
   handValues,
  )
-import qualified Data.Map as Map
+import qualified PlutusTx.AssocMap as AssocMap
 
 prettyGame :: BlackJack -> String
-prettyGame (Setup n _ playerBets) =
+prettyGame (Setup n playerBets) =
   let bet (k, v) = " " <> show k <> " ↦ " <> show v
-      output = unlines $ ("Players: " <> show n) : (bet <$> Map.toList playerBets)
+      output = unlines $ ("Players: " <> show n) : (bet <$> AssocMap.toList playerBets)
    in output
-prettyGame (BlackJack _ _ nextPlayer dealer playersState) =
-  let output = unlines $ ("Next: " <> show nextPlayer) : displayDealerHand dealer : (displayPlayer <$> Map.toList playersState)
+prettyGame (BlackJack _ nextPlayer dealer playersState) =
+  let output = unlines $ ("Next: " <> show nextPlayer) : displayDealerHand dealer : (displayPlayer <$> AssocMap.toList playersState)
    in output
 
 displayDealerHand :: DealerHand -> String

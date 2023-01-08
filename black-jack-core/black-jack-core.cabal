@@ -41,6 +41,7 @@ library
                 , base
                 , base16-bytestring
                 , containers
+                , mtl
                 , plutus-core
                 , plutus-ledger-api
                 , plutus-tx
@@ -71,11 +72,13 @@ test-suite tests
   main-is:            Spec.hs
   type:               exitcode-stdio-1.0
   build-depends:
-    , base
-    , black-jack-core
-    , containers
-    , hspec
-    , hspec-core
-    , QuickCheck
+                    QuickCheck
+                , base
+                , black-jack-core
+                , containers
+                , hspec
+                , hspec-core
+                , mtl
+                , random
 
   build-tool-depends: hspec-discover:hspec-discover -any

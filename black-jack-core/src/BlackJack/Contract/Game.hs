@@ -23,13 +23,10 @@ import Control.Monad (fail, (>=>))
 import Data.Aeson (
   FromJSON (..),
   ToJSON (..),
-  Value (String),
   withArray,
   withText,
  )
-import qualified Data.ByteString.Base16 as Base16
 import qualified Data.Foldable as Haskell
-import qualified Data.Text.Encoding as Text
 import qualified Data.Traversable as Haskell
 import GHC.Generics (Generic)
 import qualified PlutusTx
@@ -61,7 +58,7 @@ data Play
   | DealCard PlayerId -- contrary to other constructors this says to which player the card should be dealt
   | Stand PlayerId
   | Hit PlayerId
-  deriving stock (Haskell.Eq, Haskell.Ord, Generic)
+  deriving stock (Haskell.Eq, Haskell.Ord, Haskell.Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
 PlutusTx.unstableMakeIsData ''Play
@@ -208,11 +205,15 @@ reveal (DealerHand (None, cs)) = cs
 
 actionsFor :: PlayerId -> [Card] -> [Play]
 actionsFor player hand
-  | minimum (handValues hand) >= 21 = [Stand player]
+  | minimum 22 (handValues hand) >= 21 = [Stand player]
   | otherwise = [Hit player, Stand player]
 
-minimum :: Ord a => [a] -> a
-minimum = Haskell.undefined
+minimum :: (Ord a) => a -> [a] -> a
+minimum = foldr isMin
+ where
+  isMin a b
+    | a < b = a
+    | otherwise = b
 
 data Player
   = Playing {hand :: [Card], bets :: Integer}
@@ -252,20 +253,10 @@ nextPlayer player players =
 playerIds :: Integer -> Integer -> [PlayerId]
 playerIds lb ub = PlayerId <$> [lb .. ub]
 
-newtype RGen = RGen BuiltinByteString
-  deriving newtype (Haskell.Eq, Haskell.Show)
+newtype RGen = RGen Integer
+  deriving newtype (Haskell.Eq, Haskell.Show, ToJSON, FromJSON)
 
 PlutusTx.unstableMakeIsData ''RGen
-
-instance ToJSON RGen where
-  toJSON (RGen bytes) = String (Text.decodeUtf8 $ Base16.encode $ fromBuiltin bytes)
-
-instance FromJSON RGen where
-  parseJSON =
-    withText "RGen" $ \hex -> do
-      case Base16.decode $ Text.encodeUtf8 hex of
-        Left e -> fail e
-        Right bs -> Haskell.pure $ RGen $ toBuiltin bs
 
 instance ToJSON a => ToJSON (Map PlayerId a) where
   toJSON = Haskell.undefined
@@ -276,12 +267,10 @@ instance ToJSON a => FromJSON (Map PlayerId a) where
 data BlackJack
   = Setup
       { numPlayers :: Integer
-      , seed :: Integer
       , initialBets :: Map PlayerId Integer
       }
   | BlackJack
       { numPlayers :: Integer
-      , gen :: RGen
       , next :: PlayerId
       , dealerHand :: DealerHand
       , players :: Map PlayerId Player

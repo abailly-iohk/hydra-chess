@@ -1,6 +1,5 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -9,17 +8,20 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module BlackJack.GameSpec where
 
 import BlackJack.Game
 
+import BlackJack.Contract.Game (forPlayer, isEndGame)
 import Control.Arrow (second)
+import Control.Monad.State (evalState, runState)
 import Data.Data (Proxy (Proxy))
 import Data.Function ((&))
-import qualified Data.Map as Map
 import qualified Data.Set as Set
 import GHC.TypeLits (KnownNat, Nat, natVal)
+import System.Random (StdGen, mkStdGen)
 import Test.Hspec (Spec, describe, parallel)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (
@@ -71,23 +73,28 @@ spec = parallel $ do
 
 genInitialSetup :: Gen BlackJack
 genInitialSetup =
-  newGame <$> (getSmall . getPositive <$> arbitrary) <*> arbitrary
+  newGame <$> (getSmall . getPositive <$> arbitrary)
 
-prop_deal_cards_after_placing_bet :: Property
-prop_deal_cards_after_placing_bet =
+instance Arbitrary StdGen where
+  arbitrary = mkStdGen <$> arbitrary
+
+prop_deal_cards_after_placing_bet :: StdGen -> Property
+prop_deal_cards_after_placing_bet seed =
   forAll genInitialSetup $ \game ->
     let ids = playerIds 1 (numPlayers game)
         plays = [Bet p | p <- ids]
-        GameContinue game' = runPlays plays game
+        GameContinue game' = evalState (runPlays plays game) seed
      in all (\p -> length (playerHand p game') == 2) ids
           & counterexample ("game' : " <> show game')
 
-prop_stand_when_card_total_at_21 :: Property
-prop_stand_when_card_total_at_21 =
+prop_stand_when_card_total_at_21 :: StdGen -> Property
+prop_stand_when_card_total_at_21 seed =
   forAll (genHandOver 21) $ \cards ->
-    let game = mkGame 1 1 42 [(1, (100, cards))]
-     in possibleActionsFor 1 game == [Stand 1]
+    let game = evalState (mkGame 1 1 [(1, (100, cards))]) seed
+        actions = possibleActionsFor 1 game
+     in actions == [Stand 1]
           & counterexample ("game: " <> show game)
+          & counterexample ("actions: " <> show actions)
 
 gen2Cards :: Gen [Card]
 gen2Cards = do
@@ -95,10 +102,10 @@ gen2Cards = do
   c' <- arbitrary
   pure [c, c']
 
-prop_hit_when_card_total_lower_than_21 :: Property
-prop_hit_when_card_total_lower_than_21 =
+prop_hit_when_card_total_lower_than_21 :: StdGen -> Property
+prop_hit_when_card_total_lower_than_21 seed =
   forAll (genHandUnder 21) $ \cards ->
-    let game = mkGame 1 1 42 [(1, (100, cards))]
+    let game = evalState (mkGame 1 1 [(1, (100, cards))]) seed
         actions = possibleActionsFor 1 game
      in Hit 1 `elem` actions
           & counterexample ("game: " <> show game)
@@ -111,25 +118,26 @@ prop_possible_actions_for_all_players_when_setting_up =
      in Set.fromList (Bet <$> playerIds 1 (numPlayers game)) === Set.fromList actions
           & counterexample ("Actions: " <> show actions)
 
-newtype RunningGame (n :: Nat) = RunningGame BlackJack
-  deriving newtype (Eq, Show)
+data RunningGame (n :: Nat) = RunningGame BlackJack StdGen
+  deriving stock (Eq, Show)
 
 instance forall n. KnownNat n => Arbitrary (RunningGame n) where
   arbitrary = do
     let minPlayers = fromIntegral $ natVal (Proxy @n)
-    numPlayers <- (getSmall . getPositive <$> arbitrary) `suchThat` \n -> n >= minPlayers
-    hands <- vectorOf numPlayers (genHandUnder 21)
+    numPlayers :: Integer <- (getSmall . getPositive <$> arbitrary) `suchThat` \n -> n >= minPlayers
+    hands <- vectorOf (fromInteger numPlayers) (genHandUnder 21)
     next <- PlayerId <$> choose (1, numPlayers)
     seed <- arbitrary
-    pure $ RunningGame $ mkGame numPlayers next seed $ second (100,) <$> zip (playerIds 1 numPlayers) hands
+    let (game', seed') = runState (mkGame numPlayers next $ second (100,) <$> zip (playerIds 1 numPlayers) hands) seed
+    pure $ RunningGame game' seed'
 
-  shrink (RunningGame game@BlackJack{players})
-    | length players > fromIntegral (natVal (Proxy @n)) =
-      [RunningGame game{players = Map.delete (PlayerId $ length players) players}]
+  shrink (RunningGame game@BlackJack{players} seed)
+    | mapLength players > fromIntegral (natVal (Proxy @n)) =
+      [RunningGame game{players = deletePlayer (PlayerId $ fromIntegral $ mapLength players) players} seed]
   shrink _ = []
 
 prop_possible_actions_for_one_player_when_playing :: RunningGame 1 -> Property
-prop_possible_actions_for_one_player_when_playing (RunningGame game) =
+prop_possible_actions_for_one_player_when_playing (RunningGame game _) =
   let actions = possibleActions game
    in Set.fromList (forPlayer <$> actions) === Set.singleton (next game)
         & counterexample ("Actions: " <> show actions)
@@ -138,52 +146,52 @@ genPlay :: BlackJack -> Gen Play
 genPlay = elements . possibleActions
 
 prop_advance_next_player_when_standing :: RunningGame 2 -> Property
-prop_advance_next_player_when_standing (RunningGame game) =
-  let GameContinue game' = play game (Stand $ next game)
+prop_advance_next_player_when_standing (RunningGame game seed) =
+  let GameContinue game' = evalState (play game (Stand $ next game)) seed
    in next game `notElem` (forPlayer <$> possibleActions game')
         & counterexample ("updated game: " <> show game')
 
 prop_advance_to_dealer_when_hitting :: RunningGame 2 -> Property
-prop_advance_to_dealer_when_hitting (RunningGame game) =
-  let GameContinue game' = play game (Hit $ next game)
+prop_advance_to_dealer_when_hitting (RunningGame game seed) =
+  let GameContinue game' = evalState (play game (Hit $ next game)) seed
       actions = possibleActions game'
    in next game' == Dealer && actions == [DealCard $ next game]
         & counterexample ("updated game: " <> show game')
         & counterexample ("actions: " <> show actions)
 
 prop_advance_to_player_after_dealing_card :: RunningGame 2 -> Property
-prop_advance_to_player_after_dealing_card (RunningGame game) =
+prop_advance_to_player_after_dealing_card (RunningGame game seed) =
   forAll (onePlayerHitting game) $ \(pid, game') ->
-    let GameContinue game'' = play game' (DealCard pid)
+    let GameContinue game'' = evalState (play game' (DealCard pid)) seed
         actions = possibleActions game''
      in next game'' == pid
           & counterexample ("updated game: " <> show game'')
           & counterexample ("actions: " <> show actions)
 
 prop_dealer_plays_after_last_player :: RunningGame 2 -> Property
-prop_dealer_plays_after_last_player (RunningGame game) =
-  let next = PlayerId (length $ players game)
-      GameContinue game' = play game{next} (Stand next)
+prop_dealer_plays_after_last_player (RunningGame game seed) =
+  let next = PlayerId (fromIntegral $ mapLength $ players game)
+      GameContinue game' = evalState (play game{next} (Stand next)) seed
    in all (== Dealer) (forPlayer <$> possibleActions game')
         & counterexample ("Last player: " <> show next)
         & counterexample ("After player stands: " <> show game')
 
 prop_dealer_keeps_playing_when_hitting :: RunningGame 1 -> Property
-prop_dealer_keeps_playing_when_hitting (RunningGame game) =
+prop_dealer_keeps_playing_when_hitting (RunningGame game seed) =
   let game' = game{next = Dealer}
-      GameContinue game'' = play game' (Hit Dealer)
+      GameContinue game'' = evalState (play game' (Hit Dealer)) seed
    in next game'' == Dealer
         & counterexample ("After dealer hits: " <> show game'')
 
 prop_game_ends_after_dealer_stands :: RunningGame 1 -> Property
-prop_game_ends_after_dealer_stands (RunningGame game) =
+prop_game_ends_after_dealer_stands (RunningGame game seed) =
   let game' = game{next = Dealer}
-      outcome = play game' (Stand Dealer)
+      outcome = evalState (play game' (Stand Dealer)) seed
    in isEndGame outcome
         & counterexample ("outcome: " <> show outcome)
 
 prop_dealer_hits_at_16_stand_at_17 :: RunningGame 1 -> DealerHand -> Property
-prop_dealer_hits_at_16_stand_at_17 (RunningGame game) hand =
+prop_dealer_hits_at_16_stand_at_17 (RunningGame game _) hand =
   let acts = dealerActions (players game) hand
    in acts == [Hit Dealer] || acts == [Stand Dealer]
         & counterexample ("Actions: " <> show acts)
@@ -192,9 +200,9 @@ prop_dealer_hits_at_16_stand_at_17 (RunningGame game) hand =
         & checkCoverage
 
 prop_deals_new_card_when_hitting :: RunningGame 2 -> Property
-prop_deals_new_card_when_hitting (RunningGame game) =
+prop_deals_new_card_when_hitting (RunningGame game seed) =
   forAll (onePlayerHitting game) $ \(p, game') ->
-    let GameContinue game'' = play game' $ head $ possibleActions game'
+    let GameContinue game'' = evalState (play game' $ head $ possibleActions game') seed
         cardsBefore = playerHand p game'
         cardsAfter = playerHand p game''
      in length cardsAfter == length cardsBefore + 1
@@ -204,7 +212,7 @@ prop_deals_new_card_when_hitting (RunningGame game) =
 onePlayerHitting :: BlackJack -> Gen (PlayerId, BlackJack)
 onePlayerHitting game@BlackJack{numPlayers, players} = do
   pid <- PlayerId <$> choose (1, numPlayers)
-  pure (pid, game{next = Dealer, players = Map.update (Just . hitting) pid players})
+  pure (pid, game{next = Dealer, players = assocMapUpdate (Just . hitting) pid players})
 onePlayerHitting Setup{} = error "not implemented"
 
 prop_hand_values_ignore_duplicates :: [Card] -> Property
@@ -214,19 +222,19 @@ prop_hand_values_ignore_duplicates hand =
         & counterexample ("Values: " <> show values)
 
 prop_end_game_when_everyone_stands :: RunningGame 2 -> Property
-prop_end_game_when_everyone_stands (RunningGame game) =
-  let game' = allStand game
+prop_end_game_when_everyone_stands (RunningGame game seed) =
+  let game' = allStand game seed
    in any isEndGame game'
         & counterexample ("Game: " <> show (head . words . show <$> game'))
 
-allStand :: BlackJack -> [Outcome]
-allStand Setup{} = error "Unexpected setup"
-allStand game@BlackJack{next} =
-  case play game (Stand next) of
-    ends@GameEnds{} -> [ends]
-    cont@(GameContinue game') -> cont : allStand game'
+allStand :: BlackJack -> StdGen -> [Outcome]
+allStand Setup{} _ = error "Unexpected setup"
+allStand game@BlackJack{next} seed =
+  case runState (play game (Stand next)) seed of
+    (ends@GameEnds{}, _) -> [ends]
+    (cont@(GameContinue game'), seed') -> cont : allStand game' seed'
 
-genHandOver :: Int -> Gen [Card]
+genHandOver :: Integer -> Gen [Card]
 genHandOver lb = arbitrary >>= go . (: [])
  where
   go cs =
@@ -235,7 +243,7 @@ genHandOver lb = arbitrary >>= go . (: [])
           then pure cs
           else arbitrary >>= go . (: cs)
 
-genWinningHand :: Int -> Gen [Card]
+genWinningHand :: Integer -> Gen [Card]
 genWinningHand lb = arbitrary >>= go . (: [])
  where
   go cs =
@@ -245,7 +253,7 @@ genWinningHand lb = arbitrary >>= go . (: [])
             | mn > lb -> pure cs
             | otherwise -> arbitrary >>= go . (: cs)
 
-genHandUnder :: Int -> Gen [Card]
+genHandUnder :: Integer -> Gen [Card]
 genHandUnder lb = arbitrary >>= go . (: [])
  where
   go cs =

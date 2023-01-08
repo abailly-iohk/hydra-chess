@@ -3,34 +3,32 @@
 
 module BlackJack where
 
+import BlackJack.Contract.Game (BlackJack, Card, Outcome (..), Play (Quit), PlayerId)
 import BlackJack.Game (
-  BlackJack (..),
-  Card,
-  Outcome (..),
-  Play (..),
-  PlayerId,
   newGame,
   play,
   possibleActions,
  )
 import BlackJack.Pretty (displayPlayerHand, prettyGame, showAction)
 import Control.Exception (IOException, catch)
-import Data.Map (Map)
-import qualified Data.Map as Map
+import Control.Monad.State (runState)
+import qualified PlutusTx.AssocMap as AssocMap
 import System.IO.Error (isEOFError)
+import System.Random (mkStdGen)
 
 runGame :: Int -> Int -> IO ()
-runGame numberOfPlayers randomSeed = go $ BlackJack.Game.newGame numberOfPlayers randomSeed
+runGame numberOfPlayers randomSeed =
+  go (mkStdGen randomSeed) $ newGame (fromIntegral numberOfPlayers)
  where
-  go game = do
-    let actions = Quit : BlackJack.Game.possibleActions game
+  go seed game = do
+    let actions = Quit : possibleActions game
     displayActions actions
     selectAction actions >>= \case
       Action act ->
-        case play game act of
-          GameEnds dealers e -> displayEndGame dealers e
-          GameContinue g -> displayGame g >> go g
-      Error err -> putStrLn err >> go game
+        case runState (play game act) seed of
+          (GameEnds dealers e, _) -> displayEndGame dealers (AssocMap.toList e)
+          (GameContinue g, seed') -> displayGame g >> go seed' g
+      Error err -> putStrLn err >> go seed game
 
 selectAction :: [Play] -> IO Input
 selectAction choices = do
@@ -62,11 +60,11 @@ displayActions plays =
 displayGame :: BlackJack -> IO ()
 displayGame g = putStrLn $ prettyGame g
 
-displayEndGame :: [Card] -> Map PlayerId Int -> IO ()
+displayEndGame :: [Card] -> [(PlayerId, Integer)] -> IO ()
 displayEndGame dealers gains =
   putStr $
     unlines $
       ("Dealer's Hand: " <> displayPlayerHand dealers) :
-      "Payoffs: " : (showGain <$> Map.toList gains)
+      "Payoffs: " : (showGain <$> gains)
  where
   showGain (player, amount) = show player <> " : " <> show amount

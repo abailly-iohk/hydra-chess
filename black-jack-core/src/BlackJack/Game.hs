@@ -1,5 +1,3 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
@@ -8,107 +6,132 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
-module BlackJack.Game where
+module BlackJack.Game (
+  module BlackJack.Contract.Game,
+  module BlackJack.Game,
+) where
 
-import Control.Monad ((>=>))
-import Data.Aeson (
-  FromJSON,
-  FromJSONKey (fromJSONKey),
-  FromJSONKeyFunction (FromJSONKeyText),
-  ToJSON,
-  ToJSONKey,
-  toJSON,
-  withArray,
-  withText,
+import BlackJack.Contract.Game (
+  BlackJack (..),
+  Card (..),
+  Color (..),
+  DealerHand (..),
+  Face (..),
+  Hidden (..),
+  Outcome (..),
+  Play (..),
+  Player (..),
+  PlayerId (..),
+  actionsFor,
+  handValues,
+  hitting,
+  isBlackJack,
+  isHitting,
+  reveal,
+  standing,
  )
+import Control.Monad (foldM)
+import Control.Monad.State (State, gets, put)
 import Data.Aeson.KeyMap ()
-import Data.Aeson.Types (FromJSON (parseJSON), ToJSONKey (toJSONKey), toJSONKeyText)
-import Data.Foldable (toList)
-import Data.List (nub, sortBy)
+import Data.List (sortBy)
 import qualified Data.List as List
-import Data.Map (Map, size)
-import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
-import qualified Data.Text as Text
-import GHC.Generics (Generic)
-import System.Random (StdGen, Uniform, mkStdGen, uniform)
+import qualified PlutusTx.AssocMap as AssocMap
+import System.Random (StdGen, uniform)
 import Test.QuickCheck (Arbitrary (..), elements, suchThat)
 
 possibleActions :: BlackJack -> [Play]
 possibleActions Setup{numPlayers, initialBets} =
   let players = playerIds 1 numPlayers
-      missingBet p = maybe [Bet p] (const []) $ Map.lookup p initialBets
+      missingBet p = maybe [Bet p] (const []) $ AssocMap.lookup p initialBets
    in foldMap missingBet players
 possibleActions game@BlackJack{next} = possibleActionsFor next game
 
 possibleActionsFor :: PlayerId -> BlackJack -> [Play]
 possibleActionsFor player Setup{initialBets} =
-  case Map.lookup player initialBets of
+  case AssocMap.lookup player initialBets of
     Just{} -> []
     Nothing -> [Bet player]
 possibleActionsFor player BlackJack{dealerHand, players} =
   case player of
-    PlayerId{} -> case Map.lookup player players of
+    PlayerId{} -> case AssocMap.lookup player players of
       Just Playing{hand} -> actionsFor player hand
       Just Standing{} -> [Stand player]
       _ -> error $ "Invalid player number " <> show player
     Dealer -> dealerActions players dealerHand
 
-dealerActions :: Map PlayerId Player -> DealerHand -> [Play]
+dealerActions :: AssocMap.Map PlayerId Player -> DealerHand -> [Play]
 dealerActions players dealerHand =
-  case List.find (isHitting . snd) $ Map.toList players of
+  case List.find (isHitting . snd) $ AssocMap.toList players of
     Just (pid, _) -> [DealCard pid]
     Nothing ->
       let value = minimum $ dealerValues dealerHand
        in if value < 17 then [Hit Dealer] else [Stand Dealer]
 
-dealerValues :: DealerHand -> [Int]
+dealerValues :: DealerHand -> [Integer]
 dealerValues (DealerHand (Hidden c, cards)) = handValues (c : cards)
 dealerValues (DealerHand (None, _)) = error "should not happen"
 
-runPlays :: [Play] -> BlackJack -> Outcome
+runPlays :: [Play] -> BlackJack -> State StdGen Outcome
 runPlays plays initialGame =
-  foldr doPlay (GameContinue initialGame) plays
+  foldM doPlay (GameContinue initialGame) plays
  where
-  doPlay :: Play -> Outcome -> Outcome
-  doPlay p (GameContinue game) = play game p
-  doPlay _ outcome = outcome
+  doPlay :: Outcome -> Play -> State StdGen Outcome
+  doPlay (GameContinue game) p = play game p
+  doPlay outcome _ = pure outcome
 
-play :: BlackJack -> Play -> Outcome
+play :: BlackJack -> Play -> State StdGen Outcome
 play game@BlackJack{players} (Hit player) =
   case player of
     Dealer ->
-      GameContinue $ dealOneCardToDealer game
+      GameContinue <$> dealOneCardToDealer game
     PlayerId{} ->
-      GameContinue $ game{next = Dealer, players = Map.update (Just . hitting) player players}
+      pure $ GameContinue game{next = Dealer, players = assocMapUpdate (Just . hitting) player players}
 play game@BlackJack{next, dealerHand, players} (Stand player) =
   case player of
     Dealer ->
-      GameEnds (reveal dealerHand) $ payoffs dealerHand players
+      pure $ GameEnds (reveal dealerHand) $ payoffs dealerHand players
     PlayerId{} ->
       let game' =
             game
-              { players = Map.update (Just . standing) player players
+              { players = assocMapUpdate (Just . standing) player players
               }
-       in GameContinue $ game'{next = nextPlayer next players}
+       in pure $ GameContinue $ game'{next = nextPlayer next players}
 play game@BlackJack{} (DealCard player) =
-  GameContinue $ dealOneCardTo player game{next = player}
-play BlackJack{dealerHand} Quit = GameEnds (reveal dealerHand) mempty
-play game@BlackJack{next, players} _ = GameContinue $ game{next = nextPlayer next players}
-play Setup{} Quit = GameEnds [] mempty
-play setup@Setup{numPlayers, seed, initialBets} (Bet p) =
-  let newBets = Map.insert p 100 initialBets
-   in GameContinue $
-        if size newBets == numPlayers
-          then dealInitialCards newBets seed
-          else setup{initialBets = newBets}
+  GameContinue <$> dealOneCardTo player game{next = player}
+play BlackJack{dealerHand} Quit =
+  pure $ GameEnds (reveal dealerHand) (AssocMap.fromList [])
+play game@BlackJack{next, players} _ =
+  pure $ GameContinue $ game{next = nextPlayer next players}
+play Setup{} Quit =
+  pure $ GameEnds [] (AssocMap.fromList [])
+play setup@Setup{numPlayers, initialBets} (Bet p) =
+  let newBets = AssocMap.insert p 100 initialBets
+   in GameContinue
+        <$> if fromIntegral (length $ AssocMap.elems newBets) == numPlayers
+          then dealInitialCards newBets
+          else pure setup{initialBets = newBets}
 play Setup{} p = error $ "invalid play in setup stage: " <> show p
 
-payoffs :: DealerHand -> Map PlayerId Player -> Map PlayerId Int
-payoffs dealerHand = Map.map (payoff dealerHand)
+assocMapUpdate :: Eq k => (a -> Maybe a) -> k -> AssocMap.Map k a -> AssocMap.Map k a
+assocMapUpdate f k = AssocMap.mapWithKey update
+ where
+  update k' a
+    | k == k' = fromMaybe a (f a)
+    | otherwise = a
 
-payoff :: DealerHand -> Player -> Int
+deletePlayer :: PlayerId -> AssocMap.Map PlayerId a -> AssocMap.Map PlayerId a
+deletePlayer = AssocMap.delete
+
+mapLength :: AssocMap.Map k a -> Int
+mapLength = length . AssocMap.toList
+
+payoffs :: DealerHand -> AssocMap.Map PlayerId Player -> AssocMap.Map PlayerId Integer
+payoffs dealerHand = AssocMap.mapWithKey (const $ payoff dealerHand)
+
+payoff :: DealerHand -> Player -> Integer
 payoff (reveal -> dealerHand) = \case
   (Playing cas n) -> computePayoff cas n
   (Standing cas n) -> computePayoff cas n
@@ -141,198 +164,56 @@ result a b =
               | otherwise -> Tie
         LT -> Lose
 
-dealInitialCards :: Map PlayerId Int -> Int -> BlackJack
-dealInitialCards bets seed =
-  let (seed', playerHands) = foldr dealCardsToPlayer (mkStdGen seed, mempty) $ Map.keys bets
-      (seed'', cs) = dealCards 2 seed'
-      player p card =
-        Playing card $ fromMaybe (error "cannot build initial players") $ Map.lookup p bets
-   in BlackJack
-        { numPlayers = length bets
-        , dealerHand = mkDealerHand cs
-        , next = 1
-        , gen = RGen seed''
-        , players = Map.mapWithKey player playerHands
-        }
+dealInitialCards :: AssocMap.Map PlayerId Integer -> State StdGen BlackJack
+dealInitialCards bets = do
+  playerHands <- foldM (flip dealCardsToPlayer) (AssocMap.fromList []) $ AssocMap.keys bets
+  cs <- dealCards 2
+  let player p card =
+        Playing card $ fromMaybe (error "cannot build initial players") $ AssocMap.lookup p bets
+  pure $
+    BlackJack
+      { numPlayers = fromIntegral (length $ AssocMap.toList bets)
+      , dealerHand = mkDealerHand cs
+      , next = 1
+      , players = AssocMap.mapWithKey player playerHands
+      }
 
-dealCardsToPlayer :: PlayerId -> (StdGen, Map PlayerId [Card]) -> (StdGen, Map PlayerId [Card])
-dealCardsToPlayer player (seed, playerHands) =
-  let (seed', cards) = dealCards 2 seed
-   in (seed', Map.insert player cards playerHands)
+dealCardsToPlayer :: PlayerId -> AssocMap.Map PlayerId [Card] -> State StdGen (AssocMap.Map PlayerId [Card])
+dealCardsToPlayer player playerHands = do
+  cards <- dealCards 2
+  pure $ AssocMap.insert player cards playerHands
 
-dealCards :: Int -> StdGen -> (StdGen, [Card])
-dealCards num g =
-  foldr (const dealOneCard) (g, []) [1 .. num]
+dealCards :: Integer -> State StdGen [Card]
+dealCards num =
+  foldM (flip $ const dealOneCard) [] [1 .. num]
 
-dealOneCard :: (StdGen, [Card]) -> (StdGen, [Card])
-dealOneCard (g, cards) =
-  let (card, g') = uniform g
-   in (g', card : cards)
+dealOneCard :: [Card] -> State StdGen [Card]
+dealOneCard cards = do
+  (card, g') <- gets uniform
+  put g'
+  pure $ card : cards
 
-data Play
-  = Quit
-  | Bet PlayerId
-  | DealCard PlayerId -- contrary to other constructors this says to which player the card should be dealt
-  | Stand PlayerId
-  | Hit PlayerId
-  deriving stock (Eq, Ord, Show, Generic)
-  deriving anyclass (ToJSON, FromJSON)
-
-isHit :: Play -> Bool
-isHit (Hit _) = True
-isHit _ = False
-
-forPlayer :: Play -> PlayerId
-forPlayer Quit = 0 -- TODO: does not make sense
-forPlayer DealCard{} = Dealer
-forPlayer (Bet n) = n
-forPlayer (Stand n) = n
-forPlayer (Hit n) = n
-
-nextPlayer :: PlayerId -> Map PlayerId Player -> PlayerId
+nextPlayer :: PlayerId -> AssocMap.Map PlayerId Player -> PlayerId
 nextPlayer player players =
   case player of
     PlayerId p
-      | p < length players -> PlayerId $ succ p
+      | p < fromIntegral (length $ AssocMap.toList players) -> PlayerId $ succ p
       | otherwise -> Dealer
     Dealer -> PlayerId 1
 
-playerIds :: Int -> Int -> [PlayerId]
+playerIds :: Integer -> Integer -> [PlayerId]
 playerIds lb ub = PlayerId <$> [lb .. ub]
-
-type Payoffs = Map PlayerId Int
-
-data Outcome
-  = GameEnds [Card] Payoffs
-  | GameContinue BlackJack
-  deriving (Eq, Show)
-
-isEndGame :: Outcome -> Bool
-isEndGame GameEnds{} = True
-isEndGame GameContinue{} = False
-
-data Color = Heart | Spade | Diamond | Club
-  deriving stock (Eq, Show, Generic)
-  deriving anyclass (Uniform)
-
-instance ToJSON Color where
-  toJSON = \case
-    Heart -> "\x2661"
-    Spade -> "\x2660"
-    Diamond -> "\x2662"
-    Club -> "\x2663"
-
-instance FromJSON Color where
-  parseJSON = \case
-    "\x2661" -> pure Heart
-    "\x2660" -> pure Spade
-    "\x2662" -> pure Diamond
-    "\x2663" -> pure Club
-    other -> fail $ "unknown color " <> show other
 
 instance Arbitrary Color where
   arbitrary = elements [Heart, Spade, Diamond, Club]
-
-data Face
-  = Two
-  | Three
-  | Four
-  | Five
-  | Six
-  | Seven
-  | Eight
-  | Nine
-  | Ten
-  | Jack
-  | Queen
-  | King
-  | Ace
-  deriving stock (Eq, Ord, Enum, Show, Generic)
-  deriving anyclass (Uniform)
-
-instance ToJSON Face where
-  toJSON = \case
-    Two -> "2"
-    Three -> "3"
-    Four -> "4"
-    Five -> "5"
-    Six -> "6"
-    Seven -> "7"
-    Eight -> "8"
-    Nine -> "9"
-    Ten -> "10"
-    Jack -> "J"
-    Queen -> "Q"
-    King -> "K"
-    Ace -> "A"
-
-instance FromJSON Face where
-  parseJSON = withText "Face" $ \case
-    "2" -> pure Two
-    "3" -> pure Three
-    "4" -> pure Four
-    "5" -> pure Five
-    "6" -> pure Six
-    "7" -> pure Seven
-    "8" -> pure Eight
-    "9" -> pure Nine
-    "10" -> pure Ten
-    "J" -> pure Jack
-    "Q" -> pure Queen
-    "K" -> pure King
-    "A" -> pure Ace
-    other -> fail $ "unknown face " <> show other
 
 instance Arbitrary Face where
   arbitrary = elements $ enumFromTo Two Ace
   shrink face = filter (< face) $ enumFromTo Two Ace
 
-data Card = Card {color :: Color, face :: Face}
-  deriving stock (Eq, Show, Generic)
-  deriving anyclass (Uniform, ToJSON, FromJSON)
-
 instance Arbitrary Card where
   arbitrary = Card <$> arbitrary <*> arbitrary
   shrink (Card color face) = Card color <$> shrink face
-
-handValues :: [Card] -> [Int]
-handValues = nub . foldr cardValues []
-
-cardValues :: Card -> [Int] -> [Int]
-cardValues card [] = cardValue card
-cardValues card values = [vals + v | vals <- values, v <- cardValue card]
-
-cardValue :: Card -> [Int]
-cardValue Card{face = Two} = [2]
-cardValue Card{face = Three} = [3]
-cardValue Card{face = Four} = [4]
-cardValue Card{face = Five} = [5]
-cardValue Card{face = Six} = [6]
-cardValue Card{face = Seven} = [7]
-cardValue Card{face = Eight} = [8]
-cardValue Card{face = Nine} = [9]
-cardValue Card{face = Ten} = [10]
-cardValue Card{face = Jack} = [10]
-cardValue Card{face = Queen} = [10]
-cardValue Card{face = King} = [10]
-cardValue Card{face = Ace} = [1, 11]
-
-isBlackJack :: [Card] -> Bool
-isBlackJack cards = length cards == 2 && 21 `elem` handValues cards
-
-newtype DealerHand = DealerHand (Hidden Card, [Card])
-  deriving (Eq, Show)
-
-instance ToJSON DealerHand where
-  toJSON (DealerHand (_, cards)) = toJSON cards
-
-instance FromJSON DealerHand where
-  parseJSON =
-    withArray
-      "cards"
-      ( traverse parseJSON
-          >=> (\cs -> pure (DealerHand (None, toList cs)))
-      )
 
 instance Arbitrary DealerHand where
   arbitrary =
@@ -350,38 +231,7 @@ mkDealerHand :: [Card] -> DealerHand
 mkDealerHand (c : cs) = DealerHand (Hidden c, cs)
 mkDealerHand _ = error "dealer hand needs at least one card"
 
-reveal :: DealerHand -> [Card]
-reveal (DealerHand (Hidden c, cs)) = c : cs
-reveal (DealerHand (None, _)) = error "should never happen"
-
-actionsFor :: PlayerId -> [Card] -> [Play]
-actionsFor player hand
-  | minimum (handValues hand) >= 21 = [Stand player]
-  | otherwise = [Hit player, Stand player]
-
-data Hidden c = Hidden c | None
-  deriving (Eq, Show)
-
-data PlayerId
-  = PlayerId {playerId :: Int}
-  | Dealer
-  deriving stock (Eq, Ord, Show, Generic)
-  deriving anyclass (ToJSON, FromJSON)
-
-instance ToJSONKey PlayerId where
-  toJSONKey = toJSONKeyText $ \case
-    PlayerId p -> Text.pack (show p)
-    Dealer -> "0"
-
-instance FromJSONKey PlayerId where
-  fromJSONKey = FromJSONKeyText (readPlayerId . Text.unpack)
-   where
-    readPlayerId s = case reads s of
-      [(0, [])] -> Dealer
-      [(n, [])] -> PlayerId n
-      _ -> error $ "player id must be 0 for dealer, or 1 and above, found: " <> s
-
-decodePlayerId :: Int -> PlayerId
+decodePlayerId :: Integer -> PlayerId
 decodePlayerId 0 = Dealer
 decodePlayerId n = PlayerId n
 
@@ -394,89 +244,39 @@ instance Num PlayerId where
   signum = error "undefined"
   negate = error "undefined"
 
-data Player
-  = Playing {hand :: [Card], bets :: Int}
-  | Standing {hand :: [Card], bets :: Int}
-  | Hitting {hand :: [Card], bets :: Int}
-  deriving stock (Eq, Show, Generic)
-  deriving anyclass (ToJSON, FromJSON)
-
-standing :: Player -> Player
-standing Playing{hand, bets} = Standing{hand, bets}
-standing p = p
-
-hitting :: Player -> Player
-hitting Playing{hand, bets} = Hitting{hand, bets}
-hitting p = p
-
-isStanding :: Player -> Bool
-isStanding Playing{} = False
-isStanding Standing{} = True
-isStanding Hitting{} = False
-
-isHitting :: Player -> Bool
-isHitting Playing{} = False
-isHitting Standing{} = False
-isHitting Hitting{} = True
-
-data RGen = RGen StdGen | NoGen
-  deriving (Eq, Show)
-
-instance ToJSON RGen where
-  toJSON _ = "<<seed>>"
-
-instance FromJSON RGen where
-  parseJSON = const $ pure NoGen
-
-data BlackJack
-  = Setup
-      { numPlayers :: Int
-      , seed :: Int
-      , initialBets :: Map PlayerId Int
-      }
-  | BlackJack
-      { numPlayers :: Int
-      , gen :: RGen
-      , next :: PlayerId
-      , dealerHand :: DealerHand
-      , players :: Map PlayerId Player
-      }
-  deriving stock (Eq, Show, Generic)
-  deriving anyclass (ToJSON, FromJSON)
-
 playerHand :: PlayerId -> BlackJack -> [Card]
 playerHand _ Setup{} = []
-playerHand p BlackJack{players} = maybe [] hand $ Map.lookup p players
+playerHand p BlackJack{players} = maybe [] hand $ AssocMap.lookup p players
 
-dealOneCardTo :: PlayerId -> BlackJack -> BlackJack
-dealOneCardTo player game@BlackJack{gen = RGen gen, players} =
+dealOneCardTo :: PlayerId -> BlackJack -> State StdGen BlackJack
+dealOneCardTo player game@BlackJack{players} = do
   let hand = playerHand player game
-      (gen', newHand) = dealOneCard (gen, hand)
-   in game
-        { gen = RGen gen'
-        , players = Map.update (\p@Hitting{} -> Just p{hand = newHand}) player players
-        }
+  newHand <- dealOneCard hand
+  pure $
+    game
+      { players = assocMapUpdate (\p@Hitting{} -> Just p{hand = newHand}) player players
+      }
 dealOneCardTo _ _ = error "should never happen"
 
-dealOneCardToDealer :: BlackJack -> BlackJack
-dealOneCardToDealer game@BlackJack{gen = RGen gen, dealerHand = (DealerHand (h, cs))} =
-  let (gen', cs') = dealOneCard (gen, cs)
-   in game{gen = RGen gen', dealerHand = DealerHand (h, cs')}
+dealOneCardToDealer :: BlackJack -> State StdGen BlackJack
+dealOneCardToDealer game@BlackJack{dealerHand = (DealerHand (h, cs))} = do
+  cs' <- dealOneCard cs
+  pure $ game{dealerHand = DealerHand (h, cs')}
 dealOneCardToDealer _ = error "should never happen"
 
-newGame :: Int -> Int -> BlackJack
-newGame numPlayers seed = Setup numPlayers seed mempty
+newGame :: Integer -> BlackJack
+newGame numPlayers = Setup numPlayers (AssocMap.fromList [])
 
-mkGame :: Int -> PlayerId -> Int -> [(PlayerId, (Int, [Card]))] -> BlackJack
-mkGame numPlayers next seed hands =
-  let (seed', cs) = dealCards 2 (mkStdGen seed)
-   in BlackJack
-        { numPlayers
-        , gen = RGen seed'
-        , next
-        , dealerHand = mkDealerHand cs
-        , players = Map.fromList $ mkPlayer <$> hands
-        }
+mkGame :: Integer -> PlayerId -> [(PlayerId, (Integer, [Card]))] -> State StdGen BlackJack
+mkGame numPlayers next hands = do
+  cs <- dealCards 2
+  pure $
+    BlackJack
+      { numPlayers
+      , next
+      , dealerHand = mkDealerHand cs
+      , players = AssocMap.fromList $ mkPlayer <$> hands
+      }
 
-mkPlayer :: (PlayerId, (Int, [Card])) -> (PlayerId, Player)
+mkPlayer :: (PlayerId, (Integer, [Card])) -> (PlayerId, Player)
 mkPlayer (player, (bet, cards)) = (player, Playing cards bet)
