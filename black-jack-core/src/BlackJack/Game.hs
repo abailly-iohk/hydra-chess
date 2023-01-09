@@ -36,7 +36,6 @@ import Control.Monad (foldM)
 import Control.Monad.State (State, gets, put)
 import Data.Aeson.KeyMap ()
 import Data.List (sortBy)
-import qualified Data.List as List
 import Data.Maybe (fromMaybe)
 import qualified PlutusTx.AssocMap as AssocMap
 import System.Random (StdGen, uniform)

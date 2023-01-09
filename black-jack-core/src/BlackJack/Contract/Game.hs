@@ -175,19 +175,20 @@ cardValues card values = foldr (addCardValue $ cardValue card) [] values
 {-# INLINEABLE cardValues #-}
 
 cardValue :: Card -> [Integer]
-cardValue Card{face = Two} = [2]
-cardValue Card{face = Three} = [3]
-cardValue Card{face = Four} = [4]
-cardValue Card{face = Five} = [5]
-cardValue Card{face = Six} = [6]
-cardValue Card{face = Seven} = [7]
-cardValue Card{face = Eight} = [8]
-cardValue Card{face = Nine} = [9]
-cardValue Card{face = Ten} = [10]
-cardValue Card{face = Jack} = [10]
-cardValue Card{face = Queen} = [10]
-cardValue Card{face = King} = [10]
-cardValue Card{face = Ace} = [1, 11]
+cardValue Card{face} = case face of
+  Two -> [2]
+  Three -> [3]
+  Four -> [4]
+  Five -> [5]
+  Six -> [6]
+  Seven -> [7]
+  Eight -> [8]
+  Nine -> [9]
+  Ten -> [10]
+  Jack -> [10]
+  Queen -> [10]
+  King -> [10]
+  Ace -> [1, 11]
 {-# INLINEABLE cardValue #-}
 
 isBlackJack :: [Card] -> Bool
@@ -260,7 +261,12 @@ nextPlayer player players =
 {-# INLINEABLE nextPlayer #-}
 
 playerIds :: Integer -> Integer -> [PlayerId]
-playerIds lb ub = PlayerId <$> [lb .. ub]
+playerIds lb ub = PlayerId <$> go lb
+ where
+  go lb' =
+    if lb' > ub
+      then []
+      else lb' : go (succ lb')
 {-# INLINEABLE playerIds #-}
 
 newtype RGen = RGen Integer
@@ -350,9 +356,10 @@ dealerValues (DealerHand (None, _)) = []
 {-# INLINEABLE dealerValues #-}
 
 actionsFor :: PlayerId -> [Card] -> [Play]
-actionsFor player hand
-  | minimum 22 (handValues hand) >= 21 = [Stand player]
-  | otherwise = [Hit player, Stand player]
+actionsFor player hand =
+  if minimum 22 (handValues hand) >= 21
+    then [Stand player]
+    else [Hit player, Stand player]
 {-# INLINEABLE actionsFor #-}
 
 minimum :: (Ord a) => a -> [a] -> a

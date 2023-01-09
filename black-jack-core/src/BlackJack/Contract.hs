@@ -10,7 +10,8 @@ module BlackJack.Contract where
 
 import PlutusTx.Prelude
 
-import BlackJack.Game (BlackJack, Play, possibleActions)
+import BlackJack.Contract.Game (possibleActions)
+import BlackJack.Game (BlackJack, Play)
 import Plutus.V2.Ledger.Api (
   Datum (Datum),
   Script,

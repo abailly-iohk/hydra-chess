@@ -3,11 +3,10 @@
 
 module BlackJack where
 
-import BlackJack.Contract.Game (BlackJack, Card, Outcome (..), Play (Quit), PlayerId)
+import BlackJack.Contract.Game (BlackJack, Card, Outcome (..), Play (Quit), PlayerId, possibleActions)
 import BlackJack.Game (
   newGame,
   play,
-  possibleActions,
  )
 import BlackJack.Pretty (displayPlayerHand, prettyGame, showAction)
 import Control.Exception (IOException, catch)

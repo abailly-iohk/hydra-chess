@@ -14,7 +14,7 @@ module BlackJack.GameSpec where
 
 import BlackJack.Game
 
-import BlackJack.Contract.Game (forPlayer, isEndGame)
+import BlackJack.Contract.Game (dealerActions, forPlayer, isEndGame, possibleActions, possibleActionsFor)
 import Control.Arrow (second)
 import Control.Monad.State (evalState, runState)
 import Data.Data (Proxy (Proxy))
