@@ -24,31 +24,31 @@ extra-source-files: CHANGELOG.md
 library
   hs-source-dirs:  src
   ghc-options:
-    -Wall -Werror
-    -fno-ignore-interface-pragmas -fno-omit-interface-pragmas
-    -fno-strictness
+    -Wall -Werror -fno-ignore-interface-pragmas
+    -fno-omit-interface-pragmas -fno-strictness
 
   exposed-modules:
     BlackJack
-    BlackJack.Game
-    BlackJack.Pretty
     BlackJack.Contract
     BlackJack.Contract.Game
+    BlackJack.Game
+    BlackJack.Pretty
 
   build-depends:
-                  QuickCheck
-                , aeson
-                , base
-                , base16-bytestring
-                , containers
-                , mtl
-                , plutus-core
-                , plutus-ledger-api
-                , plutus-tx
-                , plutus-tx-plugin
-                , random
-                , template-haskell
-                , text
+    , aeson
+    , base
+    , base16-bytestring
+    , containers
+    , mtl
+    , plutus-core
+    , plutus-ledger-api
+    , plutus-tx
+    , plutus-tx-plugin
+    , QuickCheck
+    , random
+    , template-haskell
+    , text
+    , vector
 
 executable black-jack
   main-is:          Main.hs
@@ -72,13 +72,13 @@ test-suite tests
   main-is:            Spec.hs
   type:               exitcode-stdio-1.0
   build-depends:
-                    QuickCheck
-                , base
-                , black-jack-core
-                , containers
-                , hspec
-                , hspec-core
-                , mtl
-                , random
+    , base
+    , black-jack-core
+    , containers
+    , hspec
+    , hspec-core
+    , mtl
+    , QuickCheck
+    , random
 
   build-tool-depends: hspec-discover:hspec-discover -any

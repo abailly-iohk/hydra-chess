@@ -42,34 +42,6 @@ import qualified PlutusTx.AssocMap as AssocMap
 import System.Random (StdGen, uniform)
 import Test.QuickCheck (Arbitrary (..), elements, suchThat)
 
-possibleActions :: BlackJack -> [Play]
-possibleActions Setup{numPlayers, initialBets} =
-  let players = playerIds 1 numPlayers
-      missingBet p = maybe [Bet p] (const []) $ AssocMap.lookup p initialBets
-   in foldMap missingBet players
-possibleActions game@BlackJack{next} = possibleActionsFor next game
-
-possibleActionsFor :: PlayerId -> BlackJack -> [Play]
-possibleActionsFor player Setup{initialBets} =
-  case AssocMap.lookup player initialBets of
-    Just{} -> []
-    Nothing -> [Bet player]
-possibleActionsFor player BlackJack{dealerHand, players} =
-  case player of
-    PlayerId{} -> case AssocMap.lookup player players of
-      Just Playing{hand} -> actionsFor player hand
-      Just Standing{} -> [Stand player]
-      _ -> error $ "Invalid player number " <> show player
-    Dealer -> dealerActions players dealerHand
-
-dealerActions :: AssocMap.Map PlayerId Player -> DealerHand -> [Play]
-dealerActions players dealerHand =
-  case List.find (isHitting . snd) $ AssocMap.toList players of
-    Just (pid, _) -> [DealCard pid]
-    Nothing ->
-      let value = minimum $ dealerValues dealerHand
-       in if value < 17 then [Hit Dealer] else [Stand Dealer]
-
 dealerValues :: DealerHand -> [Integer]
 dealerValues (DealerHand (Hidden c, cards)) = handValues (c : cards)
 dealerValues (DealerHand (None, _)) = error "should not happen"

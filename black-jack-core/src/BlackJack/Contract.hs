@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -7,23 +8,58 @@
 
 module BlackJack.Contract where
 
-import Plutus.V2.Ledger.Api (
-  Script,
-  ScriptContext (..),
-  UnsafeFromData,
-  Validator (getValidator),
-  mkValidatorScript,
-  unsafeFromBuiltinData,
- )
-import PlutusTx (CompiledCode)
-import qualified PlutusTx
 import PlutusTx.Prelude
 
-type DatumType = ()
-type RedeemerType = ()
+import BlackJack.Game (BlackJack, Play, possibleActions)
+import Plutus.V2.Ledger.Api (
+  Datum (Datum),
+  Script,
+  ScriptContext (..),
+  ToData,
+  UnsafeFromData,
+  Validator (getValidator),
+  getDatum,
+  mkValidatorScript,
+  toBuiltinData,
+  txOutDatum,
+  unsafeFromBuiltinData,
+ )
+import Plutus.V2.Ledger.Contexts (findDatumHash, getContinuingOutputs)
+import Plutus.V2.Ledger.Tx (OutputDatum (..))
+import PlutusTx (CompiledCode)
+import qualified PlutusTx
+
+type DatumType = BlackJack
+type RedeemerType = Play
 
 validator :: DatumType -> RedeemerType -> ScriptContext -> Bool
-validator _game _play _scriptContext = True
+validator game play _scriptContext =
+  play `elem` possibleActions game
+
+checkHeadOutputDatum :: ToData a => ScriptContext -> a -> Bool
+checkHeadOutputDatum ctx d =
+  case ownDatum of
+    NoOutputDatum ->
+      traceError "missing datum"
+    OutputDatumHash actualHash ->
+      traceIfFalse
+        "output datum hash mismatch"
+        ( Just actualHash == expectedHash
+        )
+    OutputDatum actual ->
+      traceIfFalse "output datum mismatch" $ getDatum actual == expectedData
+ where
+  expectedData = toBuiltinData d
+
+  expectedHash = findDatumHash (Datum $ toBuiltinData d) txInfo
+
+  ownDatum =
+    case getContinuingOutputs ctx of
+      [o] -> txOutDatum o
+      _ -> traceError "expected only one head output"
+
+  ScriptContext{scriptContextTxInfo = txInfo} = ctx
+{-# INLINEABLE checkHeadOutputDatum #-}
 
 -- | Signature of an untyped validator script.
 type ValidatorType = BuiltinData -> BuiltinData -> BuiltinData -> ()

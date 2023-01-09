@@ -11,13 +11,12 @@
 
 module HttpServer where
 
+import BlackJack.Contract.Game (Payoffs)
 import BlackJack.Game (
   Outcome (GameContinue, GameEnds),
-  Payoffs,
   Play (Bet),
   PlayerId (Dealer, PlayerId),
   decodePlayerId,
-  forPlayer,
   newGame,
   play,
   possibleActions,
@@ -300,8 +299,8 @@ applyGains gains peers payoffs =
         pid . \case
           (PlayerId n) -> peers !! n
           Dealer -> List.head peers
-      payoffsToParty = Map.mapKeys playerToParty payoffs
-   in Map.adjust (+ (- won)) (playerToParty Dealer) $
+      payoffsToParty = AssocMap.mapKeys playerToParty payoffs
+   in assocMapUpdate (+ (- won)) (playerToParty Dealer) $
         Map.unionWith (+) gains payoffsToParty
 
 readNumber :: (Read a, Num a) => Text -> a

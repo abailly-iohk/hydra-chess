@@ -26,8 +26,7 @@ import Data.Aeson (
   withArray,
   withText,
  )
-import qualified Data.Foldable as Haskell
-import qualified Data.Traversable as Haskell
+import qualified Data.Vector as Vector
 import GHC.Generics (Generic)
 import qualified PlutusTx
 import PlutusTx.AssocMap (Map)
@@ -44,6 +43,7 @@ data PlayerId
 PlutusTx.unstableMakeIsData ''PlayerId
 
 instance Eq PlayerId where
+  {-# INLINEABLE (==) #-}
   (PlayerId n) == (PlayerId i) = n == i
   Dealer == Dealer = True
   _ == _ = False
@@ -60,6 +60,15 @@ data Play
   | Hit PlayerId
   deriving stock (Haskell.Eq, Haskell.Ord, Haskell.Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
+
+instance Eq Play where
+  {-# INLINEABLE (==) #-}
+  Quit == Quit = True
+  (Bet pi) == (Bet pi') = pi == pi'
+  (DealCard pi) == (DealCard pi') = pi == pi'
+  (Stand pi) == (Stand pi') = pi == pi'
+  (Hit pi) == (Hit pi') = pi == pi'
+  _ == _ = False
 
 PlutusTx.unstableMakeIsData ''Play
 
@@ -155,10 +164,15 @@ PlutusTx.unstableMakeIsData ''Card
 
 handValues :: [Card] -> [Integer]
 handValues = nub . foldr cardValues []
+{-# INLINEABLE handValues #-}
 
 cardValues :: Card -> [Integer] -> [Integer]
 cardValues card [] = cardValue card
-cardValues card values = [vals + v | vals <- values, v <- cardValue card]
+cardValues card values = foldr (addCardValue $ cardValue card) [] values
+ where
+  addCardValue :: [Integer] -> Integer -> [Integer] -> [Integer]
+  addCardValue vals v = (map (+ v) vals <>)
+{-# INLINEABLE cardValues #-}
 
 cardValue :: Card -> [Integer]
 cardValue Card{face = Two} = [2]
@@ -174,9 +188,11 @@ cardValue Card{face = Jack} = [10]
 cardValue Card{face = Queen} = [10]
 cardValue Card{face = King} = [10]
 cardValue Card{face = Ace} = [1, 11]
+{-# INLINEABLE cardValue #-}
 
 isBlackJack :: [Card] -> Bool
 isBlackJack cards = length cards == 2 && 21 `elem` handValues cards
+{-# INLINEABLE isBlackJack #-}
 
 data Hidden c = Hidden c | None
   deriving (Haskell.Eq, Haskell.Show)
@@ -196,24 +212,12 @@ instance FromJSON DealerHand where
     withArray
       "cards"
       ( Haskell.traverse parseJSON
-          >=> (\cs -> Haskell.pure (DealerHand (None, Haskell.toList cs)))
+          >=> (\cs -> Haskell.pure (DealerHand (None, Vector.toList cs)))
       )
 
 reveal :: DealerHand -> [Card]
 reveal (DealerHand (Hidden c, cs)) = c : cs
 reveal (DealerHand (None, cs)) = cs
-
-actionsFor :: PlayerId -> [Card] -> [Play]
-actionsFor player hand
-  | minimum 22 (handValues hand) >= 21 = [Stand player]
-  | otherwise = [Hit player, Stand player]
-
-minimum :: (Ord a) => a -> [a] -> a
-minimum = foldr isMin
- where
-  isMin a b
-    | a < b = a
-    | otherwise = b
 
 data Player
   = Playing {hand :: [Card], bets :: Integer}
@@ -227,20 +231,24 @@ PlutusTx.unstableMakeIsData ''Player
 standing :: Player -> Player
 standing Playing{hand, bets} = Standing{hand, bets}
 standing p = p
+{-# INLINEABLE standing #-}
 
 hitting :: Player -> Player
 hitting Playing{hand, bets} = Hitting{hand, bets}
 hitting p = p
+{-# INLINEABLE hitting #-}
 
 isStanding :: Player -> Bool
 isStanding Playing{} = False
 isStanding Standing{} = True
 isStanding Hitting{} = False
+{-# INLINEABLE isStanding #-}
 
 isHitting :: Player -> Bool
 isHitting Playing{} = False
 isHitting Standing{} = False
 isHitting Hitting{} = True
+{-# INLINEABLE isHitting #-}
 
 nextPlayer :: PlayerId -> Map PlayerId Player -> PlayerId
 nextPlayer player players =
@@ -249,9 +257,11 @@ nextPlayer player players =
       | p < length players -> PlayerId $ succ p
       | otherwise -> Dealer
     Dealer -> PlayerId 1
+{-# INLINEABLE nextPlayer #-}
 
 playerIds :: Integer -> Integer -> [PlayerId]
 playerIds lb ub = PlayerId <$> [lb .. ub]
+{-# INLINEABLE playerIds #-}
 
 newtype RGen = RGen Integer
   deriving newtype (Haskell.Eq, Haskell.Show, ToJSON, FromJSON)
@@ -283,6 +293,7 @@ PlutusTx.unstableMakeIsData ''BlackJack
 playerHand :: PlayerId -> BlackJack -> [Card]
 playerHand _ Setup{} = []
 playerHand p BlackJack{players} = maybe [] hand $ Map.lookup p players
+{-# INLINEABLE playerHand #-}
 
 type Payoffs = Map PlayerId Integer
 
@@ -295,3 +306,59 @@ data Outcome
 isEndGame :: Outcome -> Bool
 isEndGame GameEnds{} = True
 isEndGame GameContinue{} = False
+
+-- | List possible actions (`Play`) in a given state.
+possibleActions :: BlackJack -> [Play]
+possibleActions Setup{numPlayers, initialBets} =
+  let players = playerIds 1 numPlayers
+      missingBet p acts = maybe (Bet p : acts) (const acts) $ Map.lookup p initialBets
+   in foldr missingBet [] players
+possibleActions game@BlackJack{next} = possibleActionsFor next game
+{-# INLINEABLE possibleActions #-}
+
+possibleActionsFor :: PlayerId -> BlackJack -> [Play]
+possibleActionsFor player Setup{initialBets} =
+  case Map.lookup player initialBets of
+    Just{} -> []
+    Nothing -> [Bet player]
+possibleActionsFor player BlackJack{dealerHand, players} =
+  case player of
+    PlayerId{} -> case Map.lookup player players of
+      Just Playing{hand} -> actionsFor player hand
+      Just Standing{} -> [Stand player]
+      _ -> []
+    Dealer -> dealerActions players dealerHand
+{-# INLINEABLE possibleActionsFor #-}
+
+-- | This is needed to make `minimum` total on possibly empty lists.
+sillyMaximumHandsValue :: Integer
+sillyMaximumHandsValue = 50
+{-# INLINEABLE sillyMaximumHandsValue #-}
+
+dealerActions :: Map.Map PlayerId Player -> DealerHand -> [Play]
+dealerActions players dealerHand =
+  case find (isHitting . snd) $ Map.toList players of
+    Just (pid, _) -> [DealCard pid]
+    Nothing ->
+      let value = minimum sillyMaximumHandsValue $ dealerValues dealerHand
+       in if value < 17 then [Hit Dealer] else [Stand Dealer]
+{-# INLINEABLE dealerActions #-}
+
+dealerValues :: DealerHand -> [Integer]
+dealerValues (DealerHand (Hidden c, cards)) = handValues (c : cards)
+dealerValues (DealerHand (None, _)) = []
+{-# INLINEABLE dealerValues #-}
+
+actionsFor :: PlayerId -> [Card] -> [Play]
+actionsFor player hand
+  | minimum 22 (handValues hand) >= 21 = [Stand player]
+  | otherwise = [Hit player, Stand player]
+{-# INLINEABLE actionsFor #-}
+
+minimum :: (Ord a) => a -> [a] -> a
+minimum = foldr isMin
+ where
+  isMin a b
+    | a < b = a
+    | otherwise = b
+{-# INLINEABLE minimum #-}

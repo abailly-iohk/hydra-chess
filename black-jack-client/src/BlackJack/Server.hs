@@ -12,7 +12,7 @@
 
 module BlackJack.Server where
 
-import BlackJack.Game (BlackJack, Card, Payoffs, Play)
+import BlackJack.Contract.Game (BlackJack, Card, Payoffs, Play)
 import Control.Exception (Exception)
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.ByteString as BS
