@@ -9,6 +9,8 @@ An experiment to build a distributed and decentralised Black Jack game on top of
 * [x] Basic rules [in Haskell](./black-jack-core/src/BlackJack/Game.hs) (should be easy to port to [Plutus](https://docs.cardano.org/plutus/learn-about-plutus))
 * [x] Barebones Console based interface
 * [x] Mock server simulating lifecycle on Hydra (for testing purpose)
+* [x] Basic [Plutus]() smart contract (only checks proposed play is legit)
+* [ ] Advanced smart contract: Check play is valid for any given game state
 * [ ] Proper "randomness"
 * [ ] Hydra server (requires implementing multi-head hydra)
 * [ ] Web UI
