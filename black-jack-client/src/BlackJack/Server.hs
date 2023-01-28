@@ -100,8 +100,8 @@ data FromChain c
   | HeadOpened {headId :: HeadId}
   | GameStarted {headId :: HeadId, game :: BlackJack, plays :: [Play]}
   | GameChanged {headId :: HeadId, game :: BlackJack, plays :: [Play]}
-  | GameEnded {headId :: HeadId, dealerCards :: [Card], payoffs :: Payoffs, gains :: Map Text Int}
-  | HeadClosed {headId :: HeadId, gains :: Map Text Int}
+  | GameEnded {headId :: HeadId, dealerCards :: [Card], payoffs :: Payoffs, gains :: Map Text Integer}
+  | HeadClosed {headId :: HeadId, gains :: Map Text Integer}
   deriving (Generic)
 
 deriving instance IsChain c => Show (FromChain c)

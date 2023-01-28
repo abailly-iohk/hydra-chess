@@ -32,20 +32,21 @@ library
     BlackJack.Server.Mock
 
   build-depends:
-    , aeson
-    , base
-    , base16-bytestring
-    , black-jack-core
-    , bytestring
-    , containers
-    , http-client
-    , http-conduit
-    , io-classes
-    , megaparsec
-    , mtl
-    , QuickCheck
-    , random
-    , text
+                  QuickCheck
+                , aeson
+                , base
+                , base16-bytestring
+                , black-jack-core
+                , bytestring
+                , containers
+                , http-client
+                , http-conduit
+                , io-classes
+                , megaparsec
+                , mtl
+                , mtl
+                , random
+                , text
 
 executable black-jack-client
   ghc-options:      -Wall -Werror
@@ -77,20 +78,21 @@ executable mock-server
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:
   build-depends:
-    , aeson
-    , base                  ^>=4.14.3.0
-    , black-jack-client
-    , black-jack-core
-    , bytestring
-    , containers
-    , http-types
-    , optparse-applicative
-    , random
-    , stm
-    , text
-    , time
-    , wai
-    , warp
+                  aeson
+                , base                  ^>=4.14.3.0
+                , black-jack-client
+                , black-jack-core
+                , bytestring
+                , containers
+                , http-types
+                , mtl
+                , optparse-applicative
+                , random
+                , stm
+                , text
+                , time
+                , wai
+                , warp
 
   hs-source-dirs:   mock-server
   default-language: Haskell2010

@@ -8,18 +8,18 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module HttpServer where
 
-import BlackJack.Contract.Game (Payoffs)
+import BlackJack.Contract.Game (Payoffs, possibleActions, forPlayer)
 import BlackJack.Game (
   Outcome (GameContinue, GameEnds),
   Play (Bet),
   PlayerId (Dealer, PlayerId),
   decodePlayerId,
   newGame,
-  play,
-  possibleActions,
+  play, assocMapToList,
  )
 import BlackJack.Server (
   FromChain (..),
@@ -36,7 +36,7 @@ import qualified Data.ByteString.Lazy as LBS
 import Data.Foldable (toList)
 import Data.Function ((&))
 import qualified Data.List as List
-import Data.Map (Map)
+import Data.Map (Map, mapKeys)
 import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
 import Data.Sequence (Seq, (<|), (|>))
@@ -59,8 +59,10 @@ import Network.Wai (
   strictRequestBody,
  )
 import qualified Network.Wai.Handler.Warp as Warp
-import System.Random.Stateful (applyAtomicGen, globalStdGen, uniform, uniformR)
+import System.Random.Stateful (applyAtomicGen, globalStdGen, uniformR, getStdGen)
 import Prelude hiding (head)
+import System.Random (StdGen, mkStdGen)
+import Control.Monad.State (runState)
 
 data HttpLog
   = HttpServerListening {host :: Text, port :: Int}
@@ -99,16 +101,18 @@ httpServer host port =
 data HeadState
   = Initialising
       { peers :: [MockParty]
-      , committed :: Map Text Int
+      , committed :: Map Text Integer
       }
   | Open
       { peers :: [MockParty]
-      , gains :: Map Text Int
+      , gains :: Map Text Integer
       , outcome :: Outcome
+      , seed :: StdGen
       }
   | Closing
       { peers :: [MockParty]
-      , payoffs :: Map Text Int
+      , payoffs :: Map Text Integer
+      , seed :: StdGen
       }
   deriving (Eq, Show)
 
@@ -159,7 +163,7 @@ app state req send =
         send $ responseLBS ok200 [] $ encode newHeadId
 
   handleCommit head@(HeadId hid) partyId amount = do
-    let seed = fromInteger $ readNumber $ "0x" <> hid
+    let seed = mkStdGen $ readNumber $ "0x" <> hid
     res <- atomically $ do
       chain@Chain{heads, events} <- readTVar state
       case Map.lookup head heads of
@@ -170,7 +174,7 @@ app state req send =
             Nothing -> pure $ Left $ "cannot find party " <> partyId
             Just p@Party{} -> do
               let head' = h{committed = Map.insert partyId amount (committed h)}
-                  game = newGame (length (peers head') - 1) seed
+                  game = newGame (fromIntegral $ length (peers head') - 1)
                   plays = possibleActions game
                   openHead =
                     if length (committed head') == length (peers head')
@@ -185,6 +189,7 @@ app state req send =
                           { peers = peers head'
                           , outcome = GameContinue game
                           , gains = committed head'
+                          , seed
                           }
                   chain' =
                     chain
@@ -201,12 +206,12 @@ app state req send =
       chain@Chain{heads, events} <- readTVar state
       case Map.lookup head heads of
         Nothing -> pure $ Left $ "cannot find headId " <> hid
-        Just Open{peers, gains, outcome = GameContinue game} -> do
+        Just Open{peers, gains, outcome = GameContinue game, seed} -> do
           let party = List.findIndex (\p -> pid p == partyId) peers
           case party of
             Nothing -> pure $ Left $ "cannot find party " <> partyId
             Just numPlayer -> do
-              let playerId = decodePlayerId numPlayer
+              let playerId = decodePlayerId (fromIntegral numPlayer)
                   acts = possibleActions game
               if num >= length acts
                 then pure $ Left $ "invalid play for player " <> partyId
@@ -214,13 +219,13 @@ app state req send =
                   let p = acts !! num
                   if forPlayer p == playerId
                     then do
-                      let outcome = play game p
+                      let (outcome, seed') = runState (play game p) seed
                           (event, newState) =
                             case outcome of
                               GameEnds dealerCards payoffs ->
                                 let gains' = applyGains gains peers payoffs
                                  in ( GameEnded head dealerCards payoffs gains'
-                                    , Open{peers, gains = gains', outcome}
+                                    , Open{peers, gains = gains', outcome, seed = seed'}
                                     )
                               GameContinue game' ->
                                 let dealerId = pid $ List.head peers
@@ -230,8 +235,9 @@ app state req send =
                                           { outcome
                                           , peers
                                           , gains = Map.adjust (+ 100) dealerId $ Map.adjust (+ (-100)) partyId gains
+                                          , seed = seed'
                                           }
-                                      _ -> Open{outcome, peers, gains}
+                                      _ -> Open{outcome, peers, gains, seed = seed'}
                                  in (GameChanged head game' (possibleActions game'), open)
 
                           chain' =
@@ -254,10 +260,10 @@ app state req send =
         Nothing -> pure $ Left $ "cannot find headId " <> hid
         -- TODO do something with payoffs
         Just Open{peers, gains} -> do
-          let game = newGame (length peers - 1) seed
+          let game = newGame (fromIntegral $ length peers - 1)
               acts = possibleActions game
               event = GameStarted head game acts
-              chain' = chain{heads = Map.insert head (Open{peers, outcome = GameContinue game, gains}) heads, events = events |> event}
+              chain' = chain{heads = Map.insert head (Open{peers, outcome = GameContinue game, gains, seed}) heads, events = events |> event}
           writeTVar state chain'
           pure $ Right ()
         Just _ -> pure $ Left $ pack $ "game with id " <> show hid <> " is not finished"
@@ -271,11 +277,11 @@ app state req send =
       chain@Chain{heads, events} <- readTVar state
       case Map.lookup head heads of
         Nothing -> pure $ Left $ "cannot find headId " <> hid
-        Just Open{peers, gains} -> do
+        Just Open{peers, gains, seed} -> do
           let event = HeadClosed head gains
               chain' =
                 chain
-                  { heads = Map.insert head (Closing{peers, payoffs = gains}) heads
+                  { heads = Map.insert head (Closing{peers, payoffs = gains, seed}) heads
                   , events = events |> event
                   }
           writeTVar state chain'
@@ -292,16 +298,16 @@ app state req send =
             }
     send $ responseLBS ok200 [] $ encode indexed
 
-applyGains :: Map Text Int -> [MockParty] -> Payoffs -> Map Text Int
-applyGains gains peers payoffs =
+applyGains :: Map Text Integer -> [MockParty] -> Payoffs -> Map Text Integer
+applyGains gains peers (Map.fromList . assocMapToList -> payoffs) =
   let won = sum payoffs
       playerToParty =
         pid . \case
-          (PlayerId n) -> peers !! n
+          (PlayerId n) -> peers !! fromInteger n
           Dealer -> List.head peers
-      payoffsToParty = AssocMap.mapKeys playerToParty payoffs
-   in assocMapUpdate (+ (- won)) (playerToParty Dealer) $
-        Map.unionWith (+) gains payoffsToParty
+      payoffsToParty = mapKeys playerToParty payoffs
+   in Map.adjust (+ (- won)) (playerToParty Dealer) $
+      Map.unionWith (+) gains payoffsToParty
 
 readNumber :: (Read a, Num a) => Text -> a
 readNumber v =
@@ -309,8 +315,8 @@ readNumber v =
     [(a, [])] -> a
     _ -> error $ "fail to read from " <> unpack v
 
-randomSeed :: IO Int
-randomSeed = applyAtomicGen uniform globalStdGen
+randomSeed :: IO StdGen
+randomSeed = getStdGen
 
 mkNewHeadId :: IO HeadId
 mkNewHeadId = HeadId . pack . fmap toChar <$> replicateM 32 randomNibble

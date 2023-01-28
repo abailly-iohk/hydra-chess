@@ -93,6 +93,10 @@ assocMapUpdate f k = AssocMap.mapWithKey update
     | k == k' = fromMaybe a (f a)
     | otherwise = a
 
+
+assocMapToList :: AssocMap.Map k v -> [(k, v)]
+assocMapToList = AssocMap.toList
+
 deletePlayer :: PlayerId -> AssocMap.Map PlayerId a -> AssocMap.Map PlayerId a
 deletePlayer = AssocMap.delete
 
