@@ -30,6 +30,7 @@ library
     BlackJack.Client.IO
     BlackJack.Server
     BlackJack.Server.Mock
+    BlackJack.Server.Hydra
 
   build-depends:
                   QuickCheck
@@ -47,6 +48,7 @@ library
                 , mtl
                 , random
                 , text
+                , websockets
 
 executable black-jack-client
   ghc-options:      -Wall -Werror
