@@ -14,11 +14,11 @@ repository cardano-haskell-packages
 
 -- NOTE: We need to have the hackage index-state twice because of
 -- cabal/haskell.nix oddities. That is, cabal ignores this one
-index-state: 2022-10-21T00:00:00Z
+index-state: 2022-11-26T00:00:00Z
 index-state:
   -- while haskell.nix, ignores this one
   , hackage.haskell.org 2022-10-21T00:00:00Z
-  , cardano-haskell-packages 2022-11-11T00:00:00Z
+  , cardano-haskell-packages 2022-11-26T00:00:00Z
 
 packages:
   black-jack-core
@@ -69,9 +69,8 @@ constraints:
   , word-array == 0.1.0.0
   , ouroboros-consensus == 0.1.0.1
   , ouroboros-consensus-test == 0.1.0.0
-  
+
 allow-newer:
   *:aeson,
   monoidal-containers:aeson,
   size-based:template-haskell
-    

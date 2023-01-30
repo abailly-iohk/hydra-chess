@@ -6,7 +6,6 @@ module Main where
 import BlackJack.Client (runClient)
 import BlackJack.Client.Console (mkImpureIO)
 import BlackJack.Server (Host (..))
-import BlackJack.Server.Mock (MockParty (..), pid, withMockServer)
 import Data.Text (pack)
 import Options.Applicative (
   Parser,
@@ -26,8 +25,9 @@ import Options.Applicative (
   (<**>),
  )
 import System.IO (BufferMode (NoBuffering), hSetBuffering, stderr, stdout)
+import BlackJack.Server.Hydra (withHydraServer)
 
-data Options = Options {myId :: String, myHost :: Host}
+data Options = Options {myId :: String, hydraServer :: Host}
   deriving (Eq, Show)
 
 idParser :: Parser String
@@ -48,7 +48,7 @@ hostParser =
                   <> short 'h'
                   <> metavar "HOST"
                   <> value "127.0.0.1"
-                  <> help "name or ip address to bind to (default: 127.0.0.1)."
+                  <> help "name or ip address of the Hydra server to connect to (default: 127.0.0.1)."
               )
         )
     <*> option
@@ -56,8 +56,8 @@ hostParser =
       ( long "port"
           <> short 'p'
           <> metavar "PORT"
-          <> value 56789
-          <> help "port to listen on (default: 56789)."
+          <> value 4001
+          <> help "port of Hydra server to connect to (default: 4001)."
       )
 
 optionsParser :: Parser Options
@@ -75,5 +75,5 @@ main :: IO ()
 main = do
   hSetBuffering stdout NoBuffering
   hSetBuffering stderr NoBuffering
-  Options{myId, myHost} <- execParser blackJackClientInfo
-  withMockServer Party{pid = pack myId, host = myHost} $ flip runClient mkImpureIO
+  Options{hydraServer} <- execParser blackJackClientInfo
+  withHydraServer hydraServer $ flip runClient mkImpureIO
