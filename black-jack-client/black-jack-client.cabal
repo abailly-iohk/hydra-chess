@@ -61,7 +61,7 @@ executable black-jack-client
   -- other-extensions:
   build-depends:
     , aeson
-    , base                  ^>=4.14.3.0
+    , base
     , black-jack-client
     , black-jack-core
     , optparse-applicative
@@ -81,7 +81,7 @@ executable mock-server
   -- other-extensions:
   build-depends:
                   aeson
-                , base                  ^>=4.14.3.0
+                , base
                 , black-jack-client
                 , black-jack-core
                 , bytestring

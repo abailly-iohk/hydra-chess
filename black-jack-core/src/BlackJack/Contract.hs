@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -10,25 +11,32 @@ module BlackJack.Contract where
 
 import PlutusTx.Prelude
 
+import Cardano.Api (
+  PlutusScriptVersion (PlutusScriptV2),
+  SerialiseAsRawBytes (serialiseToRawBytes),
+  hashScript,
+  pattern PlutusScript,
+ )
 import BlackJack.Contract.Game (possibleActions)
 import BlackJack.Game (BlackJack, Play)
-import Plutus.V2.Ledger.Api (
+import PlutusLedgerApi.V2 (
   Datum (Datum),
-  Script,
+  OutputDatum (..),
   ScriptContext (..),
+  ScriptHash (..),
+  SerialisedScript,
   ToData,
   UnsafeFromData,
-  Validator (getValidator),
   getDatum,
-  mkValidatorScript,
+  serialiseCompiledCode,
   toBuiltinData,
   txOutDatum,
   unsafeFromBuiltinData,
  )
-import Plutus.V2.Ledger.Contexts (findDatumHash, getContinuingOutputs)
-import Plutus.V2.Ledger.Tx (OutputDatum (..))
+import PlutusLedgerApi.V2.Contexts (findDatumHash, getContinuingOutputs)
 import PlutusTx (CompiledCode)
 import qualified PlutusTx
+import Cardano.Api.Shelley (PlutusScript(PlutusScriptSerialised))
 
 type DatumType = BlackJack
 type RedeemerType = Play
@@ -71,8 +79,11 @@ compiledValidator =
  where
   wrap = wrapValidator @DatumType @RedeemerType
 
-validatorScript :: Script
-validatorScript = getValidator $ mkValidatorScript compiledValidator
+validatorScript :: SerialisedScript
+validatorScript = serialiseCompiledCode compiledValidator
+
+validatorHash :: ScriptHash
+validatorHash = scriptValidatorHash validatorScript
 
 wrapValidator ::
   (UnsafeFromData datum, UnsafeFromData redeemer, UnsafeFromData context) =>
@@ -85,3 +96,16 @@ wrapValidator f d r c =
   redeemer = unsafeFromBuiltinData r
   context = unsafeFromBuiltinData c
 {-# INLINEABLE wrapValidator #-}
+
+-- * Similar utilities as plutus-ledger
+
+-- | Compute the on-chain 'ScriptHash' for a given serialised plutus script. Use
+-- this to refer to another validator script.
+scriptValidatorHash :: SerialisedScript -> ScriptHash
+scriptValidatorHash =
+  ScriptHash
+    . toBuiltin
+    . serialiseToRawBytes
+    . hashScript
+    . PlutusScript PlutusScriptV2
+    . PlutusScriptSerialised

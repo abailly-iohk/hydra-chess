@@ -68,8 +68,9 @@ play game@BlackJack{next, dealerHand, players} (Stand player) =
       let game' =
             game
               { players = assocMapUpdate (Just . standing) player players
+              , next = nextPlayer next players
               }
-       in pure $ GameContinue $ game'{next = nextPlayer next players}
+       in pure $ GameContinue game'
 play game@BlackJack{} (DealCard player) =
   GameContinue <$> dealOneCardTo player game{next = player}
 play BlackJack{dealerHand} Quit =
@@ -229,7 +230,11 @@ dealOneCardTo player game@BlackJack{players} = do
   newHand <- dealOneCard hand
   pure $
     game
-      { players = assocMapUpdate (\p@Hitting{} -> Just p{hand = newHand}) player players
+      { players = assocMapUpdate (\case
+                                     p@Hitting{} -> Just p{hand = newHand}
+                                     _ -> Nothing
+                                 ) player players
+
       }
 dealOneCardTo _ _ = error "should never happen"
 

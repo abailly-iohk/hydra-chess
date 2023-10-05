@@ -38,6 +38,7 @@ library
     , aeson
     , base
     , base16-bytestring
+    , cardano-api
     , containers
     , mtl
     , plutus-core
@@ -59,7 +60,7 @@ executable black-jack
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:
   build-depends:
-    , base             ^>=4.14.3.0
+    , base
     , black-jack-core
 
   hs-source-dirs:   app
