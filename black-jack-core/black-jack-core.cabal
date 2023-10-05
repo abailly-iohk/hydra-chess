@@ -34,6 +34,8 @@ library
     BlackJack.Game
     BlackJack.Pretty
 
+    Chess.Game
+
   build-depends:
     , aeson
     , base
@@ -69,7 +71,9 @@ executable black-jack
 test-suite tests
   ghc-options:        -threaded -rtsopts -with-rtsopts=-N -Wall -Werror
   hs-source-dirs:     test
-  other-modules:      BlackJack.GameSpec
+  other-modules:
+     BlackJack.GameSpec
+     Chess.GameSpec
   main-is:            Spec.hs
   type:               exitcode-stdio-1.0
   build-depends:
