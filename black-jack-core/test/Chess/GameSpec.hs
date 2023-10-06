@@ -22,6 +22,24 @@ spec = parallel $ do
     prop "can move a pawn one or 2 squares at start of game" prop_can_move_pawn_one_or_2_squares_at_start
     prop "cannot move a pawn more than 2 squares at start of game" prop_cannot_move_a_pawn_more_than_2_squares
     prop "cannot move a pawn more than 1 square after it moved" prop_cannot_move_a_pawn_more_than_1_square_after_it_moved
+    prop "cannot move a pawn if there's another piece at destination" prop_cannot_move_a_pawn_where_there_is_a_piece
+
+prop_cannot_move_a_pawn_where_there_is_a_piece :: Property
+prop_cannot_move_a_pawn_where_there_is_a_piece =
+  forAll (anyPawn White initialGame) $ \(Pos row col) ->
+    let game = Game [(Pawn, Pos (row + 1) col) ]
+        move = Move (Pos row col) (Pos (row + 1) col)
+        result = apply move game
+    in case result of
+            Right game' ->
+              property False
+                & counterexample ("game: " <> show game')
+                & counterexample ("move: " <> show move)
+            Left err ->
+              err
+                === IllegalMove move
+                & counterexample ("game: " <> show err)
+
 
 prop_can_move_pawn_one_or_2_squares_at_start :: Property
 prop_can_move_pawn_one_or_2_squares_at_start =
