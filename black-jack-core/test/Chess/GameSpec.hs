@@ -11,12 +11,13 @@ import Test.QuickCheck (
   counterexample,
   elements,
   forAll,
-  property,
+  property, choose, (===),
  )
 
 spec :: Spec
 spec = parallel $ do
   prop "can move a pawn one square at start of game" prop_can_move_pawn_one_square
+  prop "cannot move a pawn more than 2 squares at start of game" prop_cannot_move_a_pawn_more_than_2_squares
 
 prop_can_move_pawn_one_square :: Property
 prop_can_move_pawn_one_square =
@@ -29,6 +30,19 @@ prop_can_move_pawn_one_square =
           Left err ->
             property False
               & counterexample ("error: " <> show err)
+
+prop_cannot_move_a_pawn_more_than_2_squares :: Property
+prop_cannot_move_a_pawn_more_than_2_squares =
+  forAll (anyPawn White initialGame) $ \(Pos row col) ->
+   forAll (choose (3,6)) $ \ offset ->
+    let move = Move (Pos row col) (Pos (row + offset) col)
+        result = apply move initialGame
+     in case result of
+          Right game' ->
+            property False
+              & counterexample ("expected error, got game: " <> show game')
+          Left err -> err === IllegalMove move
+              & counterexample ("game: " <> show err)
 
 anyPawn :: Side -> Game -> Gen Position
 anyPawn _ _ =

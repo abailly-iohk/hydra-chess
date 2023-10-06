@@ -1,8 +1,9 @@
 module Chess.Game where
 
 apply :: Move -> Game -> Either IllegalMove Game
-apply (Move _ to) _game =
-  Right $ Game [(Pawn, to)]
+apply move@(Move (Pos row _) to@(Pos row' _)) _game
+   | row' - row <= 2 = Right $ Game [(Pawn, to)]
+   | otherwise = Left $ IllegalMove move
 
 data IllegalMove = IllegalMove Move
   deriving (Eq, Show)
