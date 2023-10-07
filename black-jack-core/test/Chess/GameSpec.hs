@@ -27,10 +27,11 @@ spec = parallel $ do
 prop_cannot_move_a_pawn_where_there_is_a_piece :: Property
 prop_cannot_move_a_pawn_where_there_is_a_piece =
   forAll (anyPawn White initialGame) $ \(Pos row col) ->
-    let game = Game [(Pawn, Pos (row + 1) col) ]
-        move = Move (Pos row col) (Pos (row + 1) col)
-        result = apply move game
-    in case result of
+    forAll (choose (1, 2)) $ \offset ->
+      let game = Game [(Pawn, Pos (row + 1) col)]
+          move = Move (Pos row col) (Pos (row + offset) col)
+          result = apply move game
+       in case result of
             Right game' ->
               property False
                 & counterexample ("game: " <> show game')
@@ -39,7 +40,6 @@ prop_cannot_move_a_pawn_where_there_is_a_piece =
               err
                 === IllegalMove move
                 & counterexample ("game: " <> show err)
-
 
 prop_can_move_pawn_one_or_2_squares_at_start :: Property
 prop_can_move_pawn_one_or_2_squares_at_start =
