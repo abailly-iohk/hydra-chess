@@ -27,6 +27,8 @@ spec = parallel $ do
     prop "cannot move a white pawn if there's another piece at destination" prop_cannot_move_a_pawn_where_there_is_a_piece
     prop "white pawn can take piece when moving diagonally" prop_pawn_takes_piece_diagonally
     prop "white pawn cannot move diagonally" prop_pawn_cannot_move_diagonally
+    prop "can move a black pawn one or 2 squares at start of game" prop_can_move_black_pawn_one_or_2_squares_at_start
+    prop "can move a black pawn one square after start of game" prop_can_move_black_pawn_one_square_after_start
 
 prop_can_move_pawn_one_square_after_start :: Property
 prop_can_move_pawn_one_square_after_start =
@@ -38,6 +40,21 @@ prop_can_move_pawn_one_square_after_start =
      in case result of
           Right game' ->
             game' /= initialGame && length (findPieces Pawn White game') == 8
+              & counterexample ("game: " <> show game')
+          Left err ->
+            property False
+              & counterexample ("error: " <> show err)
+
+prop_can_move_black_pawn_one_square_after_start :: Property
+prop_can_move_black_pawn_one_square_after_start =
+  forAll (anyPawn Black initialGame) $ \(Pos row col) ->
+    let move = Move (Pos (row - 1) col) (Pos (row - 2) col)
+        result =
+          apply (Move (Pos row col) (Pos (row - 1) col)) initialGame
+            >>= apply move
+     in case result of
+          Right game' ->
+            game' /= initialGame && length (findPieces Pawn Black game') == 8
               & counterexample ("game: " <> show game')
           Left err ->
             property False
@@ -123,6 +140,20 @@ prop_can_move_pawn_one_or_2_squares_at_start =
               property False
                 & counterexample ("error: " <> show err)
 
+prop_can_move_black_pawn_one_or_2_squares_at_start :: Property
+prop_can_move_black_pawn_one_or_2_squares_at_start =
+  forAll (anyPawn Black initialGame) $ \(Pos row col) ->
+    forAll (choose (1, 2)) $ \offset ->
+      let move = Move (Pos row col) (Pos (row - offset) col)
+          result = apply move initialGame
+       in case result of
+            Right game' ->
+              game' /= initialGame && length (findPieces Pawn Black game') == 8
+                & counterexample ("end game: " <> show game')
+                & counterexample ("move: " <> show move)
+            Left err ->
+              property False
+                & counterexample ("error: " <> show err)
 
 prop_cannot_move_a_pawn_more_than_2_squares :: Property
 prop_cannot_move_a_pawn_more_than_2_squares =

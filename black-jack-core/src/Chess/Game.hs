@@ -2,12 +2,19 @@
 
 module Chess.Game where
 
+import Control.Monad (guard)
 import Data.Foldable (find)
 import Data.Maybe (isJust)
-import Control.Monad (guard)
 
 apply :: Move -> Game -> Either IllegalMove Game
-apply move@(Move from@(Pos row col) to@(Pos row' col')) game
+apply move@(Move from _) game =
+  case pieceAt from game of
+    Just (Pawn, White, _) -> moveWhitePawn move game
+    Just (Pawn, Black, _) -> moveBlackPawn move game
+    _ -> Left $ IllegalMove move
+
+moveWhitePawn :: Move -> Game -> Either IllegalMove Game
+moveWhitePawn move@(Move from@(Pos row col) to@(Pos row' col')) game
   | (row' - row) == 1 && abs (col' - col) == 1 =
       takePiece game from to
   | game `hasPieceOn` path from to =
@@ -19,19 +26,36 @@ apply move@(Move from@(Pos row col) to@(Pos row' col')) game
   | otherwise =
       Left $ IllegalMove move
 
+moveBlackPawn :: Move -> Game -> Either IllegalMove Game
+moveBlackPawn move@(Move from@(Pos row col) to@(Pos row' col')) game
+  | (row' - row) == -1 && abs (col' - col) == 1 =
+      takePiece game from to
+  | game `hasPieceOn` path from to =
+      Left $ IllegalMove move
+  | row <= 5 && row' - row == -1 =
+      Right $ movePiece game from to
+  | row == 6 && row' - row >= -2 =
+      Right $ movePiece game from to
+  | otherwise =
+      Left $ IllegalMove move
+
+pieceAt :: Position -> Game -> Maybe (Piece, Side, Position)
+pieceAt position (Game pieces) =
+  find (\(_, _, p) -> p == position) pieces
+
 movePiece :: Game -> Position -> Position -> Game
-movePiece (Game pieces) from to =
+movePiece game@(Game pieces) from to =
   let
-    att = find (\(_, _, pos) -> pos == from) pieces
+    att = pieceAt from game
     newPos = maybe [] (\(p, s, _) -> [(p, s, to)]) att
    in
     Game $ filter (\(_, _, pos) -> pos /= from) pieces <> newPos
 
 takePiece :: Game -> Position -> Position -> Either IllegalMove Game
-takePiece (Game pieces) from to =
+takePiece game@(Game pieces) from to =
   let
-    att = find (\(_, _, pos) -> pos == from) pieces
-    def = find (\(_, _, pos) -> pos == to) pieces
+    att = pieceAt from game
+    def = pieceAt to game
     newPos = do
       (piece, side, _) <- att
       (_, side', _) <- def
