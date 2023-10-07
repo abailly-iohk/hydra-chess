@@ -6,11 +6,25 @@ import Data.Foldable (find)
 import Data.Maybe (isJust)
 
 apply :: Move -> Game -> Either IllegalMove Game
-apply move@(Move from@(Pos row _) to@(Pos row' _)) game
-  | game `hasPieceOn` path from to = Left $ IllegalMove move
-  | row >= 2 && row' - row == 1 = Right $ Game [(Pawn, to)]
-  | row == 1 && row' - row <= 2 = Right $ Game [(Pawn, to)]
-  | otherwise = Left $ IllegalMove move
+apply move@(Move from@(Pos row col) to@(Pos row' col')) game
+  | (row' - row) == 1 && abs (col' - col) == 1 =
+      Right $ takePieceAt game from to
+  | game `hasPieceOn` path from to =
+      Left $ IllegalMove move
+  | row >= 2 && row' - row == 1 =
+      Right $ Game [(Pawn, White, to)]
+  | row == 1 && row' - row <= 2 =
+      Right $ Game [(Pawn, White, to)]
+  | otherwise =
+      Left $ IllegalMove move
+
+takePieceAt :: Game -> Position -> Position -> Game
+takePieceAt (Game pieces) from to =
+  let
+    att = find (\(_, _, pos) -> pos == from) pieces
+    newPos = maybe [] (\(p, s, _) -> [(p, s, to)]) att
+   in
+    Game $ filter (\(_, _, pos) -> pos /= from && pos /= to) pieces <> newPos
 
 path :: Position -> Position -> Path
 path (Pos r c) (Pos r' c') =
@@ -26,7 +40,7 @@ path (Pos r c) (Pos r' c') =
 
 hasPieceOn :: Game -> Path -> Bool
 hasPieceOn (Game pieces) =
-  any (\pos -> isJust $ find ((== pos) . snd) pieces) . positions
+  any (\pos -> isJust $ find (\(_, _, p) -> p == pos) pieces) . positions
 
 data IllegalMove = IllegalMove Move
   deriving (Eq, Show)
@@ -43,11 +57,15 @@ newtype Path = Path {positions :: [Position]}
 data Piece = Pawn
   deriving (Eq, Show)
 
-data Game = Game [(Piece, Position)]
+data Game = Game [(Piece, Side, Position)]
   deriving (Eq, Show)
 
 initialGame :: Game
 initialGame = Game []
+
+findPieces :: Piece -> Side -> Game -> [Piece]
+findPieces piece side (Game pieces) =
+  map (\(p, _, _) -> p) $ filter (\(p, s, _) -> p == piece && s == side) pieces
 
 data Side = White | Black
   deriving (Eq, Show)
