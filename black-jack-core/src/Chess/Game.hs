@@ -1,4 +1,5 @@
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE NamedFieldPuns #-}
 
 module Chess.Game where
 
@@ -7,10 +8,10 @@ import Data.Foldable (find)
 import Data.Maybe (isJust)
 
 apply :: Move -> Game -> Either IllegalMove Game
-apply move@(Move from _) game =
+apply move@(Move from _) game@(Game curSide _) =
   case pieceAt from game of
-    Just (Pawn, White, _) -> moveWhitePawn move game
-    Just (Pawn, Black, _) -> moveBlackPawn move game
+    Just (Pawn, White, _) | curSide == White -> moveWhitePawn move game
+    Just (Pawn, Black, _) | curSide == Black -> moveBlackPawn move game
     _ -> Left $ IllegalMove move
 
 moveWhitePawn :: Move -> Game -> Either IllegalMove Game
@@ -40,19 +41,19 @@ moveBlackPawn move@(Move from@(Pos row col) to@(Pos row' col')) game
       Left $ IllegalMove move
 
 pieceAt :: Position -> Game -> Maybe (Piece, Side, Position)
-pieceAt position (Game pieces) =
+pieceAt position Game{pieces} =
   find (\(_, _, p) -> p == position) pieces
 
 movePiece :: Game -> Position -> Position -> Game
-movePiece game@(Game pieces) from to =
+movePiece game@Game{curSide, pieces} from to =
   let
     att = pieceAt from game
     newPos = maybe [] (\(p, s, _) -> [(p, s, to)]) att
    in
-    Game $ filter (\(_, _, pos) -> pos /= from) pieces <> newPos
+    Game (flipSide curSide) $ filter (\(_, _, pos) -> pos /= from) pieces <> newPos
 
 takePiece :: Game -> Position -> Position -> Either IllegalMove Game
-takePiece game@(Game pieces) from to =
+takePiece game@Game{curSide, pieces} from to =
   let
     att = pieceAt from game
     def = pieceAt to game
@@ -63,7 +64,7 @@ takePiece game@(Game pieces) from to =
       pure (piece, side, to)
    in
     case newPos of
-      Just pos -> Right $ Game $ filter (\(_, _, p) -> p /= from && p /= to) pieces <> [pos]
+      Just pos -> Right $ Game (flipSide curSide) $ filter (\(_, _, p) -> p /= from && p /= to) pieces <> [pos]
       Nothing -> Left $ IllegalMove (Move from to)
 
 path :: Position -> Position -> Path
@@ -79,7 +80,7 @@ path (Pos r c) (Pos r' c') =
             | otherwise -> []
 
 hasPieceOn :: Game -> Path -> Bool
-hasPieceOn (Game pieces) =
+hasPieceOn Game{pieces} =
   any (\pos -> isJust $ find (\(_, _, p) -> p == pos) pieces) . positions
 
 data IllegalMove = IllegalMove Move
@@ -97,21 +98,28 @@ newtype Path = Path {positions :: [Position]}
 data Piece = Pawn
   deriving (Eq, Show)
 
-data Game = Game [(Piece, Side, Position)]
+data Game = Game
+  { curSide :: Side
+  , pieces :: [(Piece, Side, Position)]
+  }
   deriving (Eq, Show)
 
 initialGame :: Game
 initialGame =
-  Game $
+  Game White $
     [(Pawn, White, Pos 1 c) | c <- [0 .. 7]]
       <> [(Pawn, Black, Pos 6 c) | c <- [0 .. 7]]
 
 findPieces :: Piece -> Side -> Game -> [(Piece, Side, Position)]
-findPieces piece side (Game pieces) =
+findPieces piece side Game{pieces} =
   filter (\(p, s, _) -> p == piece && s == side) pieces
 
 data Side = White | Black
   deriving (Eq, Show)
+
+flipSide :: Side -> Side
+flipSide White = Black
+flipSide Black = White
 
 data Move = Move Position Position
   deriving (Eq, Show)
