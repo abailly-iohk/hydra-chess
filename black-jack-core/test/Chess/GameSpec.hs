@@ -13,17 +13,34 @@ import Test.QuickCheck (
   elements,
   forAll,
   property,
-  (===), suchThat,
+  suchThat,
+  (===),
  )
 
 spec :: Spec
 spec = parallel $ do
   describe "Pawn" $ do
     prop "can move a pawn one or 2 squares at start of game" prop_can_move_pawn_one_or_2_squares_at_start
+    prop "can move a pawn one square after start of game" prop_can_move_pawn_one_square_after_start
     prop "cannot move a pawn more than 2 squares at start of game" prop_cannot_move_a_pawn_more_than_2_squares
     prop "cannot move a pawn more than 1 square after it moved" prop_cannot_move_a_pawn_more_than_1_square_after_it_moved
     prop "cannot move a pawn if there's another piece at destination" prop_cannot_move_a_pawn_where_there_is_a_piece
     prop "can take piece when moving diagonally" prop_pawn_takes_piece_diagonally
+
+prop_can_move_pawn_one_square_after_start :: Property
+prop_can_move_pawn_one_square_after_start =
+  forAll (anyPawn White initialGame) $ \(Pos row col) ->
+    let move = Move (Pos (row + 1) col) (Pos (row + 2) col)
+        result =
+          apply (Move (Pos row col) (Pos (row + 1) col)) initialGame
+            >>= apply move
+     in case result of
+          Right game' ->
+            game' /= initialGame && length (findPieces Pawn White game') == 8
+              & counterexample ("game: " <> show game')
+          Left err ->
+            property False
+              & counterexample ("error: " <> show err)
 
 prop_pawn_takes_piece_diagonally :: Property
 prop_pawn_takes_piece_diagonally =
@@ -71,7 +88,7 @@ prop_can_move_pawn_one_or_2_squares_at_start =
     let result = apply (Move (Pos row col) (Pos (row + 1) col)) initialGame
      in case result of
           Right game' ->
-            game' /= initialGame
+            game' /= initialGame && length (findPieces Pawn White game') == 8
               & counterexample ("game: " <> show game')
           Left err ->
             property False
@@ -111,9 +128,9 @@ prop_cannot_move_a_pawn_more_than_1_square_after_it_moved =
                 & counterexample ("game: " <> show err)
 
 anyPawn :: Side -> Game -> Gen Position
-anyPawn _ _ =
-  elements [Pos 1 c | c <- [0 .. 7]]
+anyPawn side game =
+  elements $ ((\(_, _, pos) -> pos) <$> findPieces Pawn side game)
 
 anyPos :: Gen Position
 anyPos =
-  elements [ Pos r c | r <- [0..7], c <- [0..7]]
+  elements [Pos r c | r <- [0 .. 7], c <- [0 .. 7]]

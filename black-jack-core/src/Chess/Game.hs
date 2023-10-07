@@ -8,18 +8,26 @@ import Data.Maybe (isJust)
 apply :: Move -> Game -> Either IllegalMove Game
 apply move@(Move from@(Pos row col) to@(Pos row' col')) game
   | (row' - row) == 1 && abs (col' - col) == 1 =
-      Right $ takePieceAt game from to
+      Right $ takePiece game from to
   | game `hasPieceOn` path from to =
       Left $ IllegalMove move
   | row >= 2 && row' - row == 1 =
-      Right $ Game [(Pawn, White, to)]
+      Right $ movePiece game from to
   | row == 1 && row' - row <= 2 =
-      Right $ Game [(Pawn, White, to)]
+      Right $ movePiece game from to
   | otherwise =
       Left $ IllegalMove move
 
-takePieceAt :: Game -> Position -> Position -> Game
-takePieceAt (Game pieces) from to =
+movePiece :: Game -> Position -> Position -> Game
+movePiece (Game pieces) from to =
+  let
+    att = find (\(_, _, pos) -> pos == from) pieces
+    newPos = maybe [] (\(p, s, _) -> [(p, s, to)]) att
+   in
+    Game $ filter (\(_, _, pos) -> pos /= from) pieces <> newPos
+
+takePiece :: Game -> Position -> Position -> Game
+takePiece (Game pieces) from to =
   let
     att = find (\(_, _, pos) -> pos == from) pieces
     newPos = maybe [] (\(p, s, _) -> [(p, s, to)]) att
@@ -61,11 +69,14 @@ data Game = Game [(Piece, Side, Position)]
   deriving (Eq, Show)
 
 initialGame :: Game
-initialGame = Game []
+initialGame =
+  Game $
+    [(Pawn, White, Pos 1 c) | c <- [0 .. 7]]
+      <> [(Pawn, Black, Pos 6 c) | c <- [0 .. 7]]
 
-findPieces :: Piece -> Side -> Game -> [Piece]
+findPieces :: Piece -> Side -> Game -> [(Piece, Side, Position)]
 findPieces piece side (Game pieces) =
-  map (\(p, _, _) -> p) $ filter (\(p, s, _) -> p == piece && s == side) pieces
+  filter (\(p, s, _) -> p == piece && s == side) pieces
 
 data Side = White | Black
   deriving (Eq, Show)
