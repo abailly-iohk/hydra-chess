@@ -1,11 +1,15 @@
+{-# OPTIONS_GHC -Wno-orphans #-}
+
 module Chess.GameSpec where
 
 import Chess.Game
 
+import Data.Either (isRight)
 import Data.Function ((&))
 import Test.Hspec (Spec, describe, parallel)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (
+  Arbitrary (..),
   Gen,
   Property,
   choose,
@@ -19,6 +23,8 @@ import Test.QuickCheck (
 
 spec :: Spec
 spec = parallel $ do
+  describe "Generators" $ do
+    prop "generates 2 moves at start for pawns" prop_generate_2_starting_moves_for_pawns
   describe "Pawn" $ do
     prop "can move a white pawn one or 2 squares at start of game" prop_can_move_pawn_one_or_2_squares_at_start
     prop "can move a white pawn one square after start of game" prop_can_move_pawn_one_square_after_start
@@ -27,8 +33,66 @@ spec = parallel $ do
     prop "cannot move a white pawn if there's another piece at destination" prop_cannot_move_a_pawn_where_there_is_a_piece
     prop "white pawn can take piece when moving diagonally" prop_pawn_takes_piece_diagonally
     prop "white pawn cannot move diagonally" prop_pawn_cannot_move_diagonally
+    prop "white pawn cannot move backwards" prop_pawn_cannot_move_backwards
     prop "can move a black pawn one or 2 squares at start of game" prop_can_move_black_pawn_one_or_2_squares_at_start
     prop "can move a black pawn one square after start of game" prop_can_move_black_pawn_one_square_after_start
+    prop "can move a pawn in its column only" prop_can_move_black_pawn_in_its_column_only
+prop_pawn_cannot_move_backwards :: Side -> Property
+prop_pawn_cannot_move_backwards side =
+  forAll anyPos $ \pos@(Pos r c) ->
+    let game = Game [(Pawn, side, pos)]
+        offset = case side of
+          White -> -1
+          Black -> 1
+        move = Move pos (Pos (r + offset) c)
+     in case apply move game of
+          Right game' ->
+            property False
+              & counterexample ("game': " <> show game')
+              & counterexample ("move: " <> show move)
+          Left err ->
+            err
+              === IllegalMove move
+              & counterexample ("game: " <> show err)
+
+prop_generate_2_starting_moves_for_pawns :: Side -> Property
+prop_generate_2_starting_moves_for_pawns side =
+  forAll (anyPawn side initialGame) $ \pos ->
+    let moves = possibleMoves pos initialGame
+     in length moves == 2
+          & counterexample ("possible moves: " <> show moves)
+
+prop_can_move_black_pawn_in_its_column_only :: Side -> Property
+prop_can_move_black_pawn_in_its_column_only side =
+  forAll (anyPawn side initialGame) $ \from@(Pos row col) ->
+    forAll
+      ( elements [0 .. 7]
+          `suchThat` \c' -> c' >= col + 2 || c' <= col - 2
+      )
+      $ \col' ->
+        let offset = case side of
+              White -> 1
+              Black -> -1
+            move = Move from (Pos (row + offset) col')
+         in case apply move initialGame of
+              Right game' ->
+                property False
+                  & counterexample ("game': " <> show game')
+                  & counterexample ("move: " <> show move)
+              Left err ->
+                err
+                  === IllegalMove move
+                  & counterexample ("move: " <> show move)
+generateMove :: Position -> Game -> Gen Move
+generateMove pos game =
+  case possibleMoves pos game of
+    [] -> error $ "no possible moves from " <> show pos <> "in game " <> show game
+    other -> elements other
+
+possibleMoves :: Position -> Game -> [Move]
+possibleMoves pos@(Pos r c) game =
+  let allMoves = [Move pos (Pos r' c') | r' <- [0 .. 7], c' <- [0 .. 7], (r, c) /= (r', c')]
+   in filter (\move -> isRight $ apply move game) allMoves
 
 prop_can_move_pawn_one_square_after_start :: Property
 prop_can_move_pawn_one_square_after_start =
@@ -195,3 +259,6 @@ anyPawn side game =
 anyPos :: Gen Position
 anyPos =
   elements [Pos r c | r <- [0 .. 7], c <- [0 .. 7]]
+
+instance Arbitrary Side where
+  arbitrary = elements [White, Black]

@@ -19,9 +19,9 @@ moveWhitePawn move@(Move from@(Pos row col) to@(Pos row' col')) game
       takePiece game from to
   | game `hasPieceOn` path from to =
       Left $ IllegalMove move
-  | row >= 2 && row' - row == 1 =
+  | row >= 2 && row' - row == 1 && col == col' =
       Right $ movePiece game from to
-  | row == 1 && row' - row <= 2 =
+  | row == 1 && row' - row <= 2 && row' > row && col == col' =
       Right $ movePiece game from to
   | otherwise =
       Left $ IllegalMove move
@@ -32,9 +32,9 @@ moveBlackPawn move@(Move from@(Pos row col) to@(Pos row' col')) game
       takePiece game from to
   | game `hasPieceOn` path from to =
       Left $ IllegalMove move
-  | row <= 5 && row' - row == -1 =
+  | row <= 5 && row' - row == -1 && col == col' =
       Right $ movePiece game from to
-  | row == 6 && row' - row >= -2 =
+  | row == 6 && row' - row >= -2 && row' < row && col == col' =
       Right $ movePiece game from to
   | otherwise =
       Left $ IllegalMove move
@@ -76,7 +76,7 @@ path (Pos r c) (Pos r' c') =
             | vert == 0 && horiz < 0 -> [Pos r x | x <- [c - 1 .. c']]
             | horiz == 0 && vert < 0 -> [Pos x c | x <- [r - 1 .. r']]
             | horiz == 0 && vert > 0 -> [Pos x c | x <- [r + 1 .. r']]
-            | otherwise -> error "non linear move"
+            | otherwise -> []
 
 hasPieceOn :: Game -> Path -> Bool
 hasPieceOn (Game pieces) =
