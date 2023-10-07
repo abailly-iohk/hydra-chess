@@ -20,12 +20,13 @@ import Test.QuickCheck (
 spec :: Spec
 spec = parallel $ do
   describe "Pawn" $ do
-    prop "can move a pawn one or 2 squares at start of game" prop_can_move_pawn_one_or_2_squares_at_start
-    prop "can move a pawn one square after start of game" prop_can_move_pawn_one_square_after_start
-    prop "cannot move a pawn more than 2 squares at start of game" prop_cannot_move_a_pawn_more_than_2_squares
-    prop "cannot move a pawn more than 1 square after it moved" prop_cannot_move_a_pawn_more_than_1_square_after_it_moved
-    prop "cannot move a pawn if there's another piece at destination" prop_cannot_move_a_pawn_where_there_is_a_piece
-    prop "can take piece when moving diagonally" prop_pawn_takes_piece_diagonally
+    prop "can move a white pawn one or 2 squares at start of game" prop_can_move_pawn_one_or_2_squares_at_start
+    prop "can move a white pawn one square after start of game" prop_can_move_pawn_one_square_after_start
+    prop "cannot move a white pawn more than 2 squares at start of game" prop_cannot_move_a_pawn_more_than_2_squares
+    prop "cannot move a white pawn more than 1 square after it moved" prop_cannot_move_a_pawn_more_than_1_square_after_it_moved
+    prop "cannot move a white pawn if there's another piece at destination" prop_cannot_move_a_pawn_where_there_is_a_piece
+    prop "white pawn can take piece when moving diagonally" prop_pawn_takes_piece_diagonally
+    prop "white pawn cannot move diagonally" prop_pawn_cannot_move_diagonally
 
 prop_can_move_pawn_one_square_after_start :: Property
 prop_can_move_pawn_one_square_after_start =
@@ -48,7 +49,12 @@ prop_pawn_takes_piece_diagonally =
     forAll (elements [-1, 1]) $ \diagonal ->
       let targetPos = Pos (r + 1) (c + diagonal)
        in forAll (anyPos `suchThat` \p -> p /= pos && p /= targetPos) $ \otherPos ->
-            let game = Game [(Pawn, White, pos), (Pawn, Black, targetPos), (Pawn, Black, otherPos)]
+            let game =
+                  Game
+                    [ (Pawn, White, pos)
+                    , (Pawn, Black, targetPos)
+                    , (Pawn, Black, otherPos)
+                    ]
                 move = Move pos targetPos
              in case apply move game of
                   Right game' ->
@@ -59,6 +65,28 @@ prop_pawn_takes_piece_diagonally =
                       & counterexample ("start game: " <> show game)
                   Left err ->
                     property False
+                      & counterexample ("game: " <> show err)
+
+prop_pawn_cannot_move_diagonally :: Property
+prop_pawn_cannot_move_diagonally =
+  forAll (anyValidPawn White) $ \pos@(Pos r c) ->
+    forAll (elements [-1, 1]) $ \diagonal ->
+      let targetPos = Pos (r + 1) (c + diagonal)
+       in forAll (anyPos `suchThat` \p -> p /= pos && p /= targetPos) $ \otherPos ->
+            let game =
+                  Game
+                    [ (Pawn, White, pos)
+                    , (Pawn, Black, otherPos)
+                    ]
+                move = Move pos targetPos
+             in case apply move game of
+                  Right game' ->
+                    property False
+                      & counterexample ("game: " <> show game')
+                      & counterexample ("move: " <> show move)
+                  Left err ->
+                    err
+                      === IllegalMove move
                       & counterexample ("game: " <> show err)
 
 anyValidPawn :: Side -> Gen Position
@@ -85,14 +113,16 @@ prop_cannot_move_a_pawn_where_there_is_a_piece =
 prop_can_move_pawn_one_or_2_squares_at_start :: Property
 prop_can_move_pawn_one_or_2_squares_at_start =
   forAll (anyPawn White initialGame) $ \(Pos row col) ->
-    let result = apply (Move (Pos row col) (Pos (row + 1) col)) initialGame
-     in case result of
-          Right game' ->
-            game' /= initialGame && length (findPieces Pawn White game') == 8
-              & counterexample ("game: " <> show game')
-          Left err ->
-            property False
-              & counterexample ("error: " <> show err)
+    forAll (choose (1, 2)) $ \offset ->
+      let result = apply (Move (Pos row col) (Pos (row + offset) col)) initialGame
+       in case result of
+            Right game' ->
+              game' /= initialGame && length (findPieces Pawn White game') == 8
+                & counterexample ("game: " <> show game')
+            Left err ->
+              property False
+                & counterexample ("error: " <> show err)
+
 
 prop_cannot_move_a_pawn_more_than_2_squares :: Property
 prop_cannot_move_a_pawn_more_than_2_squares =

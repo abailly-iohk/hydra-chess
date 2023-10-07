@@ -4,11 +4,12 @@ module Chess.Game where
 
 import Data.Foldable (find)
 import Data.Maybe (isJust)
+import Control.Monad (guard)
 
 apply :: Move -> Game -> Either IllegalMove Game
 apply move@(Move from@(Pos row col) to@(Pos row' col')) game
   | (row' - row) == 1 && abs (col' - col) == 1 =
-      Right $ takePiece game from to
+      takePiece game from to
   | game `hasPieceOn` path from to =
       Left $ IllegalMove move
   | row >= 2 && row' - row == 1 =
@@ -26,13 +27,20 @@ movePiece (Game pieces) from to =
    in
     Game $ filter (\(_, _, pos) -> pos /= from) pieces <> newPos
 
-takePiece :: Game -> Position -> Position -> Game
+takePiece :: Game -> Position -> Position -> Either IllegalMove Game
 takePiece (Game pieces) from to =
   let
     att = find (\(_, _, pos) -> pos == from) pieces
-    newPos = maybe [] (\(p, s, _) -> [(p, s, to)]) att
+    def = find (\(_, _, pos) -> pos == to) pieces
+    newPos = do
+      (piece, side, _) <- att
+      (_, side', _) <- def
+      guard $ side /= side'
+      pure (piece, side, to)
    in
-    Game $ filter (\(_, _, pos) -> pos /= from && pos /= to) pieces <> newPos
+    case newPos of
+      Just pos -> Right $ Game $ filter (\(_, _, p) -> p /= from && p /= to) pieces <> [pos]
+      Nothing -> Left $ IllegalMove (Move from to)
 
 path :: Position -> Position -> Path
 path (Pos r c) (Pos r' c') =
