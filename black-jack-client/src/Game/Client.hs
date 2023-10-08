@@ -10,14 +10,14 @@
 
 module Game.Client where
 
-import Game.Client.IO (Command (..), Err (..), HasIO (..), Output (Bye, Ko, Ok))
-import Game.Server (HeadId (HeadId), Indexed (..), IsChain (..), Server (..), Game)
-import qualified Game.Server as Server
 import Control.Monad (forM_, unless)
 import Control.Monad.Class.MonadAsync (MonadAsync, race_)
 import Control.Monad.Class.MonadTimer (MonadDelay, threadDelay)
-import Data.Functor ((<&>), void)
+import Data.Functor (void, (<&>))
 import Data.Text (Text, pack)
+import Game.Client.IO (Command (..), Err (..), HasIO (..), Output (Bye, Ko, Ok))
+import Game.Server (Game, HeadId (HeadId), Indexed (..), IsChain (..), Server (..))
+import qualified Game.Server as Server
 
 data Result c
   = TableCreated {parties :: [Party c], tableId :: Text}
@@ -35,7 +35,7 @@ runClient server io = race_ loop (notify 0)
     Indexed{lastIndex, events} <- poll server fromIndex (fromIndex + 10)
     unless (null events) $ forM_ events (output io . Ok . pack . show)
     let newIndex = fromIndex + fromIntegral (length events)
-    unless (lastIndex > newIndex) $ threadDelay 1
+    unless (lastIndex > newIndex) $ threadDelay 2000000
     notify newIndex
 
   loop = do

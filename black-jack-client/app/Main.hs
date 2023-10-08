@@ -1,18 +1,22 @@
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Main where
 
-import Data.Text (pack)
+import Data.Text (Text, pack)
+import Game.BlackJack (BlackJack)
 import Game.Client (runClient)
 import Game.Client.Console (mkImpureIO)
 import Game.Server (Host (..))
 import Game.Server.Hydra (withHydraServer)
+import Game.Server.Mock (MockParty (..), withMockServer)
 import Options.Applicative (
   Parser,
   ParserInfo,
   auto,
+  command,
   execParser,
   help,
   helper,
@@ -23,13 +27,16 @@ import Options.Applicative (
   progDesc,
   short,
   strOption,
+  subparser,
   value,
   (<**>),
+  (<|>),
  )
 import System.IO (BufferMode (NoBuffering), hSetBuffering, stderr, stdout)
-import Game.BlackJack (BlackJack)
 
-data Options = Options {myId :: String, hydraServer :: Host}
+data Options
+  = HydraOptions {myId :: String, hydraServer :: Host}
+  | MockOptions {pid :: Text, host :: Host}
   deriving (Eq, Show)
 
 idParser :: Parser String
@@ -47,10 +54,10 @@ hostParser =
     <$> ( pack
             <$> strOption
               ( long "host"
-                  <> short 'h'
+                  <> short 'H'
                   <> metavar "HOST"
                   <> value "127.0.0.1"
-                  <> help "name or ip address of the Hydra server to connect to (default: 127.0.0.1)."
+                  <> help "name or ip address of the server to connect to (default: 127.0.0.1)."
               )
         )
     <*> option
@@ -59,12 +66,42 @@ hostParser =
           <> short 'p'
           <> metavar "PORT"
           <> value 4001
-          <> help "port of Hydra server to connect to (default: 4001)."
+          <> help "port of the server to connect to (default: 4001)."
       )
 
 optionsParser :: Parser Options
 optionsParser =
-  Options <$> idParser <*> hostParser
+  hydraCommand <|> mockCommand
+ where
+  hydraCommand =
+    subparser $
+      command
+        "hydra"
+        ( info
+            (helper <*> hydraOptionsParser)
+            ( progDesc "Run a game client connecting to a Hydra instance"
+            )
+        )
+
+  mockCommand =
+    subparser $
+      command
+        "mock"
+        ( info
+            (helper <*> mockOptionsParser)
+            ( progDesc "Run a game client connecting to a mock HTTP instance"
+            )
+        )
+
+hydraOptionsParser :: Parser Options
+hydraOptionsParser =
+  HydraOptions <$> idParser <*> hostParser
+
+mockOptionsParser :: Parser Options
+mockOptionsParser =
+  MockOptions
+    <$> (pack <$> idParser)
+    <*> hostParser
 
 blackJackClientInfo :: ParserInfo Options
 blackJackClientInfo =
@@ -77,5 +114,8 @@ main :: IO ()
 main = do
   hSetBuffering stdout NoBuffering
   hSetBuffering stderr NoBuffering
-  Options{hydraServer} <- execParser blackJackClientInfo
-  withHydraServer hydraServer $ flip (runClient @BlackJack) mkImpureIO
+  execParser blackJackClientInfo >>= \case
+    HydraOptions{hydraServer} ->
+      withHydraServer hydraServer $ flip (runClient @BlackJack) mkImpureIO
+    MockOptions{pid, host} ->
+      withMockServer (Party host pid) $ flip (runClient @BlackJack) mkImpureIO
