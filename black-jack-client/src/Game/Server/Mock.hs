@@ -6,9 +6,9 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module BlackJack.Server.Mock where
+module Game.Server.Mock where
 
-import BlackJack.Server (HeadId (HeadId), Host (..), Indexed, IsChain (..), Server (..))
+import Game.Server (HeadId (HeadId), Host (..), Indexed, IsChain (..), Server (..), Game)
 import Control.Exception (Exception, throwIO)
 import Control.Monad (when)
 import Data.Aeson (FromJSON, ToJSON)
@@ -25,11 +25,11 @@ import Network.HTTP.Simple (
  )
 import Test.QuickCheck (Arbitrary (..), getPositive)
 
-withMockServer :: MockParty -> (Server MockChain IO -> IO ()) -> IO ()
+withMockServer :: Game g => MockParty -> (Server g MockChain IO -> IO ()) -> IO ()
 withMockServer myParty k =
   newMockServer myParty >>= k
 
-newMockServer :: MockParty -> IO (Server MockChain IO)
+newMockServer :: Game g => MockParty -> IO (Server g MockChain IO)
 newMockServer myParty = do
   cnx <- connectToServer "localhost" 56789 myParty
   pure $
@@ -96,7 +96,7 @@ sendClose Host{host, port} (HeadId hid) = do
   response <- httpLBS request
   when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to close head " <> unpack hid)
 
-pollEvents :: Host -> Integer -> Integer -> IO (Indexed MockChain)
+pollEvents :: Game g => Host -> Integer -> Integer -> IO (Indexed g MockChain)
 pollEvents Host{host, port} index num = do
   request <- parseRequest $ "GET http://" <> unpack host <> ":" <> show port <> "/events/" <> show index <> "/" <> show num
   getResponseBody <$> httpJSON request

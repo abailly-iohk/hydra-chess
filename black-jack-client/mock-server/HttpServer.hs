@@ -12,23 +12,19 @@
 
 module HttpServer where
 
-import BlackJack.Contract.Game (Payoffs, possibleActions, forPlayer)
+import BlackJack.Contract.Game (Payoffs, forPlayer, possibleActions)
 import BlackJack.Game (
   Outcome (GameContinue, GameEnds),
   Play (Bet),
   PlayerId (Dealer, PlayerId),
+  assocMapToList,
   decodePlayerId,
   newGame,
-  play, assocMapToList,
+  play,
  )
-import BlackJack.Server (
-  FromChain (..),
-  HeadId (..),
-  Indexed (..),
- )
-import BlackJack.Server.Mock (MockChain, MockCoin (MockCoin), MockParty (Party), pid)
 import Control.Concurrent.STM (TVar, atomically, modifyTVar', newTVarIO, readTVar, readTVarIO, writeTVar)
 import Control.Monad (replicateM)
+import Control.Monad.State (runState)
 import Data.Aeson (FromJSON, ToJSON, Value (Object), eitherDecode, encode, toJSON)
 import Data.Aeson.KeyMap (insert)
 import qualified Data.ByteString as BS
@@ -48,6 +44,12 @@ import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import Data.Time (getCurrentTime)
 import qualified GHC.Clock
 import GHC.Generics (Generic)
+import Game.Server (
+  FromChain (..),
+  HeadId (..),
+  Indexed (..),
+ )
+import Game.Server.Mock (MockChain, MockCoin (MockCoin), MockParty (Party), pid)
 import Network.HTTP.Types (badRequest400, methodNotAllowed405, notFound404, ok200, statusCode)
 import Network.Wai (
   Application,
@@ -59,10 +61,10 @@ import Network.Wai (
   strictRequestBody,
  )
 import qualified Network.Wai.Handler.Warp as Warp
-import System.Random.Stateful (applyAtomicGen, globalStdGen, uniformR, getStdGen)
-import Prelude hiding (head)
 import System.Random (StdGen, mkStdGen)
-import Control.Monad.State (runState)
+import System.Random.Stateful (applyAtomicGen, getStdGen, globalStdGen, uniformR)
+import Prelude hiding (head)
+import Game.BlackJack (BlackJack)
 
 data HttpLog
   = HttpServerListening {host :: Text, port :: Int}
@@ -119,7 +121,7 @@ data HeadState
 data Chain = Chain
   { knownHosts :: Map Text MockParty
   , heads :: Map HeadId HeadState
-  , events :: Seq (FromChain MockChain)
+  , events :: Seq (FromChain BlackJack MockChain)
   }
   deriving stock (Eq, Show)
 
@@ -178,9 +180,9 @@ app state req send =
                   plays = possibleActions game
                   openHead =
                     if length (committed head') == length (peers head')
-                      then HeadOpened head <| GameStarted head game plays <| mempty
+                    then HeadOpened head <| GameStarted head game plays <| mempty
                       else mempty
-                  newEvents = FundCommitted @MockChain head p (MockCoin $ fromIntegral amount) <| openHead
+                  newEvents = FundCommitted @BlackJack @MockChain head p (MockCoin $ fromIntegral amount) <| openHead
                   head'' =
                     if null openHead
                       then head'
@@ -224,7 +226,7 @@ app state req send =
                             case outcome of
                               GameEnds dealerCards payoffs ->
                                 let gains' = applyGains gains peers payoffs
-                                 in ( GameEnded head dealerCards payoffs gains'
+                                 in ( GameEnded head (dealerCards, payoffs, gains')
                                     , Open{peers, gains = gains', outcome, seed = seed'}
                                     )
                               GameContinue game' ->
@@ -278,7 +280,7 @@ app state req send =
       case Map.lookup head heads of
         Nothing -> pure $ Left $ "cannot find headId " <> hid
         Just Open{peers, gains, seed} -> do
-          let event = HeadClosed head gains
+          let event = HeadClosed head
               chain' =
                 chain
                   { heads = Map.insert head (Closing{peers, payoffs = gains, seed}) heads
@@ -306,8 +308,8 @@ applyGains gains peers (Map.fromList . assocMapToList -> payoffs) =
           (PlayerId n) -> peers !! fromInteger n
           Dealer -> List.head peers
       payoffsToParty = mapKeys playerToParty payoffs
-   in Map.adjust (+ (- won)) (playerToParty Dealer) $
-      Map.unionWith (+) gains payoffsToParty
+   in Map.adjust (+ (-won)) (playerToParty Dealer) $
+        Map.unionWith (+) gains payoffsToParty
 
 readNumber :: (Read a, Num a) => Text -> a
 readNumber v =

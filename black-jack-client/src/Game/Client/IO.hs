@@ -5,7 +5,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# OPTIONS_GHC -Wno-unused-imports #-}
 
-module BlackJack.Client.IO where
+module Game.Client.IO where
 
 import Control.Monad.State (MonadState, State, StateT, execState, gets, modify, runState, runStateT)
 import Control.Monad.Trans (MonadTrans)

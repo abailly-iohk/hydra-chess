@@ -9,9 +9,9 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module BlackJack.Server.Hydra where
+module Game.Server.Hydra where
 
-import BlackJack.Server (
+import Game.Server (
   FromChain (..),
   HeadId,
   Host (..),
@@ -39,7 +39,7 @@ import GHC.Generics (Generic)
 import Network.WebSockets (Connection, runClient)
 import qualified Network.WebSockets as WS
 import Numeric.Natural (Natural)
-import BlackJack.Server.Mock(MockCoin(..))
+import Game.Server.Mock(MockCoin(..))
 import qualified Data.Sequence as Seq
 import Data.Foldable (toList)
 
@@ -54,7 +54,7 @@ instance IsChain Hydra where
 
   coinValue (MockCoin c) = c
 
-withHydraServer :: Host -> (Server Hydra IO -> IO ()) -> IO ()
+withHydraServer :: Host -> (Server g Hydra IO -> IO ()) -> IO ()
 withHydraServer host k = do
   events <- newTVarIO mempty
   withClient host $ \cnx ->
@@ -70,7 +70,7 @@ withHydraServer host k = do
               }
        in k server
  where
-  pullEventsFromWs :: TVar IO (Seq (FromChain Hydra)) -> Connection -> IO ()
+  pullEventsFromWs :: TVar IO (Seq (FromChain g Hydra)) -> Connection -> IO ()
   pullEventsFromWs events cnx =
     forever $
       WS.receiveData cnx >>= \dat ->
@@ -78,7 +78,7 @@ withHydraServer host k = do
           Left err -> putStrLn (show err <> ", data: " <> show dat)
           Right (HeadIsInitializing headId parties) -> atomically (modifyTVar' events (|> HeadCreated headId parties))
 
-  sendInit :: Connection -> TVar IO (Seq (FromChain Hydra)) -> [Text] -> IO HeadId
+  sendInit :: Connection -> TVar IO (Seq (FromChain g Hydra)) -> [Text] -> IO HeadId
   sendInit cnx events parties = do
     WS.sendTextData cnx (encode Init)
     timeout 60 (waitForHeadId events parties)
@@ -93,7 +93,7 @@ withHydraServer host k = do
   playGame :: Connection -> HeadId -> Int -> IO ()
   playGame = error "not implemented"
 
-  pollEvents :: TVar IO (Seq (FromChain Hydra)) -> Integer -> Integer -> IO (Indexed Hydra)
+  pollEvents :: TVar IO (Seq (FromChain g Hydra)) -> Integer -> Integer -> IO (Indexed g Hydra)
   pollEvents events (fromInteger -> start) (fromInteger -> count) = do
     history <- readTVarIO events
     let indexed =
@@ -107,7 +107,7 @@ withHydraServer host k = do
   sendCommit :: Connection -> Integer -> HeadId -> IO ()
   sendCommit = error "not implemented"
 
-waitForHeadId :: TVar IO (Seq (FromChain Hydra)) -> [Text] -> IO HeadId
+waitForHeadId :: TVar IO (Seq (FromChain g Hydra)) -> [Text] -> IO HeadId
 waitForHeadId events parties =
   atomically $ do
     readTVar events >>= \case

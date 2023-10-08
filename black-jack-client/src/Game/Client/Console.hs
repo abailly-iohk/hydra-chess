@@ -1,9 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module BlackJack.Client.Console where
+module Game.Client.Console where
 
-import BlackJack.Client.IO (Command (..), Err (..), HasIO (..))
+import Game.Client.IO (Command (..), Err (..), HasIO (..))
 import Control.Applicative ((<|>))
 import Control.Exception (IOException, handle)
 import Data.Bifunctor (first)

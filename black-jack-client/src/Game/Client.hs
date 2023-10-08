@@ -8,15 +8,15 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
-module BlackJack.Client where
+module Game.Client where
 
-import BlackJack.Client.IO (Command (..), Err (..), HasIO (..), Output (Bye, Ko, Ok))
-import BlackJack.Server (HeadId (HeadId), Indexed (..), IsChain (..), Server (..))
-import qualified BlackJack.Server as Server
+import Game.Client.IO (Command (..), Err (..), HasIO (..), Output (Bye, Ko, Ok))
+import Game.Server (HeadId (HeadId), Indexed (..), IsChain (..), Server (..), Game)
+import qualified Game.Server as Server
 import Control.Monad (forM_, unless)
 import Control.Monad.Class.MonadAsync (MonadAsync, race_)
 import Control.Monad.Class.MonadTimer (MonadDelay, threadDelay)
-import Data.Functor ((<&>))
+import Data.Functor ((<&>), void)
 import Data.Text (Text, pack)
 
 data Result c
@@ -28,7 +28,7 @@ data Result c
 deriving instance IsChain c => Eq (Result c)
 deriving instance IsChain c => Show (Result c)
 
-runClient :: (IsChain c, MonadAsync m, MonadDelay m) => Server c m -> HasIO m -> m ()
+runClient :: (Game g, IsChain c, MonadAsync m, MonadDelay m) => Server g c m -> HasIO m -> m ()
 runClient server io = race_ loop (notify 0)
  where
   notify fromIndex = do
@@ -43,10 +43,10 @@ runClient server io = race_ loop (notify 0)
     input io >>= \case
       Left EOF -> pure ()
       Left (Err err) -> output io (Ko err) >> loop
-      Right Quit -> output io Bye >> pure ()
+      Right Quit -> void (output io Bye)
       Right cmd -> handleCommand server cmd >>= output io >> loop
 
-handleCommand :: (IsChain c, Monad m) => Server c m -> Command -> m Output
+handleCommand :: (Game g, IsChain c, Monad m) => Server g c m -> Command -> m Output
 handleCommand Server{initHead, commit, play, closeHead, newGame} = \case
   NewTable peers ->
     initHead peers <&> (\HeadId{headId} -> Ok . ("head initialised with id " <>) $ headId)

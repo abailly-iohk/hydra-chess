@@ -1,12 +1,14 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Main where
 
-import BlackJack.Client (runClient)
-import BlackJack.Client.Console (mkImpureIO)
-import BlackJack.Server (Host (..))
 import Data.Text (pack)
+import Game.Client (runClient)
+import Game.Client.Console (mkImpureIO)
+import Game.Server (Host (..))
+import Game.Server.Hydra (withHydraServer)
 import Options.Applicative (
   Parser,
   ParserInfo,
@@ -25,7 +27,7 @@ import Options.Applicative (
   (<**>),
  )
 import System.IO (BufferMode (NoBuffering), hSetBuffering, stderr, stdout)
-import BlackJack.Server.Hydra (withHydraServer)
+import Game.BlackJack (BlackJack)
 
 data Options = Options {myId :: String, hydraServer :: Host}
   deriving (Eq, Show)
@@ -76,4 +78,4 @@ main = do
   hSetBuffering stdout NoBuffering
   hSetBuffering stderr NoBuffering
   Options{hydraServer} <- execParser blackJackClientInfo
-  withHydraServer hydraServer $ flip runClient mkImpureIO
+  withHydraServer hydraServer $ flip (runClient @BlackJack) mkImpureIO
