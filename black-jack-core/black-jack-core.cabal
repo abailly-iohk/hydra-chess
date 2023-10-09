@@ -73,6 +73,7 @@ test-suite tests
   hs-source-dirs:     test
   other-modules:
      BlackJack.GameSpec
+     BlackJack.Contract.GameSpec
      Chess.GameSpec
   main-is:            Spec.hs
   type:               exitcode-stdio-1.0
@@ -82,6 +83,7 @@ test-suite tests
     , containers
     , hspec
     , hspec-core
+    , hspec-golden-aeson
     , mtl
     , QuickCheck
     , random
