@@ -33,6 +33,7 @@ import PlutusTx.AssocMap (Map)
 import qualified PlutusTx.AssocMap as Map
 import System.Random (Uniform)
 import qualified Prelude as Haskell
+import Data.Functor ((<&>))
 
 data PlayerId
   = PlayerId {playerId :: Integer}
@@ -275,10 +276,10 @@ newtype RGen = RGen Integer
 PlutusTx.unstableMakeIsData ''RGen
 
 instance ToJSON a => ToJSON (Map PlayerId a) where
-  toJSON = Haskell.undefined
+  toJSON = toJSON . toList
 
-instance ToJSON a => FromJSON (Map PlayerId a) where
-  parseJSON = Haskell.undefined
+instance FromJSON a => FromJSON (Map PlayerId a) where
+  parseJSON v = parseJSON v <&> Map.fromList
 
 data BlackJack
   = Setup
