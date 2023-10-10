@@ -2,50 +2,50 @@
     "samples": [
         [
             {
-                "color": "â¢",
-                "face": "6"
+                "color": "♢",
+                "face": "7"
             },
             {
-                "color": "â ",
-                "face": "3"
-            },
-            {
-                "color": "â¢",
-                "face": "A"
+                "color": "♡",
+                "face": "K"
             }
         ],
         [
             {
-                "color": "â ",
-                "face": "10"
+                "color": "♣",
+                "face": "K"
+            }
+        ],
+        [
+            {
+                "color": "♠",
+                "face": "4"
             },
             {
-                "color": "â¢",
+                "color": "♠",
                 "face": "5"
             }
         ],
         [
             {
-                "color": "â ",
-                "face": "6"
+                "color": "♡",
+                "face": "K"
             }
         ],
         [
             {
-                "color": "â£",
-                "face": "10"
-            }
-        ],
-        [
-            {
-                "color": "â ",
-                "face": "8"
+                "color": "♢",
+                "face": "3"
             },
             {
-                "color": "â¡",
-                "face": "2"
+                "color": "♣",
+                "face": "10"
+            },
+            {
+                "color": "♡",
+                "face": "6"
             }
         ]
     ],
-    "seed": 961589732
+    "seed": -1590887859
 }

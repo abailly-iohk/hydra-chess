@@ -41,6 +41,7 @@ library
                 , black-jack-core
                 , bytestring
                 , containers
+                , generic-random
                 , http-client
                 , http-conduit
                 , io-classes
@@ -110,11 +111,14 @@ test-suite tests
   main-is:            Spec.hs
   type:               exitcode-stdio-1.0
   build-depends:
+    , aeson
     , base
     , black-jack-client
+    , bytestring
     , containers
     , hspec
     , hspec-core
+    , hspec-golden-aeson
     , http-types
     , io-classes
     , io-sim

@@ -5,6 +5,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -18,10 +19,12 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as Hex
 import Data.Kind (Type)
 import Data.String (IsString)
-import Data.Text (Text)
+import Data.Text (Text, intercalate, pack)
 import Data.Text.Encoding (decodeUtf8)
+import Data.Word (Word8, Word16)
 import GHC.Generics (Generic)
-import Test.QuickCheck (Arbitrary (arbitrary), vectorOf)
+import Generic.Random (genericArbitrary, uniform)
+import Test.QuickCheck (Arbitrary (arbitrary), Gen, vectorOf)
 
 data Message = Ping
   deriving (Eq, Show)
@@ -133,6 +136,17 @@ deriving instance (Game g, IsChain c) => Eq (FromChain g c)
 deriving instance (Game g, IsChain c) => ToJSON (FromChain g c)
 deriving instance (Game g, IsChain c) => FromJSON (FromChain g c)
 
+instance
+  ( Arbitrary (Party c)
+  , Arbitrary (Coin c)
+  , Arbitrary (GameState g)
+  , Arbitrary (GamePlay g)
+  , Arbitrary (GameEnd g)
+  ) =>
+  Arbitrary (FromChain g c)
+  where
+  arbitrary = genericArbitrary uniform
+
 data Indexed g c = Indexed {lastIndex :: Integer, events :: [FromChain g c]}
   deriving (Generic)
 
@@ -141,6 +155,23 @@ deriving instance (Game g, IsChain c) => Eq (Indexed g c)
 deriving instance (Game g, IsChain c) => ToJSON (Indexed g c)
 deriving instance (Game g, IsChain c) => FromJSON (Indexed g c)
 
+instance
+  ( Arbitrary (Party c)
+  , Arbitrary (Coin c)
+  , Arbitrary (GameState g)
+  , Arbitrary (GamePlay g)
+  , Arbitrary (GameEnd g)
+  ) =>
+  Arbitrary (Indexed g c)
+  where
+  arbitrary = genericArbitrary uniform
+
 data Host = Host {host :: Text, port :: Int}
   deriving stock (Eq, Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
+
+instance Arbitrary Host where
+  arbitrary = Host <$> anyIp <*> anyPort
+   where
+    anyIp = intercalate "." . fmap (pack . show) <$> vectorOf 4 (arbitrary :: Gen Word8)
+    anyPort = fromIntegral <$> (arbitrary :: Gen Word16)

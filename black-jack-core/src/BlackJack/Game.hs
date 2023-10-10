@@ -37,9 +37,11 @@ import Control.Monad.State (State, gets, put)
 import Data.Aeson.KeyMap ()
 import Data.List (sortBy)
 import Data.Maybe (fromMaybe)
+import Generic.Random (genericArbitrary)
+import qualified Generic.Random as Generic
 import qualified PlutusTx.AssocMap as AssocMap
 import System.Random (StdGen, uniform)
-import Test.QuickCheck (Arbitrary (..), elements, suchThat)
+import Test.QuickCheck (Arbitrary (..), elements, suchThat, frequency)
 
 dealerValues :: DealerHand -> [Integer]
 dealerValues (DealerHand (Hidden c, cards)) = handValues (c : cards)
@@ -93,7 +95,6 @@ assocMapUpdate f k = AssocMap.mapWithKey update
   update k' a
     | k == k' = fromMaybe a (f a)
     | otherwise = a
-
 
 assocMapToList :: AssocMap.Map k v -> [(k, v)]
 assocMapToList = AssocMap.toList
@@ -197,10 +198,29 @@ instance Arbitrary DealerHand where
    where
     go (c : cs)
       | any (<= 21) (handValues (c : cs)) = do
-        c' <- arbitrary `suchThat` \c'' -> not (isBlackJack $ c'' : c : cs)
-        go (c' : c : cs)
+          c' <- arbitrary `suchThat` \c'' -> not (isBlackJack $ c'' : c : cs)
+          go (c' : c : cs)
       | otherwise = pure cs
     go [] = error "should not happen"
+
+instance (Arbitrary k, Arbitrary v) => Arbitrary (AssocMap.Map k v) where
+  arbitrary = genericArbitrary Generic.uniform
+
+instance Arbitrary PlayerId where
+  arbitrary =
+    frequency
+      [ (1, pure Dealer)
+      , (9, PlayerId <$> arbitrary)
+      ]
+
+instance Arbitrary Player where
+  arbitrary = genericArbitrary Generic.uniform
+
+instance Arbitrary Play where
+  arbitrary = genericArbitrary Generic.uniform
+
+instance Arbitrary BlackJack where
+  arbitrary = genericArbitrary Generic.uniform
 
 -- FIXME: partial function
 mkDealerHand :: [Card] -> DealerHand
@@ -230,11 +250,14 @@ dealOneCardTo player game@BlackJack{players} = do
   newHand <- dealOneCard hand
   pure $
     game
-      { players = assocMapUpdate (\case
-                                     p@Hitting{} -> Just p{hand = newHand}
-                                     _ -> Nothing
-                                 ) player players
-
+      { players =
+          assocMapUpdate
+            ( \case
+                p@Hitting{} -> Just p{hand = newHand}
+                _ -> Nothing
+            )
+            player
+            players
       }
 dealOneCardTo _ _ = error "should never happen"
 

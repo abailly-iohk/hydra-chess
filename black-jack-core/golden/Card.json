@@ -1,25 +1,25 @@
 {
     "samples": [
         {
-            "color": "â£",
-            "face": "K"
-        },
-        {
-            "color": "â¢",
-            "face": "9"
-        },
-        {
-            "color": "â¢",
+            "color": "♢",
             "face": "A"
         },
         {
-            "color": "â¢",
-            "face": "5"
+            "color": "♡",
+            "face": "7"
         },
         {
-            "color": "â¡",
-            "face": "K"
+            "color": "♣",
+            "face": "9"
+        },
+        {
+            "color": "♡",
+            "face": "2"
+        },
+        {
+            "color": "♡",
+            "face": "2"
         }
     ],
-    "seed": 1887221612
+    "seed": -1209505532
 }

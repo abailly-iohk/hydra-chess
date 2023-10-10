@@ -42,11 +42,13 @@ library
     , base16-bytestring
     , cardano-api
     , containers
+    , generic-random
     , mtl
     , plutus-core
     , plutus-ledger-api
     , plutus-tx
     , plutus-tx-plugin
+    , prettyprinter-ansi-terminal
     , QuickCheck
     , random
     , template-haskell

@@ -8,13 +8,13 @@
 
 module Game.Server.Mock where
 
-import Game.Server (HeadId (HeadId), Host (..), Indexed, IsChain (..), Server (..), Game)
 import Control.Exception (Exception, throwIO)
 import Control.Monad (when)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Semigroup (Sum (..))
 import Data.Text (Text, pack, unpack)
 import GHC.Generics (Generic)
+import Game.Server (Game, HeadId (HeadId), Host (..), Indexed, IsChain (..), Server (..))
 import Network.HTTP.Simple (
   getResponseBody,
   getResponseStatusCode,
@@ -23,7 +23,8 @@ import Network.HTTP.Simple (
   parseRequest,
   setRequestBodyJSON,
  )
-import Test.QuickCheck (Arbitrary (..), getPositive)
+import Test.QuickCheck (Arbitrary (..), getPositive, listOf, arbitraryPrintableChar)
+import Test.QuickCheck.Gen (Gen)
 
 withMockServer :: Game g => MockParty -> (Server g MockChain IO -> IO ()) -> IO ()
 withMockServer myParty k =
@@ -114,6 +115,12 @@ instance Arbitrary MockCoin where
 data MockParty = Party {host :: Host, pid :: Text}
   deriving stock (Eq, Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
+
+instance Arbitrary MockParty where
+  arbitrary = Party <$> arbitrary <*> somePid
+   where
+    somePid :: Gen Text
+    somePid = pack <$> listOf arbitraryPrintableChar
 
 instance IsChain MockChain where
   type Party MockChain = MockParty
