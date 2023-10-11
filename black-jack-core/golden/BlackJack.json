@@ -1,1643 +1,2944 @@
 {
     "samples": [
         {
-            "initialBets": [
-                -27,
-                -21,
-                -22,
-                -1,
-                28,
-                1,
-                8,
-                -24,
-                -10
-            ],
-            "numPlayers": -7,
-            "tag": "Setup"
-        },
-        {
-            "initialBets": [
-                -4,
-                6,
-                -1,
-                23,
-                30,
-                -5,
-                1,
-                -4,
-                15,
-                0,
-                15,
-                9,
-                -18,
-                -4,
-                -10,
-                -2,
-                10,
-                10,
-                15,
-                27,
-                -1,
-                -6,
-                -23,
-                30,
-                19,
-                30,
-                -10,
-                8,
-                28,
-                11
-            ],
-            "numPlayers": -2,
-            "tag": "Setup"
-        },
-        {
             "dealerHand": [
                 {
-                    "color": "♢",
-                    "face": "8"
-                }
+                    "contents": {
+                        "color": "S",
+                        "face": "A"
+                    },
+                    "tag": "Hidden"
+                },
+                [
+                    {
+                        "color": "C",
+                        "face": "4"
+                    },
+                    {
+                        "color": "H",
+                        "face": "8"
+                    }
+                ]
             ],
             "next": {
-                "playerId": -25,
+                "playerId": 12,
                 "tag": "PlayerId"
             },
-            "numPlayers": -1,
+            "numPlayers": -9,
             "players": [
-                {
-                    "bets": 25,
-                    "hand": [
-                        {
-                            "color": "♡",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "9"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "10"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "6"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "2"
-                        }
-                    ],
-                    "tag": "Playing"
-                },
-                {
-                    "bets": -14,
-                    "hand": [
-                        {
-                            "color": "♣",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "6"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "9"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "9"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "K"
-                        }
-                    ],
-                    "tag": "Playing"
-                },
-                {
-                    "bets": 29,
-                    "hand": [
-                        {
-                            "color": "♡",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "A"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "6"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "9"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "9"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "3"
-                        }
-                    ],
-                    "tag": "Playing"
-                },
-                {
-                    "bets": -22,
-                    "hand": [
-                        {
-                            "color": "♡",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "5"
-                        }
-                    ],
-                    "tag": "Playing"
-                },
-                {
-                    "bets": -17,
-                    "hand": [
-                        {
-                            "color": "♢",
-                            "face": "A"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "10"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "A"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "Q"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "10"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "J"
-                        }
-                    ],
-                    "tag": "Playing"
-                },
-                {
-                    "bets": 21,
-                    "hand": [
-                        {
-                            "color": "♠",
-                            "face": "A"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "Q"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "A"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "A"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "Q"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "9"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "10"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "9"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "Q"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "10"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "7"
-                        }
-                    ],
-                    "tag": "Hitting"
-                },
-                {
-                    "bets": 24,
-                    "hand": [
-                        {
-                            "color": "♠",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "6"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "Q"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "6"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "10"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "Q"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "Q"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "6"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "Q"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "2"
-                        }
-                    ],
-                    "tag": "Hitting"
-                },
-                {
-                    "bets": -8,
-                    "hand": [
-                        {
-                            "color": "♡",
-                            "face": "A"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "10"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "Q"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "9"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "10"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "A"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "Q"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "10"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "9"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "Q"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "10"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "4"
-                        }
-                    ],
-                    "tag": "Playing"
-                },
-                {
-                    "bets": -13,
-                    "hand": [],
-                    "tag": "Hitting"
-                },
-                {
-                    "bets": 22,
-                    "hand": [
-                        {
-                            "color": "♠",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "6"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "A"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "Q"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "6"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "A"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "10"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "6"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "10"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "2"
-                        }
-                    ],
-                    "tag": "Standing"
-                },
-                {
-                    "bets": 12,
-                    "hand": [
-                        {
-                            "color": "♢",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "10"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "6"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "10"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "A"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "9"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "10"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "9"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "4"
-                        }
-                    ],
-                    "tag": "Playing"
-                },
-                {
-                    "bets": 14,
-                    "hand": [
-                        {
-                            "color": "♢",
-                            "face": "9"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "9"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "9"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "A"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "10"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "Q"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "10"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "9"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "A"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "Q"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "9"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "6"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "6"
-                        }
-                    ],
-                    "tag": "Hitting"
-                },
-                {
-                    "bets": -22,
-                    "hand": [
-                        {
-                            "color": "♢",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "9"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "K"
-                        }
-                    ],
-                    "tag": "Standing"
-                },
-                {
-                    "bets": 20,
-                    "hand": [
-                        {
-                            "color": "♣",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "6"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "3"
-                        }
-                    ],
-                    "tag": "Playing"
-                },
-                {
-                    "bets": -20,
-                    "hand": [
-                        {
-                            "color": "♡",
-                            "face": "9"
-                        }
-                    ],
-                    "tag": "Hitting"
-                },
-                {
-                    "bets": -12,
-                    "hand": [
-                        {
-                            "color": "♠",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "6"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "Q"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "9"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "6"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "6"
-                        }
-                    ],
-                    "tag": "Standing"
-                },
-                {
-                    "bets": -29,
-                    "hand": [
-                        {
-                            "color": "♣",
-                            "face": "6"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "6"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "8"
-                        }
-                    ],
-                    "tag": "Standing"
-                },
-                {
-                    "bets": 2,
-                    "hand": [
-                        {
-                            "color": "♢",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "10"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "9"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "10"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "4"
-                        }
-                    ],
-                    "tag": "Standing"
-                },
-                {
-                    "bets": 22,
-                    "hand": [
-                        {
-                            "color": "♢",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "A"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "10"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "6"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "A"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "A"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "9"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "10"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "5"
-                        }
-                    ],
-                    "tag": "Playing"
-                },
-                {
-                    "bets": 1,
-                    "hand": [
-                        {
-                            "color": "♠",
-                            "face": "2"
-                        }
-                    ],
-                    "tag": "Hitting"
-                },
-                {
-                    "bets": -14,
-                    "hand": [
-                        {
-                            "color": "♢",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "Q"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "Q"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "A"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "9"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "A"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "Q"
-                        }
-                    ],
-                    "tag": "Standing"
-                },
-                {
-                    "bets": -18,
-                    "hand": [
-                        {
-                            "color": "♡",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "J"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "A"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "Q"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "A"
-                        }
-                    ],
-                    "tag": "Playing"
-                },
-                {
-                    "bets": 19,
-                    "hand": [
-                        {
-                            "color": "♡",
-                            "face": "5"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "Q"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "6"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "9"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "6"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "6"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "Q"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "3"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "6"
-                        },
-                        {
-                            "color": "♠",
-                            "face": "4"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "A"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "2"
-                        },
-                        {
-                            "color": "♢",
-                            "face": "7"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "K"
-                        },
-                        {
-                            "color": "♡",
-                            "face": "8"
-                        },
-                        {
-                            "color": "♣",
-                            "face": "Q"
-                        }
-                    ],
-                    "tag": "Standing"
-                }
+                [
+                    {
+                        "playerId": 0,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": 15,
+                        "hand": [
+                            {
+                                "color": "D",
+                                "face": "8"
+                            },
+                            {
+                                "color": "C",
+                                "face": "3"
+                            },
+                            {
+                                "color": "S",
+                                "face": "4"
+                            },
+                            {
+                                "color": "C",
+                                "face": "3"
+                            },
+                            {
+                                "color": "H",
+                                "face": "2"
+                            },
+                            {
+                                "color": "C",
+                                "face": "7"
+                            },
+                            {
+                                "color": "H",
+                                "face": "9"
+                            },
+                            {
+                                "color": "D",
+                                "face": "K"
+                            },
+                            {
+                                "color": "D",
+                                "face": "5"
+                            },
+                            {
+                                "color": "H",
+                                "face": "J"
+                            },
+                            {
+                                "color": "C",
+                                "face": "5"
+                            },
+                            {
+                                "color": "D",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "H",
+                                "face": "2"
+                            },
+                            {
+                                "color": "H",
+                                "face": "K"
+                            },
+                            {
+                                "color": "S",
+                                "face": "5"
+                            },
+                            {
+                                "color": "C",
+                                "face": "J"
+                            },
+                            {
+                                "color": "H",
+                                "face": "J"
+                            },
+                            {
+                                "color": "D",
+                                "face": "A"
+                            },
+                            {
+                                "color": "D",
+                                "face": "7"
+                            }
+                        ],
+                        "tag": "Standing"
+                    }
+                ],
+                [
+                    {
+                        "tag": "Dealer"
+                    },
+                    {
+                        "bets": -21,
+                        "hand": [
+                            {
+                                "color": "C",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "C",
+                                "face": "6"
+                            },
+                            {
+                                "color": "D",
+                                "face": "8"
+                            },
+                            {
+                                "color": "S",
+                                "face": "J"
+                            },
+                            {
+                                "color": "S",
+                                "face": "6"
+                            },
+                            {
+                                "color": "H",
+                                "face": "7"
+                            },
+                            {
+                                "color": "D",
+                                "face": "K"
+                            },
+                            {
+                                "color": "S",
+                                "face": "2"
+                            },
+                            {
+                                "color": "S",
+                                "face": "K"
+                            },
+                            {
+                                "color": "C",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "D",
+                                "face": "3"
+                            }
+                        ],
+                        "tag": "Playing"
+                    }
+                ],
+                [
+                    {
+                        "playerId": -3,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": 12,
+                        "hand": [
+                            {
+                                "color": "C",
+                                "face": "4"
+                            },
+                            {
+                                "color": "H",
+                                "face": "10"
+                            },
+                            {
+                                "color": "C",
+                                "face": "10"
+                            },
+                            {
+                                "color": "S",
+                                "face": "5"
+                            },
+                            {
+                                "color": "D",
+                                "face": "8"
+                            },
+                            {
+                                "color": "D",
+                                "face": "9"
+                            },
+                            {
+                                "color": "H",
+                                "face": "5"
+                            },
+                            {
+                                "color": "H",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "C",
+                                "face": "9"
+                            },
+                            {
+                                "color": "D",
+                                "face": "10"
+                            },
+                            {
+                                "color": "S",
+                                "face": "7"
+                            },
+                            {
+                                "color": "D",
+                                "face": "5"
+                            },
+                            {
+                                "color": "S",
+                                "face": "2"
+                            },
+                            {
+                                "color": "C",
+                                "face": "3"
+                            },
+                            {
+                                "color": "C",
+                                "face": "2"
+                            },
+                            {
+                                "color": "H",
+                                "face": "J"
+                            },
+                            {
+                                "color": "D",
+                                "face": "2"
+                            },
+                            {
+                                "color": "D",
+                                "face": "10"
+                            },
+                            {
+                                "color": "D",
+                                "face": "2"
+                            },
+                            {
+                                "color": "S",
+                                "face": "3"
+                            },
+                            {
+                                "color": "S",
+                                "face": "A"
+                            },
+                            {
+                                "color": "C",
+                                "face": "3"
+                            },
+                            {
+                                "color": "H",
+                                "face": "2"
+                            },
+                            {
+                                "color": "S",
+                                "face": "8"
+                            },
+                            {
+                                "color": "D",
+                                "face": "J"
+                            },
+                            {
+                                "color": "C",
+                                "face": "K"
+                            }
+                        ],
+                        "tag": "Standing"
+                    }
+                ],
+                [
+                    {
+                        "playerId": -30,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": 26,
+                        "hand": [
+                            {
+                                "color": "H",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "H",
+                                "face": "8"
+                            },
+                            {
+                                "color": "S",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "C",
+                                "face": "9"
+                            },
+                            {
+                                "color": "H",
+                                "face": "8"
+                            },
+                            {
+                                "color": "D",
+                                "face": "3"
+                            },
+                            {
+                                "color": "C",
+                                "face": "3"
+                            },
+                            {
+                                "color": "H",
+                                "face": "K"
+                            },
+                            {
+                                "color": "H",
+                                "face": "6"
+                            },
+                            {
+                                "color": "H",
+                                "face": "Q"
+                            }
+                        ],
+                        "tag": "Standing"
+                    }
+                ],
+                [
+                    {
+                        "playerId": -11,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": -13,
+                        "hand": [
+                            {
+                                "color": "S",
+                                "face": "J"
+                            },
+                            {
+                                "color": "D",
+                                "face": "J"
+                            }
+                        ],
+                        "tag": "Hitting"
+                    }
+                ],
+                [
+                    {
+                        "tag": "Dealer"
+                    },
+                    {
+                        "bets": -24,
+                        "hand": [
+                            {
+                                "color": "D",
+                                "face": "6"
+                            },
+                            {
+                                "color": "C",
+                                "face": "9"
+                            },
+                            {
+                                "color": "H",
+                                "face": "10"
+                            },
+                            {
+                                "color": "H",
+                                "face": "9"
+                            },
+                            {
+                                "color": "C",
+                                "face": "9"
+                            },
+                            {
+                                "color": "S",
+                                "face": "9"
+                            }
+                        ],
+                        "tag": "Hitting"
+                    }
+                ],
+                [
+                    {
+                        "playerId": 12,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": 1,
+                        "hand": [
+                            {
+                                "color": "H",
+                                "face": "8"
+                            },
+                            {
+                                "color": "D",
+                                "face": "3"
+                            },
+                            {
+                                "color": "H",
+                                "face": "A"
+                            },
+                            {
+                                "color": "C",
+                                "face": "4"
+                            },
+                            {
+                                "color": "D",
+                                "face": "6"
+                            },
+                            {
+                                "color": "C",
+                                "face": "10"
+                            },
+                            {
+                                "color": "D",
+                                "face": "3"
+                            },
+                            {
+                                "color": "C",
+                                "face": "J"
+                            },
+                            {
+                                "color": "S",
+                                "face": "2"
+                            }
+                        ],
+                        "tag": "Playing"
+                    }
+                ],
+                [
+                    {
+                        "playerId": 16,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": 30,
+                        "hand": [
+                            {
+                                "color": "H",
+                                "face": "3"
+                            },
+                            {
+                                "color": "D",
+                                "face": "10"
+                            },
+                            {
+                                "color": "C",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "S",
+                                "face": "J"
+                            },
+                            {
+                                "color": "H",
+                                "face": "5"
+                            },
+                            {
+                                "color": "C",
+                                "face": "6"
+                            },
+                            {
+                                "color": "C",
+                                "face": "J"
+                            },
+                            {
+                                "color": "C",
+                                "face": "7"
+                            },
+                            {
+                                "color": "C",
+                                "face": "J"
+                            },
+                            {
+                                "color": "H",
+                                "face": "2"
+                            },
+                            {
+                                "color": "S",
+                                "face": "8"
+                            },
+                            {
+                                "color": "C",
+                                "face": "2"
+                            },
+                            {
+                                "color": "D",
+                                "face": "10"
+                            },
+                            {
+                                "color": "D",
+                                "face": "8"
+                            },
+                            {
+                                "color": "D",
+                                "face": "2"
+                            },
+                            {
+                                "color": "H",
+                                "face": "8"
+                            },
+                            {
+                                "color": "C",
+                                "face": "K"
+                            }
+                        ],
+                        "tag": "Hitting"
+                    }
+                ],
+                [
+                    {
+                        "playerId": -10,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": 1,
+                        "hand": [
+                            {
+                                "color": "H",
+                                "face": "3"
+                            },
+                            {
+                                "color": "C",
+                                "face": "K"
+                            },
+                            {
+                                "color": "D",
+                                "face": "6"
+                            },
+                            {
+                                "color": "S",
+                                "face": "A"
+                            },
+                            {
+                                "color": "C",
+                                "face": "3"
+                            },
+                            {
+                                "color": "D",
+                                "face": "7"
+                            },
+                            {
+                                "color": "C",
+                                "face": "4"
+                            },
+                            {
+                                "color": "D",
+                                "face": "8"
+                            },
+                            {
+                                "color": "S",
+                                "face": "5"
+                            },
+                            {
+                                "color": "C",
+                                "face": "8"
+                            },
+                            {
+                                "color": "D",
+                                "face": "A"
+                            },
+                            {
+                                "color": "D",
+                                "face": "2"
+                            },
+                            {
+                                "color": "S",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "H",
+                                "face": "A"
+                            },
+                            {
+                                "color": "C",
+                                "face": "5"
+                            },
+                            {
+                                "color": "C",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "S",
+                                "face": "8"
+                            },
+                            {
+                                "color": "D",
+                                "face": "A"
+                            },
+                            {
+                                "color": "C",
+                                "face": "7"
+                            },
+                            {
+                                "color": "S",
+                                "face": "J"
+                            },
+                            {
+                                "color": "C",
+                                "face": "7"
+                            }
+                        ],
+                        "tag": "Hitting"
+                    }
+                ],
+                [
+                    {
+                        "playerId": -27,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": 20,
+                        "hand": [
+                            {
+                                "color": "H",
+                                "face": "10"
+                            },
+                            {
+                                "color": "S",
+                                "face": "6"
+                            },
+                            {
+                                "color": "H",
+                                "face": "2"
+                            },
+                            {
+                                "color": "H",
+                                "face": "6"
+                            },
+                            {
+                                "color": "S",
+                                "face": "2"
+                            },
+                            {
+                                "color": "S",
+                                "face": "9"
+                            },
+                            {
+                                "color": "S",
+                                "face": "5"
+                            },
+                            {
+                                "color": "D",
+                                "face": "8"
+                            },
+                            {
+                                "color": "D",
+                                "face": "3"
+                            },
+                            {
+                                "color": "H",
+                                "face": "8"
+                            },
+                            {
+                                "color": "H",
+                                "face": "2"
+                            },
+                            {
+                                "color": "H",
+                                "face": "10"
+                            },
+                            {
+                                "color": "C",
+                                "face": "10"
+                            },
+                            {
+                                "color": "D",
+                                "face": "4"
+                            },
+                            {
+                                "color": "S",
+                                "face": "5"
+                            },
+                            {
+                                "color": "H",
+                                "face": "8"
+                            }
+                        ],
+                        "tag": "Standing"
+                    }
+                ],
+                [
+                    {
+                        "playerId": -3,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": -28,
+                        "hand": [
+                            {
+                                "color": "H",
+                                "face": "K"
+                            },
+                            {
+                                "color": "H",
+                                "face": "J"
+                            },
+                            {
+                                "color": "H",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "D",
+                                "face": "7"
+                            },
+                            {
+                                "color": "H",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "D",
+                                "face": "A"
+                            },
+                            {
+                                "color": "D",
+                                "face": "10"
+                            },
+                            {
+                                "color": "D",
+                                "face": "6"
+                            },
+                            {
+                                "color": "C",
+                                "face": "10"
+                            },
+                            {
+                                "color": "H",
+                                "face": "5"
+                            },
+                            {
+                                "color": "S",
+                                "face": "5"
+                            },
+                            {
+                                "color": "H",
+                                "face": "8"
+                            },
+                            {
+                                "color": "H",
+                                "face": "10"
+                            },
+                            {
+                                "color": "C",
+                                "face": "9"
+                            },
+                            {
+                                "color": "C",
+                                "face": "J"
+                            },
+                            {
+                                "color": "C",
+                                "face": "K"
+                            },
+                            {
+                                "color": "S",
+                                "face": "A"
+                            },
+                            {
+                                "color": "S",
+                                "face": "10"
+                            }
+                        ],
+                        "tag": "Hitting"
+                    }
+                ],
+                [
+                    {
+                        "playerId": -13,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": 7,
+                        "hand": [
+                            {
+                                "color": "D",
+                                "face": "9"
+                            },
+                            {
+                                "color": "C",
+                                "face": "9"
+                            },
+                            {
+                                "color": "H",
+                                "face": "A"
+                            },
+                            {
+                                "color": "C",
+                                "face": "2"
+                            },
+                            {
+                                "color": "S",
+                                "face": "4"
+                            },
+                            {
+                                "color": "H",
+                                "face": "7"
+                            },
+                            {
+                                "color": "C",
+                                "face": "K"
+                            },
+                            {
+                                "color": "D",
+                                "face": "A"
+                            },
+                            {
+                                "color": "C",
+                                "face": "A"
+                            },
+                            {
+                                "color": "S",
+                                "face": "3"
+                            },
+                            {
+                                "color": "D",
+                                "face": "6"
+                            },
+                            {
+                                "color": "C",
+                                "face": "6"
+                            },
+                            {
+                                "color": "H",
+                                "face": "A"
+                            },
+                            {
+                                "color": "D",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "H",
+                                "face": "A"
+                            },
+                            {
+                                "color": "H",
+                                "face": "9"
+                            },
+                            {
+                                "color": "C",
+                                "face": "8"
+                            },
+                            {
+                                "color": "C",
+                                "face": "9"
+                            },
+                            {
+                                "color": "H",
+                                "face": "9"
+                            },
+                            {
+                                "color": "D",
+                                "face": "5"
+                            },
+                            {
+                                "color": "D",
+                                "face": "3"
+                            },
+                            {
+                                "color": "D",
+                                "face": "6"
+                            },
+                            {
+                                "color": "C",
+                                "face": "4"
+                            },
+                            {
+                                "color": "H",
+                                "face": "7"
+                            },
+                            {
+                                "color": "C",
+                                "face": "9"
+                            },
+                            {
+                                "color": "D",
+                                "face": "4"
+                            },
+                            {
+                                "color": "C",
+                                "face": "2"
+                            },
+                            {
+                                "color": "H",
+                                "face": "8"
+                            },
+                            {
+                                "color": "S",
+                                "face": "9"
+                            },
+                            {
+                                "color": "D",
+                                "face": "5"
+                            }
+                        ],
+                        "tag": "Hitting"
+                    }
+                ],
+                [
+                    {
+                        "playerId": -12,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": -21,
+                        "hand": [
+                            {
+                                "color": "H",
+                                "face": "10"
+                            },
+                            {
+                                "color": "H",
+                                "face": "6"
+                            },
+                            {
+                                "color": "D",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "C",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "D",
+                                "face": "10"
+                            },
+                            {
+                                "color": "H",
+                                "face": "10"
+                            },
+                            {
+                                "color": "D",
+                                "face": "5"
+                            },
+                            {
+                                "color": "C",
+                                "face": "3"
+                            },
+                            {
+                                "color": "C",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "C",
+                                "face": "7"
+                            }
+                        ],
+                        "tag": "Standing"
+                    }
+                ],
+                [
+                    {
+                        "tag": "Dealer"
+                    },
+                    {
+                        "bets": 21,
+                        "hand": [
+                            {
+                                "color": "D",
+                                "face": "7"
+                            },
+                            {
+                                "color": "C",
+                                "face": "7"
+                            },
+                            {
+                                "color": "D",
+                                "face": "6"
+                            },
+                            {
+                                "color": "C",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "H",
+                                "face": "K"
+                            },
+                            {
+                                "color": "D",
+                                "face": "A"
+                            },
+                            {
+                                "color": "D",
+                                "face": "8"
+                            },
+                            {
+                                "color": "C",
+                                "face": "J"
+                            },
+                            {
+                                "color": "D",
+                                "face": "6"
+                            },
+                            {
+                                "color": "H",
+                                "face": "K"
+                            },
+                            {
+                                "color": "S",
+                                "face": "7"
+                            },
+                            {
+                                "color": "C",
+                                "face": "J"
+                            },
+                            {
+                                "color": "S",
+                                "face": "J"
+                            },
+                            {
+                                "color": "C",
+                                "face": "J"
+                            }
+                        ],
+                        "tag": "Hitting"
+                    }
+                ],
+                [
+                    {
+                        "playerId": 23,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": 5,
+                        "hand": [
+                            {
+                                "color": "H",
+                                "face": "5"
+                            },
+                            {
+                                "color": "H",
+                                "face": "4"
+                            },
+                            {
+                                "color": "C",
+                                "face": "K"
+                            },
+                            {
+                                "color": "C",
+                                "face": "J"
+                            },
+                            {
+                                "color": "H",
+                                "face": "2"
+                            },
+                            {
+                                "color": "D",
+                                "face": "4"
+                            },
+                            {
+                                "color": "D",
+                                "face": "J"
+                            },
+                            {
+                                "color": "H",
+                                "face": "3"
+                            },
+                            {
+                                "color": "S",
+                                "face": "8"
+                            },
+                            {
+                                "color": "H",
+                                "face": "6"
+                            },
+                            {
+                                "color": "S",
+                                "face": "8"
+                            },
+                            {
+                                "color": "H",
+                                "face": "8"
+                            },
+                            {
+                                "color": "C",
+                                "face": "10"
+                            },
+                            {
+                                "color": "H",
+                                "face": "2"
+                            },
+                            {
+                                "color": "H",
+                                "face": "7"
+                            },
+                            {
+                                "color": "C",
+                                "face": "7"
+                            },
+                            {
+                                "color": "D",
+                                "face": "4"
+                            },
+                            {
+                                "color": "C",
+                                "face": "2"
+                            },
+                            {
+                                "color": "D",
+                                "face": "J"
+                            },
+                            {
+                                "color": "C",
+                                "face": "10"
+                            },
+                            {
+                                "color": "D",
+                                "face": "4"
+                            },
+                            {
+                                "color": "C",
+                                "face": "9"
+                            }
+                        ],
+                        "tag": "Standing"
+                    }
+                ],
+                [
+                    {
+                        "playerId": -29,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": -10,
+                        "hand": [
+                            {
+                                "color": "S",
+                                "face": "K"
+                            },
+                            {
+                                "color": "H",
+                                "face": "K"
+                            },
+                            {
+                                "color": "S",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "D",
+                                "face": "10"
+                            },
+                            {
+                                "color": "D",
+                                "face": "10"
+                            },
+                            {
+                                "color": "C",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "C",
+                                "face": "A"
+                            },
+                            {
+                                "color": "C",
+                                "face": "7"
+                            },
+                            {
+                                "color": "S",
+                                "face": "J"
+                            },
+                            {
+                                "color": "D",
+                                "face": "4"
+                            },
+                            {
+                                "color": "H",
+                                "face": "8"
+                            },
+                            {
+                                "color": "H",
+                                "face": "J"
+                            },
+                            {
+                                "color": "C",
+                                "face": "6"
+                            },
+                            {
+                                "color": "D",
+                                "face": "A"
+                            },
+                            {
+                                "color": "H",
+                                "face": "7"
+                            },
+                            {
+                                "color": "H",
+                                "face": "5"
+                            },
+                            {
+                                "color": "H",
+                                "face": "9"
+                            },
+                            {
+                                "color": "H",
+                                "face": "7"
+                            }
+                        ],
+                        "tag": "Standing"
+                    }
+                ],
+                [
+                    {
+                        "playerId": -23,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": -19,
+                        "hand": [
+                            {
+                                "color": "H",
+                                "face": "6"
+                            },
+                            {
+                                "color": "S",
+                                "face": "10"
+                            },
+                            {
+                                "color": "C",
+                                "face": "9"
+                            },
+                            {
+                                "color": "C",
+                                "face": "4"
+                            },
+                            {
+                                "color": "S",
+                                "face": "K"
+                            },
+                            {
+                                "color": "H",
+                                "face": "2"
+                            }
+                        ],
+                        "tag": "Hitting"
+                    }
+                ]
             ],
             "tag": "BlackJack"
         },
         {
             "initialBets": [
-                -5,
-                -6,
-                -21,
-                27,
-                15,
-                22,
-                18,
-                5,
-                2
+                [
+                    {
+                        "playerId": -22,
+                        "tag": "PlayerId"
+                    },
+                    7
+                ],
+                [
+                    {
+                        "playerId": -2,
+                        "tag": "PlayerId"
+                    },
+                    13
+                ],
+                [
+                    {
+                        "tag": "Dealer"
+                    },
+                    -15
+                ],
+                [
+                    {
+                        "playerId": 21,
+                        "tag": "PlayerId"
+                    },
+                    -16
+                ],
+                [
+                    {
+                        "playerId": -22,
+                        "tag": "PlayerId"
+                    },
+                    -4
+                ],
+                [
+                    {
+                        "playerId": -11,
+                        "tag": "PlayerId"
+                    },
+                    -8
+                ],
+                [
+                    {
+                        "playerId": 5,
+                        "tag": "PlayerId"
+                    },
+                    1
+                ],
+                [
+                    {
+                        "playerId": 15,
+                        "tag": "PlayerId"
+                    },
+                    11
+                ],
+                [
+                    {
+                        "playerId": -28,
+                        "tag": "PlayerId"
+                    },
+                    18
+                ],
+                [
+                    {
+                        "playerId": 12,
+                        "tag": "PlayerId"
+                    },
+                    -14
+                ],
+                [
+                    {
+                        "tag": "Dealer"
+                    },
+                    14
+                ],
+                [
+                    {
+                        "playerId": 17,
+                        "tag": "PlayerId"
+                    },
+                    28
+                ],
+                [
+                    {
+                        "playerId": -20,
+                        "tag": "PlayerId"
+                    },
+                    -25
+                ],
+                [
+                    {
+                        "playerId": 20,
+                        "tag": "PlayerId"
+                    },
+                    -19
+                ],
+                [
+                    {
+                        "playerId": -15,
+                        "tag": "PlayerId"
+                    },
+                    -19
+                ],
+                [
+                    {
+                        "playerId": 9,
+                        "tag": "PlayerId"
+                    },
+                    -23
+                ],
+                [
+                    {
+                        "playerId": -28,
+                        "tag": "PlayerId"
+                    },
+                    3
+                ],
+                [
+                    {
+                        "playerId": -10,
+                        "tag": "PlayerId"
+                    },
+                    -28
+                ],
+                [
+                    {
+                        "playerId": 13,
+                        "tag": "PlayerId"
+                    },
+                    -3
+                ],
+                [
+                    {
+                        "playerId": 23,
+                        "tag": "PlayerId"
+                    },
+                    -11
+                ],
+                [
+                    {
+                        "playerId": -18,
+                        "tag": "PlayerId"
+                    },
+                    19
+                ],
+                [
+                    {
+                        "playerId": 19,
+                        "tag": "PlayerId"
+                    },
+                    27
+                ],
+                [
+                    {
+                        "playerId": 26,
+                        "tag": "PlayerId"
+                    },
+                    -20
+                ],
+                [
+                    {
+                        "playerId": 8,
+                        "tag": "PlayerId"
+                    },
+                    -19
+                ]
             ],
-            "numPlayers": -5,
+            "numPlayers": -25,
+            "tag": "Setup"
+        },
+        {
+            "dealerHand": [
+                {
+                    "contents": {
+                        "color": "H",
+                        "face": "2"
+                    },
+                    "tag": "Hidden"
+                },
+                [
+                    {
+                        "color": "H",
+                        "face": "K"
+                    },
+                    {
+                        "color": "D",
+                        "face": "3"
+                    },
+                    {
+                        "color": "H",
+                        "face": "3"
+                    }
+                ]
+            ],
+            "next": {
+                "playerId": -4,
+                "tag": "PlayerId"
+            },
+            "numPlayers": -11,
+            "players": [
+                [
+                    {
+                        "playerId": -13,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": 6,
+                        "hand": [
+                            {
+                                "color": "S",
+                                "face": "A"
+                            },
+                            {
+                                "color": "H",
+                                "face": "6"
+                            },
+                            {
+                                "color": "D",
+                                "face": "8"
+                            },
+                            {
+                                "color": "S",
+                                "face": "6"
+                            },
+                            {
+                                "color": "C",
+                                "face": "5"
+                            },
+                            {
+                                "color": "D",
+                                "face": "2"
+                            },
+                            {
+                                "color": "H",
+                                "face": "3"
+                            },
+                            {
+                                "color": "H",
+                                "face": "6"
+                            },
+                            {
+                                "color": "D",
+                                "face": "7"
+                            },
+                            {
+                                "color": "H",
+                                "face": "4"
+                            },
+                            {
+                                "color": "H",
+                                "face": "4"
+                            },
+                            {
+                                "color": "H",
+                                "face": "3"
+                            },
+                            {
+                                "color": "S",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "D",
+                                "face": "J"
+                            },
+                            {
+                                "color": "C",
+                                "face": "K"
+                            },
+                            {
+                                "color": "S",
+                                "face": "K"
+                            },
+                            {
+                                "color": "S",
+                                "face": "J"
+                            },
+                            {
+                                "color": "C",
+                                "face": "K"
+                            },
+                            {
+                                "color": "S",
+                                "face": "3"
+                            },
+                            {
+                                "color": "H",
+                                "face": "5"
+                            },
+                            {
+                                "color": "D",
+                                "face": "A"
+                            },
+                            {
+                                "color": "S",
+                                "face": "6"
+                            },
+                            {
+                                "color": "S",
+                                "face": "5"
+                            },
+                            {
+                                "color": "C",
+                                "face": "8"
+                            },
+                            {
+                                "color": "D",
+                                "face": "K"
+                            },
+                            {
+                                "color": "S",
+                                "face": "5"
+                            },
+                            {
+                                "color": "H",
+                                "face": "6"
+                            }
+                        ],
+                        "tag": "Hitting"
+                    }
+                ],
+                [
+                    {
+                        "playerId": -26,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": -23,
+                        "hand": [
+                            {
+                                "color": "D",
+                                "face": "A"
+                            },
+                            {
+                                "color": "D",
+                                "face": "8"
+                            },
+                            {
+                                "color": "D",
+                                "face": "2"
+                            },
+                            {
+                                "color": "C",
+                                "face": "9"
+                            },
+                            {
+                                "color": "D",
+                                "face": "4"
+                            },
+                            {
+                                "color": "C",
+                                "face": "A"
+                            },
+                            {
+                                "color": "D",
+                                "face": "10"
+                            },
+                            {
+                                "color": "C",
+                                "face": "7"
+                            },
+                            {
+                                "color": "D",
+                                "face": "4"
+                            },
+                            {
+                                "color": "C",
+                                "face": "8"
+                            },
+                            {
+                                "color": "H",
+                                "face": "8"
+                            },
+                            {
+                                "color": "S",
+                                "face": "9"
+                            },
+                            {
+                                "color": "S",
+                                "face": "4"
+                            },
+                            {
+                                "color": "C",
+                                "face": "4"
+                            },
+                            {
+                                "color": "S",
+                                "face": "9"
+                            },
+                            {
+                                "color": "S",
+                                "face": "5"
+                            },
+                            {
+                                "color": "C",
+                                "face": "J"
+                            },
+                            {
+                                "color": "H",
+                                "face": "K"
+                            },
+                            {
+                                "color": "D",
+                                "face": "3"
+                            },
+                            {
+                                "color": "C",
+                                "face": "K"
+                            },
+                            {
+                                "color": "C",
+                                "face": "7"
+                            },
+                            {
+                                "color": "D",
+                                "face": "8"
+                            },
+                            {
+                                "color": "D",
+                                "face": "J"
+                            },
+                            {
+                                "color": "C",
+                                "face": "K"
+                            },
+                            {
+                                "color": "D",
+                                "face": "8"
+                            }
+                        ],
+                        "tag": "Standing"
+                    }
+                ],
+                [
+                    {
+                        "playerId": 16,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": 18,
+                        "hand": [
+                            {
+                                "color": "D",
+                                "face": "A"
+                            },
+                            {
+                                "color": "H",
+                                "face": "A"
+                            },
+                            {
+                                "color": "S",
+                                "face": "4"
+                            },
+                            {
+                                "color": "S",
+                                "face": "8"
+                            },
+                            {
+                                "color": "C",
+                                "face": "J"
+                            },
+                            {
+                                "color": "D",
+                                "face": "5"
+                            },
+                            {
+                                "color": "H",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "S",
+                                "face": "A"
+                            },
+                            {
+                                "color": "S",
+                                "face": "A"
+                            },
+                            {
+                                "color": "H",
+                                "face": "6"
+                            },
+                            {
+                                "color": "H",
+                                "face": "5"
+                            },
+                            {
+                                "color": "H",
+                                "face": "10"
+                            },
+                            {
+                                "color": "D",
+                                "face": "7"
+                            },
+                            {
+                                "color": "S",
+                                "face": "7"
+                            }
+                        ],
+                        "tag": "Hitting"
+                    }
+                ],
+                [
+                    {
+                        "playerId": 24,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": 1,
+                        "hand": [
+                            {
+                                "color": "S",
+                                "face": "3"
+                            },
+                            {
+                                "color": "S",
+                                "face": "5"
+                            },
+                            {
+                                "color": "H",
+                                "face": "3"
+                            },
+                            {
+                                "color": "C",
+                                "face": "10"
+                            },
+                            {
+                                "color": "D",
+                                "face": "3"
+                            },
+                            {
+                                "color": "D",
+                                "face": "9"
+                            },
+                            {
+                                "color": "H",
+                                "face": "4"
+                            },
+                            {
+                                "color": "C",
+                                "face": "A"
+                            },
+                            {
+                                "color": "C",
+                                "face": "9"
+                            },
+                            {
+                                "color": "H",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "C",
+                                "face": "6"
+                            },
+                            {
+                                "color": "H",
+                                "face": "8"
+                            },
+                            {
+                                "color": "D",
+                                "face": "2"
+                            },
+                            {
+                                "color": "H",
+                                "face": "10"
+                            }
+                        ],
+                        "tag": "Standing"
+                    }
+                ],
+                [
+                    {
+                        "playerId": -1,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": -2,
+                        "hand": [],
+                        "tag": "Standing"
+                    }
+                ],
+                [
+                    {
+                        "playerId": 23,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": -2,
+                        "hand": [
+                            {
+                                "color": "H",
+                                "face": "K"
+                            },
+                            {
+                                "color": "D",
+                                "face": "K"
+                            },
+                            {
+                                "color": "H",
+                                "face": "K"
+                            },
+                            {
+                                "color": "D",
+                                "face": "3"
+                            },
+                            {
+                                "color": "C",
+                                "face": "9"
+                            },
+                            {
+                                "color": "H",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "H",
+                                "face": "10"
+                            },
+                            {
+                                "color": "S",
+                                "face": "10"
+                            },
+                            {
+                                "color": "D",
+                                "face": "4"
+                            },
+                            {
+                                "color": "C",
+                                "face": "7"
+                            },
+                            {
+                                "color": "S",
+                                "face": "4"
+                            },
+                            {
+                                "color": "S",
+                                "face": "K"
+                            },
+                            {
+                                "color": "S",
+                                "face": "7"
+                            },
+                            {
+                                "color": "D",
+                                "face": "5"
+                            }
+                        ],
+                        "tag": "Standing"
+                    }
+                ],
+                [
+                    {
+                        "playerId": -14,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": -26,
+                        "hand": [
+                            {
+                                "color": "H",
+                                "face": "7"
+                            },
+                            {
+                                "color": "S",
+                                "face": "A"
+                            }
+                        ],
+                        "tag": "Playing"
+                    }
+                ],
+                [
+                    {
+                        "playerId": -6,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": 30,
+                        "hand": [
+                            {
+                                "color": "D",
+                                "face": "7"
+                            },
+                            {
+                                "color": "S",
+                                "face": "K"
+                            },
+                            {
+                                "color": "S",
+                                "face": "4"
+                            },
+                            {
+                                "color": "S",
+                                "face": "5"
+                            },
+                            {
+                                "color": "S",
+                                "face": "10"
+                            },
+                            {
+                                "color": "H",
+                                "face": "4"
+                            },
+                            {
+                                "color": "D",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "S",
+                                "face": "8"
+                            },
+                            {
+                                "color": "C",
+                                "face": "6"
+                            },
+                            {
+                                "color": "H",
+                                "face": "K"
+                            },
+                            {
+                                "color": "S",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "C",
+                                "face": "5"
+                            },
+                            {
+                                "color": "D",
+                                "face": "4"
+                            },
+                            {
+                                "color": "S",
+                                "face": "8"
+                            },
+                            {
+                                "color": "D",
+                                "face": "K"
+                            },
+                            {
+                                "color": "D",
+                                "face": "2"
+                            },
+                            {
+                                "color": "D",
+                                "face": "8"
+                            },
+                            {
+                                "color": "H",
+                                "face": "8"
+                            },
+                            {
+                                "color": "H",
+                                "face": "K"
+                            },
+                            {
+                                "color": "H",
+                                "face": "9"
+                            },
+                            {
+                                "color": "C",
+                                "face": "7"
+                            },
+                            {
+                                "color": "H",
+                                "face": "4"
+                            },
+                            {
+                                "color": "D",
+                                "face": "9"
+                            },
+                            {
+                                "color": "H",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "C",
+                                "face": "3"
+                            },
+                            {
+                                "color": "H",
+                                "face": "6"
+                            }
+                        ],
+                        "tag": "Playing"
+                    }
+                ],
+                [
+                    {
+                        "playerId": -15,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": 6,
+                        "hand": [
+                            {
+                                "color": "S",
+                                "face": "9"
+                            },
+                            {
+                                "color": "S",
+                                "face": "10"
+                            },
+                            {
+                                "color": "D",
+                                "face": "5"
+                            },
+                            {
+                                "color": "S",
+                                "face": "A"
+                            },
+                            {
+                                "color": "C",
+                                "face": "7"
+                            },
+                            {
+                                "color": "S",
+                                "face": "8"
+                            },
+                            {
+                                "color": "S",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "C",
+                                "face": "3"
+                            },
+                            {
+                                "color": "C",
+                                "face": "5"
+                            },
+                            {
+                                "color": "D",
+                                "face": "9"
+                            },
+                            {
+                                "color": "S",
+                                "face": "K"
+                            },
+                            {
+                                "color": "H",
+                                "face": "7"
+                            },
+                            {
+                                "color": "H",
+                                "face": "6"
+                            },
+                            {
+                                "color": "S",
+                                "face": "5"
+                            }
+                        ],
+                        "tag": "Playing"
+                    }
+                ],
+                [
+                    {
+                        "playerId": -7,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": 14,
+                        "hand": [
+                            {
+                                "color": "H",
+                                "face": "4"
+                            },
+                            {
+                                "color": "C",
+                                "face": "2"
+                            },
+                            {
+                                "color": "S",
+                                "face": "4"
+                            },
+                            {
+                                "color": "S",
+                                "face": "9"
+                            },
+                            {
+                                "color": "C",
+                                "face": "3"
+                            },
+                            {
+                                "color": "S",
+                                "face": "J"
+                            },
+                            {
+                                "color": "S",
+                                "face": "J"
+                            },
+                            {
+                                "color": "H",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "D",
+                                "face": "A"
+                            },
+                            {
+                                "color": "D",
+                                "face": "2"
+                            },
+                            {
+                                "color": "D",
+                                "face": "5"
+                            },
+                            {
+                                "color": "H",
+                                "face": "9"
+                            },
+                            {
+                                "color": "C",
+                                "face": "9"
+                            },
+                            {
+                                "color": "D",
+                                "face": "7"
+                            },
+                            {
+                                "color": "S",
+                                "face": "J"
+                            },
+                            {
+                                "color": "C",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "H",
+                                "face": "5"
+                            },
+                            {
+                                "color": "H",
+                                "face": "A"
+                            },
+                            {
+                                "color": "S",
+                                "face": "9"
+                            },
+                            {
+                                "color": "H",
+                                "face": "6"
+                            }
+                        ],
+                        "tag": "Hitting"
+                    }
+                ],
+                [
+                    {
+                        "playerId": -6,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": -26,
+                        "hand": [],
+                        "tag": "Playing"
+                    }
+                ],
+                [
+                    {
+                        "playerId": -4,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": -24,
+                        "hand": [
+                            {
+                                "color": "S",
+                                "face": "J"
+                            },
+                            {
+                                "color": "S",
+                                "face": "3"
+                            },
+                            {
+                                "color": "C",
+                                "face": "2"
+                            },
+                            {
+                                "color": "C",
+                                "face": "A"
+                            },
+                            {
+                                "color": "H",
+                                "face": "J"
+                            },
+                            {
+                                "color": "H",
+                                "face": "2"
+                            },
+                            {
+                                "color": "S",
+                                "face": "6"
+                            }
+                        ],
+                        "tag": "Standing"
+                    }
+                ],
+                [
+                    {
+                        "playerId": -1,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": -23,
+                        "hand": [
+                            {
+                                "color": "C",
+                                "face": "4"
+                            },
+                            {
+                                "color": "C",
+                                "face": "4"
+                            },
+                            {
+                                "color": "H",
+                                "face": "5"
+                            },
+                            {
+                                "color": "H",
+                                "face": "8"
+                            },
+                            {
+                                "color": "H",
+                                "face": "9"
+                            },
+                            {
+                                "color": "C",
+                                "face": "8"
+                            },
+                            {
+                                "color": "D",
+                                "face": "3"
+                            },
+                            {
+                                "color": "D",
+                                "face": "K"
+                            },
+                            {
+                                "color": "D",
+                                "face": "K"
+                            },
+                            {
+                                "color": "H",
+                                "face": "4"
+                            },
+                            {
+                                "color": "D",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "C",
+                                "face": "6"
+                            },
+                            {
+                                "color": "H",
+                                "face": "5"
+                            },
+                            {
+                                "color": "H",
+                                "face": "6"
+                            },
+                            {
+                                "color": "C",
+                                "face": "7"
+                            },
+                            {
+                                "color": "C",
+                                "face": "4"
+                            },
+                            {
+                                "color": "H",
+                                "face": "J"
+                            },
+                            {
+                                "color": "C",
+                                "face": "8"
+                            },
+                            {
+                                "color": "C",
+                                "face": "6"
+                            },
+                            {
+                                "color": "D",
+                                "face": "9"
+                            },
+                            {
+                                "color": "H",
+                                "face": "10"
+                            },
+                            {
+                                "color": "D",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "H",
+                                "face": "3"
+                            },
+                            {
+                                "color": "H",
+                                "face": "3"
+                            },
+                            {
+                                "color": "H",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "C",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "C",
+                                "face": "9"
+                            },
+                            {
+                                "color": "C",
+                                "face": "A"
+                            }
+                        ],
+                        "tag": "Playing"
+                    }
+                ],
+                [
+                    {
+                        "playerId": 20,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": 7,
+                        "hand": [
+                            {
+                                "color": "C",
+                                "face": "6"
+                            },
+                            {
+                                "color": "S",
+                                "face": "3"
+                            },
+                            {
+                                "color": "D",
+                                "face": "9"
+                            },
+                            {
+                                "color": "C",
+                                "face": "7"
+                            },
+                            {
+                                "color": "D",
+                                "face": "K"
+                            },
+                            {
+                                "color": "C",
+                                "face": "2"
+                            },
+                            {
+                                "color": "H",
+                                "face": "K"
+                            },
+                            {
+                                "color": "H",
+                                "face": "2"
+                            }
+                        ],
+                        "tag": "Standing"
+                    }
+                ],
+                [
+                    {
+                        "playerId": -5,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": -6,
+                        "hand": [
+                            {
+                                "color": "D",
+                                "face": "2"
+                            },
+                            {
+                                "color": "C",
+                                "face": "6"
+                            },
+                            {
+                                "color": "H",
+                                "face": "K"
+                            },
+                            {
+                                "color": "C",
+                                "face": "K"
+                            },
+                            {
+                                "color": "S",
+                                "face": "7"
+                            },
+                            {
+                                "color": "C",
+                                "face": "9"
+                            },
+                            {
+                                "color": "C",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "D",
+                                "face": "7"
+                            },
+                            {
+                                "color": "D",
+                                "face": "6"
+                            },
+                            {
+                                "color": "D",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "S",
+                                "face": "J"
+                            },
+                            {
+                                "color": "S",
+                                "face": "J"
+                            },
+                            {
+                                "color": "H",
+                                "face": "10"
+                            },
+                            {
+                                "color": "S",
+                                "face": "A"
+                            },
+                            {
+                                "color": "C",
+                                "face": "5"
+                            },
+                            {
+                                "color": "D",
+                                "face": "6"
+                            },
+                            {
+                                "color": "C",
+                                "face": "J"
+                            },
+                            {
+                                "color": "C",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "H",
+                                "face": "3"
+                            },
+                            {
+                                "color": "D",
+                                "face": "K"
+                            },
+                            {
+                                "color": "S",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "D",
+                                "face": "2"
+                            },
+                            {
+                                "color": "C",
+                                "face": "8"
+                            },
+                            {
+                                "color": "H",
+                                "face": "9"
+                            },
+                            {
+                                "color": "H",
+                                "face": "8"
+                            },
+                            {
+                                "color": "S",
+                                "face": "8"
+                            },
+                            {
+                                "color": "H",
+                                "face": "7"
+                            },
+                            {
+                                "color": "C",
+                                "face": "7"
+                            },
+                            {
+                                "color": "C",
+                                "face": "4"
+                            },
+                            {
+                                "color": "S",
+                                "face": "10"
+                            }
+                        ],
+                        "tag": "Standing"
+                    }
+                ],
+                [
+                    {
+                        "playerId": 1,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": 24,
+                        "hand": [
+                            {
+                                "color": "H",
+                                "face": "9"
+                            },
+                            {
+                                "color": "H",
+                                "face": "3"
+                            },
+                            {
+                                "color": "D",
+                                "face": "3"
+                            },
+                            {
+                                "color": "H",
+                                "face": "2"
+                            },
+                            {
+                                "color": "S",
+                                "face": "9"
+                            },
+                            {
+                                "color": "S",
+                                "face": "2"
+                            },
+                            {
+                                "color": "H",
+                                "face": "9"
+                            },
+                            {
+                                "color": "D",
+                                "face": "7"
+                            },
+                            {
+                                "color": "D",
+                                "face": "K"
+                            },
+                            {
+                                "color": "C",
+                                "face": "2"
+                            }
+                        ],
+                        "tag": "Hitting"
+                    }
+                ],
+                [
+                    {
+                        "playerId": -22,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": 22,
+                        "hand": [
+                            {
+                                "color": "D",
+                                "face": "3"
+                            },
+                            {
+                                "color": "H",
+                                "face": "A"
+                            },
+                            {
+                                "color": "S",
+                                "face": "3"
+                            },
+                            {
+                                "color": "S",
+                                "face": "9"
+                            },
+                            {
+                                "color": "C",
+                                "face": "K"
+                            },
+                            {
+                                "color": "H",
+                                "face": "3"
+                            },
+                            {
+                                "color": "S",
+                                "face": "4"
+                            }
+                        ],
+                        "tag": "Playing"
+                    }
+                ],
+                [
+                    {
+                        "playerId": -1,
+                        "tag": "PlayerId"
+                    },
+                    {
+                        "bets": 21,
+                        "hand": [
+                            {
+                                "color": "S",
+                                "face": "J"
+                            },
+                            {
+                                "color": "D",
+                                "face": "6"
+                            },
+                            {
+                                "color": "D",
+                                "face": "6"
+                            },
+                            {
+                                "color": "C",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "C",
+                                "face": "3"
+                            },
+                            {
+                                "color": "S",
+                                "face": "3"
+                            },
+                            {
+                                "color": "C",
+                                "face": "4"
+                            },
+                            {
+                                "color": "S",
+                                "face": "8"
+                            },
+                            {
+                                "color": "D",
+                                "face": "J"
+                            },
+                            {
+                                "color": "H",
+                                "face": "8"
+                            },
+                            {
+                                "color": "H",
+                                "face": "Q"
+                            },
+                            {
+                                "color": "S",
+                                "face": "J"
+                            },
+                            {
+                                "color": "S",
+                                "face": "4"
+                            },
+                            {
+                                "color": "S",
+                                "face": "4"
+                            },
+                            {
+                                "color": "S",
+                                "face": "10"
+                            },
+                            {
+                                "color": "S",
+                                "face": "J"
+                            },
+                            {
+                                "color": "D",
+                                "face": "8"
+                            },
+                            {
+                                "color": "H",
+                                "face": "K"
+                            },
+                            {
+                                "color": "H",
+                                "face": "A"
+                            },
+                            {
+                                "color": "S",
+                                "face": "3"
+                            },
+                            {
+                                "color": "S",
+                                "face": "J"
+                            },
+                            {
+                                "color": "S",
+                                "face": "7"
+                            },
+                            {
+                                "color": "S",
+                                "face": "4"
+                            },
+                            {
+                                "color": "D",
+                                "face": "7"
+                            },
+                            {
+                                "color": "S",
+                                "face": "3"
+                            },
+                            {
+                                "color": "S",
+                                "face": "10"
+                            },
+                            {
+                                "color": "S",
+                                "face": "5"
+                            }
+                        ],
+                        "tag": "Standing"
+                    }
+                ]
+            ],
+            "tag": "BlackJack"
+        },
+        {
+            "initialBets": [
+                [
+                    {
+                        "playerId": 26,
+                        "tag": "PlayerId"
+                    },
+                    -20
+                ],
+                [
+                    {
+                        "playerId": 3,
+                        "tag": "PlayerId"
+                    },
+                    20
+                ],
+                [
+                    {
+                        "playerId": -4,
+                        "tag": "PlayerId"
+                    },
+                    21
+                ],
+                [
+                    {
+                        "playerId": 10,
+                        "tag": "PlayerId"
+                    },
+                    26
+                ],
+                [
+                    {
+                        "playerId": -2,
+                        "tag": "PlayerId"
+                    },
+                    -4
+                ],
+                [
+                    {
+                        "tag": "Dealer"
+                    },
+                    -23
+                ],
+                [
+                    {
+                        "playerId": -23,
+                        "tag": "PlayerId"
+                    },
+                    6
+                ],
+                [
+                    {
+                        "playerId": 17,
+                        "tag": "PlayerId"
+                    },
+                    -13
+                ],
+                [
+                    {
+                        "playerId": 18,
+                        "tag": "PlayerId"
+                    },
+                    -29
+                ],
+                [
+                    {
+                        "playerId": -2,
+                        "tag": "PlayerId"
+                    },
+                    -12
+                ],
+                [
+                    {
+                        "playerId": 7,
+                        "tag": "PlayerId"
+                    },
+                    -20
+                ],
+                [
+                    {
+                        "playerId": -16,
+                        "tag": "PlayerId"
+                    },
+                    -25
+                ],
+                [
+                    {
+                        "playerId": 8,
+                        "tag": "PlayerId"
+                    },
+                    -22
+                ]
+            ],
+            "numPlayers": 5,
             "tag": "Setup"
         },
         {
             "initialBets": [
-                -17
+                [
+                    {
+                        "playerId": 23,
+                        "tag": "PlayerId"
+                    },
+                    20
+                ],
+                [
+                    {
+                        "playerId": 29,
+                        "tag": "PlayerId"
+                    },
+                    28
+                ],
+                [
+                    {
+                        "playerId": -1,
+                        "tag": "PlayerId"
+                    },
+                    9
+                ],
+                [
+                    {
+                        "playerId": -25,
+                        "tag": "PlayerId"
+                    },
+                    -26
+                ],
+                [
+                    {
+                        "tag": "Dealer"
+                    },
+                    2
+                ],
+                [
+                    {
+                        "playerId": -18,
+                        "tag": "PlayerId"
+                    },
+                    -16
+                ],
+                [
+                    {
+                        "playerId": -30,
+                        "tag": "PlayerId"
+                    },
+                    -24
+                ],
+                [
+                    {
+                        "playerId": -22,
+                        "tag": "PlayerId"
+                    },
+                    12
+                ],
+                [
+                    {
+                        "playerId": 8,
+                        "tag": "PlayerId"
+                    },
+                    6
+                ],
+                [
+                    {
+                        "playerId": 22,
+                        "tag": "PlayerId"
+                    },
+                    -30
+                ],
+                [
+                    {
+                        "playerId": -13,
+                        "tag": "PlayerId"
+                    },
+                    23
+                ]
             ],
-            "numPlayers": -18,
+            "numPlayers": 19,
             "tag": "Setup"
         }
     ],
-    "seed": -1183117629
+    "seed": 454042020
 }

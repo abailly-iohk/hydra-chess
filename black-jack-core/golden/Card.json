@@ -1,25 +1,25 @@
 {
     "samples": [
         {
-            "color": "♢",
-            "face": "A"
+            "color": "H",
+            "face": "Q"
         },
         {
-            "color": "♡",
-            "face": "7"
+            "color": "D",
+            "face": "4"
         },
         {
-            "color": "♣",
-            "face": "9"
+            "color": "H",
+            "face": "K"
         },
         {
-            "color": "♡",
-            "face": "2"
+            "color": "D",
+            "face": "10"
         },
         {
-            "color": "♡",
-            "face": "2"
+            "color": "S",
+            "face": "J"
         }
     ],
-    "seed": -1209505532
+    "seed": -231684302
 }

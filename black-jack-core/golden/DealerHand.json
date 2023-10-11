@@ -2,50 +2,107 @@
     "samples": [
         [
             {
-                "color": "♢",
-                "face": "7"
+                "contents": {
+                    "color": "D",
+                    "face": "9"
+                },
+                "tag": "Hidden"
             },
-            {
-                "color": "♡",
-                "face": "K"
-            }
+            [
+                {
+                    "color": "D",
+                    "face": "4"
+                },
+                {
+                    "color": "H",
+                    "face": "3"
+                },
+                {
+                    "color": "H",
+                    "face": "3"
+                }
+            ]
         ],
         [
             {
-                "color": "♣",
-                "face": "K"
-            }
+                "contents": {
+                    "color": "H",
+                    "face": "3"
+                },
+                "tag": "Hidden"
+            },
+            [
+                {
+                    "color": "S",
+                    "face": "5"
+                },
+                {
+                    "color": "S",
+                    "face": "3"
+                },
+                {
+                    "color": "D",
+                    "face": "8"
+                }
+            ]
         ],
         [
             {
-                "color": "♠",
-                "face": "4"
+                "contents": {
+                    "color": "H",
+                    "face": "Q"
+                },
+                "tag": "Hidden"
             },
-            {
-                "color": "♠",
-                "face": "5"
-            }
+            [
+                {
+                    "color": "C",
+                    "face": "7"
+                }
+            ]
         ],
         [
             {
-                "color": "♡",
-                "face": "K"
-            }
+                "contents": {
+                    "color": "D",
+                    "face": "7"
+                },
+                "tag": "Hidden"
+            },
+            [
+                {
+                    "color": "D",
+                    "face": "3"
+                },
+                {
+                    "color": "H",
+                    "face": "Q"
+                }
+            ]
         ],
         [
             {
-                "color": "♢",
-                "face": "3"
+                "contents": {
+                    "color": "S",
+                    "face": "2"
+                },
+                "tag": "Hidden"
             },
-            {
-                "color": "♣",
-                "face": "10"
-            },
-            {
-                "color": "♡",
-                "face": "6"
-            }
+            [
+                {
+                    "color": "D",
+                    "face": "4"
+                },
+                {
+                    "color": "C",
+                    "face": "2"
+                },
+                {
+                    "color": "S",
+                    "face": "6"
+                }
+            ]
         ]
     ],
-    "seed": -1590887859
+    "seed": -8459136
 }

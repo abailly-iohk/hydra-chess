@@ -204,7 +204,7 @@ instance Arbitrary DealerHand where
     go [] = error "should not happen"
 
 instance (Arbitrary k, Arbitrary v) => Arbitrary (AssocMap.Map k v) where
-  arbitrary = genericArbitrary Generic.uniform
+  arbitrary = AssocMap.fromList <$> arbitrary
 
 instance Arbitrary PlayerId where
   arbitrary =

@@ -2,9 +2,9 @@
 
 module BlackJack.Contract.GameSpec where
 
-import BlackJack.Contract.Game (Color, Card, DealerHand)
-import BlackJack.Game (BlackJack)
-import Test.Aeson.GenericSpecs (roundtripAndGoldenSpecs, Proxy (Proxy))
+import BlackJack.Contract.Game (BlackJack (..), Card, Color, DealerHand)
+import BlackJack.Game ()
+import Test.Aeson.GenericSpecs (Proxy (Proxy), roundtripAndGoldenSpecs)
 import Test.Hspec (Spec)
 
 spec :: Spec

@@ -3,6 +3,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -19,21 +20,19 @@ module BlackJack.Contract.Game where
 
 import PlutusTx.Prelude
 
-import Control.Monad (fail, (>=>))
+import Control.Monad (fail)
 import Data.Aeson (
   FromJSON (..),
   ToJSON (..),
-  withArray,
   withText,
  )
-import qualified Data.Vector as Vector
+import Data.Functor ((<&>))
 import GHC.Generics (Generic)
 import qualified PlutusTx
 import PlutusTx.AssocMap (Map)
 import qualified PlutusTx.AssocMap as Map
 import System.Random (Uniform)
 import qualified Prelude as Haskell
-import Data.Functor ((<&>))
 
 data PlayerId
   = PlayerId {playerId :: Integer}
@@ -92,17 +91,17 @@ PlutusTx.unstableMakeIsData ''Color
 
 instance ToJSON Color where
   toJSON = \case
-    Heart -> "\x2661"
-    Spade -> "\x2660"
-    Diamond -> "\x2662"
-    Club -> "\x2663"
+    Heart -> "H"
+    Spade -> "S"
+    Diamond -> "D"
+    Club -> "C"
 
 instance FromJSON Color where
   parseJSON = \case
-    "\x2661" -> Haskell.pure Heart
-    "\x2660" -> Haskell.pure Spade
-    "\x2662" -> Haskell.pure Diamond
-    "\x2663" -> Haskell.pure Club
+    "H" -> Haskell.pure Heart
+    "S" -> Haskell.pure Spade
+    "D" -> Haskell.pure Diamond
+    "C" -> Haskell.pure Club
     other -> fail $ "unknown color " <> Haskell.show other
 
 data Face
@@ -197,25 +196,15 @@ isBlackJack cards = length cards == 2 && 21 `elem` handValues cards
 {-# INLINEABLE isBlackJack #-}
 
 data Hidden c = Hidden c | None
-  deriving (Haskell.Eq, Haskell.Show)
+  deriving stock (Haskell.Eq, Haskell.Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)
 
 PlutusTx.unstableMakeIsData ''Hidden
 
 newtype DealerHand = DealerHand (Hidden Card, [Card])
-  deriving (Haskell.Eq, Haskell.Show)
+  deriving newtype (Haskell.Eq, Haskell.Show, ToJSON, FromJSON)
 
 PlutusTx.unstableMakeIsData ''DealerHand
-
-instance ToJSON DealerHand where
-  toJSON (DealerHand (_, cards)) = toJSON cards
-
-instance FromJSON DealerHand where
-  parseJSON =
-    withArray
-      "cards"
-      ( Haskell.traverse parseJSON
-          >=> (\cs -> Haskell.pure (DealerHand (None, Vector.toList cs)))
-      )
 
 reveal :: DealerHand -> [Card]
 reveal (DealerHand (Hidden c, cs)) = c : cs
@@ -276,7 +265,7 @@ newtype RGen = RGen Integer
 PlutusTx.unstableMakeIsData ''RGen
 
 instance ToJSON a => ToJSON (Map PlayerId a) where
-  toJSON = toJSON . toList
+  toJSON = toJSON . Map.toList
 
 instance FromJSON a => FromJSON (Map PlayerId a) where
   parseJSON v = parseJSON v <&> Map.fromList

@@ -80,6 +80,7 @@ test-suite tests
   main-is:            Spec.hs
   type:               exitcode-stdio-1.0
   build-depends:
+    , aeson
     , base
     , black-jack-core
     , containers
