@@ -35,6 +35,7 @@ library
     BlackJack.Pretty
 
     Chess.Game
+    Chess.Render
 
   build-depends:
     , aeson

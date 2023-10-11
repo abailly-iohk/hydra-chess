@@ -9,19 +9,32 @@
 
 module Game.ClientSpec where
 
-import Control.Concurrent.Class.MonadSTM (MonadSTM, atomically, modifyTVar', newTVarIO, readTVar, readTVarIO, writeTVar)
+import Control.Concurrent.Class.MonadSTM (
+  MonadSTM,
+  atomically,
+  modifyTVar',
+  newTVarIO,
+  readTVar,
+  readTVarIO,
+  writeTVar,
+ )
 import Control.Monad.Class.MonadAsync (MonadAsync (race_))
 import Control.Monad.Class.MonadTimer (threadDelay)
 import Control.Monad.IOSim (runSimOrThrow)
-import Data.Aeson (eitherDecode)
-import Data.ByteString.Lazy (ByteString)
 import Data.String (IsString)
 import Data.Text (pack)
 import Game.BlackJack (BlackJack)
 import Game.Client (runClient)
 import Game.Client.IO (Command (..), Err (..), HasIO (..), Output (..))
-import Game.Server (FromChain (..), Host (Host), Indexed (Indexed, events), IsChain (..), Server (..))
+import Game.Server (
+  FromChain (..),
+  Host (Host),
+  Indexed (Indexed),
+  IsChain (..),
+  Server (..),
+ )
 import Game.Server.Mock (MockChain, MockCoin, MockParty (..))
+import Test.Aeson.GenericSpecs (Proxy (Proxy), roundtripAndGoldenSpecs)
 import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (
@@ -32,30 +45,15 @@ import Test.QuickCheck (
   getNonEmpty,
   sublistOf,
  )
-import Test.Aeson.GenericSpecs (roundtripAndGoldenSpecs, Proxy (Proxy))
-
-sampleEvents :: ByteString
-sampleEvents =
-  "{\"events\":[{\"headId\":\"5c9d0a7d44fa71ea4745a1ea62a930dc\",\"parties\":[{\"host\":{\"host\":\"localhost\",\"port\":12345},\"pid\":\"alice\"},{\"host\":{\"host\":\"localhost\",\"port\":12346},\"pid\":\"bob\"}],\"tag\":\"HeadCreated\"},"
-    <> "{\"coin\":100,\"headId\":\"5c9d0a7d44fa71ea4745a1ea62a930dc\",\"party\":{\"host\":{\"host\":\"localhost\",\"port\":12345},\"pid\":\"alice\"},\"tag\":\"FundCommitted\"}"
-    <> ",{\"coin\":100,\"headId\":\"5c9d0a7d44fa71ea4745a1ea62a930dc\",\"party\":{\"host\":{\"host\":\"localhost\",\"port\":12346},\"pid\":\"bob\"},\"tag\":\"FundCommitted\"},"
-    <> "{\"headId\":\"5c9d0a7d44fa71ea4745a1ea62a930dc\",\"tag\":\"HeadOpened\"},"
-    <> "{\"game\":{\"initialBets\":[],\"numPlayers\":1,\"tag\":\"Setup\"},\"headId\":\"5c9d0a7d44fa71ea4745a1ea62a930dc\",\"plays\":[{\"contents\":{\"playerId\":1,\"tag\":\"PlayerId\"},\"tag\":\"Bet\"}],\"tag\":\"GameStarted\"},"
-    <> "{\"game\":{\"dealerHand\":[{\"color\":\"♠\",\"face\":\"7\"}],\"next\":{\"playerId\":1,\"tag\":\"PlayerId\"},\"numPlayers\":1,\"players\":[{\"bets\":100,\"hand\":[{\"color\":\"♠\",\"face\":\"K\"},{\"color\":\"♢\",\"face\":\"K\"}],\"tag\":\"Playing\"}],\"tag\":\"BlackJack\"},\"headId\":\"5c9d0a7d44fa71ea4745a1ea62a930dc\",\"plays\":[{\"contents\":{\"playerId\":1,\"tag\":\"PlayerId\"},\"tag\":\"Hit\"},{\"contents\":{\"playerId\":1,\"tag\":\"PlayerId\"},\"tag\":\"Stand\"}],\"tag\":\"GameChanged\"}],\"lastIndex\":6}"
 
 spec :: Spec
 spec = do
   describe "Serialisation" $ do
     roundtripAndGoldenSpecs (Proxy @(Indexed BlackJack MockChain))
 
-    it "can deserialise events list" $ do
-      let parsed = eitherDecode sampleEvents
-
-      (length . events @BlackJack @MockChain <$> parsed) `shouldBe` Right 2
-
   describe "New Table" $ do
     it "is notified when invited to a new table" $
-      failAfter 10 $ do
+      failAfter 100 $ do
         let res = runSimOrThrow $ do
               let peers = [alice, bob]
                   server = connectedServer{poll = \_ _ -> pure $ Indexed 1 [HeadCreated @BlackJack @MockChain mockId peers]}

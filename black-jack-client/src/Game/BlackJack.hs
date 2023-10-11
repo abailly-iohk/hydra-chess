@@ -1,15 +1,36 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Game.BlackJack (module BlackJack.Game) where
 
 import BlackJack.Contract.Game (Payoffs)
 import BlackJack.Game
-import Data.Map (Map)
-import Data.Text (Text)
+import Data.Aeson (FromJSON, ToJSON)
+import Data.Map (Map, fromList)
+import Data.Text (Text, pack)
+import GHC.Generics (Generic)
 import Game.Server (Game (..))
+import Test.QuickCheck (Arbitrary (arbitrary))
+import Data.Bifunctor (first)
+
+data BlackJackEnd = BlackJackEnd
+  { dealerCards :: [Card]
+  , payoffs :: Payoffs
+  , gains :: Map Text Integer
+  }
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)
+
+instance Arbitrary BlackJackEnd where
+  arbitrary = BlackJackEnd <$> arbitrary <*> arbitrary <*> someGains
+   where
+     someGains = fromList . fmap (first (pack . show @PlayerId)) <$> arbitrary
 
 instance Game BlackJack where
   type GameState BlackJack = BlackJack
   type GamePlay BlackJack = Play
-  type GameEnd BlackJack = ([Card], Payoffs, Map Text Integer)
+  type GameEnd BlackJack = BlackJackEnd
