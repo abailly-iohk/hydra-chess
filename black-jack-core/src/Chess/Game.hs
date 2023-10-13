@@ -1,17 +1,100 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_GHC -fno-specialize -fdefer-type-errors #-}
 
 module Chess.Game where
 
+import PlutusTx.Prelude
+
 import Control.Monad (guard)
-import Data.Foldable (find)
-import Data.Maybe (isJust)
+import qualified PlutusTx
+import qualified Prelude as Haskell
+
+type Row = Integer
+type Col = Integer
+
+data Position = Pos Row Col
+  deriving (Haskell.Eq, Haskell.Show)
+
+PlutusTx.unstableMakeIsData ''Position
+
+instance Eq Position where
+  Pos r c == Pos r' c' = r == r' && c == c'
+
+newtype Path = Path {positions :: [Position]}
+  deriving (Haskell.Eq, Haskell.Show)
+
+instance Eq Path where
+  Path p == Path p' = p == p'
+
+data Piece = Pawn
+  deriving (Haskell.Eq, Haskell.Show)
+
+PlutusTx.unstableMakeIsData ''Piece
+
+instance Eq Piece where
+  Pawn == Pawn = True
+
+data Side = White | Black
+  deriving (Haskell.Eq, Haskell.Show)
+
+PlutusTx.unstableMakeIsData ''Side
+
+instance Eq Side where
+  White == White = True
+  Black == Black = True
+  _ == _ = False
+
+flipSide :: Side -> Side
+flipSide White = Black
+flipSide Black = White
+
+data PieceOnBoard = PieceOnBoard {piece :: Piece, side :: Side, pos :: Position}
+  deriving (Haskell.Eq, Haskell.Show)
+
+PlutusTx.unstableMakeIsData ''PieceOnBoard
+
+instance Eq PieceOnBoard where
+  PieceOnBoard p s pos == PieceOnBoard p' s' pos' = p == p' && s == s' && pos == pos'
+
+data Game = Game
+  { curSide :: Side
+  , pieces :: [PieceOnBoard]
+  }
+  deriving (Haskell.Eq, Haskell.Show)
+
+PlutusTx.unstableMakeIsData ''Game
+
+instance Eq Game where
+  Game s p == Game s' p' = s == s' && p == p'
+
+initialGame :: Game
+initialGame =
+  Game White $
+    [PieceOnBoard Pawn White (Pos 1 c) | c <- [0 .. 7]]
+      <> [PieceOnBoard Pawn Black (Pos 6 c) | c <- [0 .. 7]]
+
+findPieces :: Piece -> Side -> Game -> [PieceOnBoard]
+findPieces piece' side' Game{pieces} =
+  filter (\PieceOnBoard{piece, side} -> piece == piece' && side == side') pieces
+
+data Move = Move Position Position
+  deriving (Haskell.Eq, Haskell.Show)
+
+PlutusTx.unstableMakeIsData ''Move
+
+data IllegalMove = IllegalMove Move
+  deriving (Haskell.Eq, Haskell.Show)
+
+PlutusTx.unstableMakeIsData ''IllegalMove
 
 apply :: Move -> Game -> Either IllegalMove Game
 apply move@(Move from _) game@(Game curSide _) =
   case pieceAt from game of
-    Just (Pawn, White, _) | curSide == White -> moveWhitePawn move game
-    Just (Pawn, Black, _) | curSide == Black -> moveBlackPawn move game
+    Just (PieceOnBoard Pawn White _) | curSide == White -> moveWhitePawn move game
+    Just (PieceOnBoard Pawn Black _) | curSide == Black -> moveBlackPawn move game
     _ -> Left $ IllegalMove move
 
 moveWhitePawn :: Move -> Game -> Either IllegalMove Game
@@ -40,17 +123,17 @@ moveBlackPawn move@(Move from@(Pos row col) to@(Pos row' col')) game
   | otherwise =
       Left $ IllegalMove move
 
-pieceAt :: Position -> Game -> Maybe (Piece, Side, Position)
+pieceAt :: Position -> Game -> Maybe PieceOnBoard
 pieceAt position Game{pieces} =
-  find (\(_, _, p) -> p == position) pieces
+  find (\PieceOnBoard{pos} -> pos == position) pieces
 
 movePiece :: Game -> Position -> Position -> Game
 movePiece game@Game{curSide, pieces} from to =
   let
     att = pieceAt from game
-    newPos = maybe [] (\(p, s, _) -> [(p, s, to)]) att
+    newPos = maybe [] (\PieceOnBoard{piece, side} -> [PieceOnBoard{piece, side, pos = to}]) att
    in
-    Game (flipSide curSide) $ filter (\(_, _, pos) -> pos /= from) pieces <> newPos
+    Game (flipSide curSide) $ filter (\PieceOnBoard{pos} -> pos /= from) pieces <> newPos
 
 takePiece :: Game -> Position -> Position -> Either IllegalMove Game
 takePiece game@Game{curSide, pieces} from to =
@@ -58,13 +141,13 @@ takePiece game@Game{curSide, pieces} from to =
     att = pieceAt from game
     def = pieceAt to game
     newPos = do
-      (piece, side, _) <- att
-      (_, side', _) <- def
+      PieceOnBoard{piece, side} <- att
+      PieceOnBoard{side = side'} <- def
       guard $ side /= side'
-      pure (piece, side, to)
+      pure $ PieceOnBoard piece side to
    in
     case newPos of
-      Just pos -> Right $ Game (flipSide curSide) $ filter (\(_, _, p) -> p /= from && p /= to) pieces <> [pos]
+      Just p -> Right $ Game (flipSide curSide) $ filter (\PieceOnBoard{pos} -> pos /= from && pos /= to) pieces <> [p]
       Nothing -> Left $ IllegalMove (Move from to)
 
 path :: Position -> Position -> Path
@@ -81,45 +164,4 @@ path (Pos r c) (Pos r' c') =
 
 hasPieceOn :: Game -> Path -> Bool
 hasPieceOn Game{pieces} =
-  any (\pos -> isJust $ find (\(_, _, p) -> p == pos) pieces) . positions
-
-data IllegalMove = IllegalMove Move
-  deriving (Eq, Show)
-
-data Position = Pos Row Col
-  deriving (Eq, Show)
-
-type Row = Int
-type Col = Int
-
-newtype Path = Path {positions :: [Position]}
-  deriving (Eq, Show)
-
-data Piece = Pawn
-  deriving (Eq, Show)
-
-data Game = Game
-  { curSide :: Side
-  , pieces :: [(Piece, Side, Position)]
-  }
-  deriving (Eq, Show)
-
-initialGame :: Game
-initialGame =
-  Game White $
-    [(Pawn, White, Pos 1 c) | c <- [0 .. 7]]
-      <> [(Pawn, Black, Pos 6 c) | c <- [0 .. 7]]
-
-findPieces :: Piece -> Side -> Game -> [(Piece, Side, Position)]
-findPieces piece side Game{pieces} =
-  filter (\(p, s, _) -> p == piece && s == side) pieces
-
-data Side = White | Black
-  deriving (Eq, Show)
-
-flipSide :: Side -> Side
-flipSide White = Black
-flipSide Black = White
-
-data Move = Move Position Position
-  deriving (Eq, Show)
+  any (\p -> isJust $ find (\PieceOnBoard{pos} -> p == pos) pieces) . positions

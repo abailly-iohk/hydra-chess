@@ -9,6 +9,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
 
 module HttpServer where
 
@@ -44,6 +45,7 @@ import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import Data.Time (getCurrentTime)
 import qualified GHC.Clock
 import GHC.Generics (Generic)
+import Game.BlackJack (BlackJack, BlackJackEnd (..))
 import Game.Server (
   FromChain (..),
   HeadId (..),
@@ -64,7 +66,6 @@ import qualified Network.Wai.Handler.Warp as Warp
 import System.Random (StdGen, mkStdGen)
 import System.Random.Stateful (applyAtomicGen, getStdGen, globalStdGen, uniformR)
 import Prelude hiding (head)
-import Game.BlackJack (BlackJack)
 
 data HttpLog
   = HttpServerListening {host :: Text, port :: Int}
@@ -180,7 +181,7 @@ app state req send =
                   plays = possibleActions game
                   openHead =
                     if length (committed head') == length (peers head')
-                    then HeadOpened head <| GameStarted head game plays <| mempty
+                      then HeadOpened head <| GameStarted head game plays <| mempty
                       else mempty
                   newEvents = FundCommitted @BlackJack @MockChain head p (MockCoin $ fromIntegral amount) <| openHead
                   head'' =
@@ -226,7 +227,7 @@ app state req send =
                             case outcome of
                               GameEnds dealerCards payoffs ->
                                 let gains' = applyGains gains peers payoffs
-                                 in ( GameEnded head (dealerCards, payoffs, gains')
+                                 in ( GameEnded head (BlackJackEnd dealerCards payoffs gains')
                                     , Open{peers, gains = gains', outcome, seed = seed'}
                                     )
                               GameContinue game' ->

@@ -34,6 +34,7 @@ library
     BlackJack.Game
     BlackJack.Pretty
 
+    Chess.Contract
     Chess.Game
     Chess.Render
 

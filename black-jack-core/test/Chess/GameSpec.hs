@@ -43,7 +43,7 @@ spec = parallel $ do
 prop_pawn_cannot_move_backwards :: Side -> Property
 prop_pawn_cannot_move_backwards side =
   forAll anyPos $ \pos@(Pos r c) ->
-    let game = Game side [(Pawn, side, pos)]
+    let game = Game side [PieceOnBoard Pawn side pos]
         offset = case side of
           White -> -1
           Black -> 1
@@ -134,7 +134,7 @@ prop_can_move_pawn_one_square_after_start side =
     let offset = case side of
           White -> 1
           Black -> -1
-        game = Game side [(Pawn, side, pos)]
+        game = Game side [PieceOnBoard Pawn side pos]
         move = Move (Pos row col) (Pos (row + offset) col)
      in case apply move game of
           Right game' ->
@@ -153,9 +153,9 @@ prop_pawn_takes_piece_diagonally =
             let game =
                   Game
                     White
-                    [ (Pawn, White, pos)
-                    , (Pawn, Black, targetPos)
-                    , (Pawn, Black, otherPos)
+                    [ PieceOnBoard Pawn White pos
+                    , PieceOnBoard Pawn Black targetPos
+                    , PieceOnBoard Pawn Black otherPos
                     ]
                 move = Move pos targetPos
              in case apply move game of
@@ -178,8 +178,8 @@ prop_pawn_cannot_move_diagonally =
             let game =
                   Game
                     White
-                    [ (Pawn, White, pos)
-                    , (Pawn, Black, otherPos)
+                    [ PieceOnBoard Pawn White pos
+                    , PieceOnBoard Pawn Black otherPos
                     ]
                 move = Move pos targetPos
              in case apply move game of
@@ -200,7 +200,7 @@ prop_cannot_move_a_pawn_where_there_is_a_piece :: Property
 prop_cannot_move_a_pawn_where_there_is_a_piece =
   forAll (anyPawn White initialGame) $ \(Pos row col) ->
     forAll (choose (1, 2)) $ \offset ->
-      let game = Game White [(Pawn, White, Pos (row + 1) col)]
+      let game = Game White [PieceOnBoard Pawn White $ Pos (row + 1) col]
           move = Move (Pos row col) (Pos (row + offset) col)
           result = apply move game
        in case result of
@@ -264,7 +264,7 @@ prop_cannot_move_a_pawn_more_than_2_squares side =
 prop_cannot_move_a_pawn_more_than_1_square_after_it_moved :: Side -> Property
 prop_cannot_move_a_pawn_more_than_1_square_after_it_moved side =
   forAll (anyPos `suchThat` pawnHasMoved side) $ \pos@(Pos row col) ->
-    let game = Game side [(Pawn, side, pos)]
+    let game = Game side [PieceOnBoard Pawn side pos]
         move = Move (Pos row col) (Pos (row + 2) col)
      in case apply move game of
           Right game' ->
@@ -283,7 +283,7 @@ pawnHasMoved side (Pos r _) = case side of
 
 anyPawn :: Side -> Game -> Gen Position
 anyPawn side game =
-  elements ((\(_, _, pos) -> pos) <$> findPieces Pawn side game)
+  elements ((\PieceOnBoard{pos} -> pos) <$> findPieces Pawn side game)
 
 anyPos :: Gen Position
 anyPos =

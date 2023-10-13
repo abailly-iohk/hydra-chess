@@ -10,10 +10,10 @@ An experiment to build a distributed and decentralised Black Jack game on top of
 * [x] Barebones Console based interface
 * [x] Mock server simulating lifecycle on Hydra (for testing purpose)
 * [x] Basic [Plutus]() smart contract (only checks proposed play is legit)
-* [ ] Create Cardano transactions and play over the L1 chain
+* [ ] Create Cardano transactions and play over a Cardano chain
 * [ ] Advanced smart contract: Check play is valid for any given game state
 * [ ] Proper "randomness"
-* [ ] Hydra server (requires implementing multi-head hydra)
+* [ ] Hydra server (requires implementing multi-head hydra?)
 * [ ] Web UI
 
 # Why?
