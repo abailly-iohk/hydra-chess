@@ -96,36 +96,42 @@ apply move@(Move from _) game@(Game curSide _) =
     Just (PieceOnBoard Pawn White _) | curSide == White -> moveWhitePawn move game
     Just (PieceOnBoard Pawn Black _) | curSide == Black -> moveBlackPawn move game
     _ -> Left $ IllegalMove move
+{-# INLINEABLE apply #-}
 
 moveWhitePawn :: Move -> Game -> Either IllegalMove Game
-moveWhitePawn move@(Move from@(Pos row col) to@(Pos row' col')) game
-  | (row' - row) == 1 && abs (col' - col) == 1 =
-      takePiece game from to
-  | game `hasPieceOn` path from to =
-      Left $ IllegalMove move
-  | row >= 2 && row' - row == 1 && col == col' =
-      Right $ movePiece game from to
-  | row == 1 && row' - row <= 2 && row' > row && col == col' =
-      Right $ movePiece game from to
-  | otherwise =
-      Left $ IllegalMove move
+moveWhitePawn move@(Move from@(Pos row col) to@(Pos row' col')) game =
+  if
+      | (row' - row) == 1 && abs (col' - col) == 1 ->
+          takePiece game from to
+      | game `hasPieceOn` path from to ->
+          Left $ IllegalMove move
+      | row >= 2 && row' - row == 1 && col == col' ->
+          Right $ movePiece game from to
+      | row == 1 && row' - row <= 2 && row' > row && col == col' ->
+          Right $ movePiece game from to
+      | otherwise ->
+          Left $ IllegalMove move
+{-# INLINEABLE moveWhitePawn #-}
 
 moveBlackPawn :: Move -> Game -> Either IllegalMove Game
-moveBlackPawn move@(Move from@(Pos row col) to@(Pos row' col')) game
-  | (row' - row) == -1 && abs (col' - col) == 1 =
-      takePiece game from to
-  | game `hasPieceOn` path from to =
-      Left $ IllegalMove move
-  | row <= 5 && row' - row == -1 && col == col' =
-      Right $ movePiece game from to
-  | row == 6 && row' - row >= -2 && row' < row && col == col' =
-      Right $ movePiece game from to
-  | otherwise =
-      Left $ IllegalMove move
+moveBlackPawn move@(Move from@(Pos row col) to@(Pos row' col')) game =
+  if
+      | (row' - row) == -1 && abs (col' - col) == 1 ->
+          takePiece game from to
+      | game `hasPieceOn` path from to ->
+          Left $ IllegalMove move
+      | row <= 5 && row' - row == -1 && col == col' ->
+          Right $ movePiece game from to
+      | row == 6 && row' - row >= -2 && row' < row && col == col' ->
+          Right $ movePiece game from to
+      | otherwise ->
+          Left $ IllegalMove move
+{-# INLINEABLE moveBlackPawn #-}
 
 pieceAt :: Position -> Game -> Maybe PieceOnBoard
 pieceAt position Game{pieces} =
   find (\PieceOnBoard{pos} -> pos == position) pieces
+{-# INLINEABLE pieceAt #-}
 
 movePiece :: Game -> Position -> Position -> Game
 movePiece game@Game{curSide, pieces} from to =
@@ -134,6 +140,7 @@ movePiece game@Game{curSide, pieces} from to =
     newPos = maybe [] (\PieceOnBoard{piece, side} -> [PieceOnBoard{piece, side, pos = to}]) att
    in
     Game (flipSide curSide) $ filter (\PieceOnBoard{pos} -> pos /= from) pieces <> newPos
+{-# INLINEABLE movePiece #-}
 
 takePiece :: Game -> Position -> Position -> Either IllegalMove Game
 takePiece game@Game{curSide, pieces} from to =
@@ -149,6 +156,7 @@ takePiece game@Game{curSide, pieces} from to =
     case newPos of
       Just p -> Right $ Game (flipSide curSide) $ filter (\PieceOnBoard{pos} -> pos /= from && pos /= to) pieces <> [p]
       Nothing -> Left $ IllegalMove (Move from to)
+{-# INLINEABLE takePiece #-}
 
 path :: Position -> Position -> Path
 path (Pos r c) (Pos r' c') =
@@ -156,12 +164,19 @@ path (Pos r c) (Pos r' c') =
       horiz = c' - c
    in Path $
         if
-            | vert == 0 && horiz > 0 -> [Pos r x | x <- [c + 1 .. c']]
-            | vert == 0 && horiz < 0 -> [Pos r x | x <- [c - 1 .. c']]
-            | horiz == 0 && vert < 0 -> [Pos x c | x <- [r - 1 .. r']]
-            | horiz == 0 && vert > 0 -> [Pos x c | x <- [r + 1 .. r']]
-            | otherwise -> []
+            | vert == 0 && horiz > 0 ->
+                [Pos r x | x <- enumFromTo (c + 1) c']
+            | vert == 0 && horiz < 0 ->
+                [Pos r x | x <- enumFromTo (c - 1) c']
+            | horiz == 0 && vert < 0 ->
+                [Pos x c | x <- enumFromTo (r - 1) r']
+            | horiz == 0 && vert > 0 ->
+                [Pos x c | x <- enumFromTo (r + 1) r']
+            | otherwise ->
+                []
+{-# INLINEABLE path #-}
 
 hasPieceOn :: Game -> Path -> Bool
 hasPieceOn Game{pieces} =
   any (\p -> isJust $ find (\PieceOnBoard{pos} -> p == pos) pieces) . positions
+{-# INLINEABLE hasPieceOn #-}

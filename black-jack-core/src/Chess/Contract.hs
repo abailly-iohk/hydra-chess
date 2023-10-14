@@ -43,6 +43,7 @@ type RedeemerType = Move
 validator :: DatumType -> RedeemerType -> ScriptContext -> Bool
 validator game move scriptContext =
   checkGameOutput scriptContext $ apply move game
+{-# INLINEABLE validator #-}
 
 checkGameOutput :: ToData a => ScriptContext -> a -> Bool
 checkGameOutput ctx d =
