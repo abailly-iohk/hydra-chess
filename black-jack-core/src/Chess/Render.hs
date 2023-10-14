@@ -9,18 +9,27 @@ import Chess.Game (
   PieceOnBoard (PieceOnBoard),
   Position (..),
   Side (..),
-  pieceAt,
+  pieceAt, Move (..),
  )
-import Data.Char (intToDigit)
-import Data.Text (Text)
+import Data.Char (intToDigit, chr, ord)
+import Data.Text (Text, pack)
 import qualified Data.Text as Text
 
-render :: Game -> Text
-render game =
-  let allPos = [character (pieceAt (Pos r c) game) | r <- [0 .. 7], c <- [0 .. 7]]
-      raws = splitEvery 8 allPos
-      rows = zipWith (\cs n -> intToDigit n : ' ' : cs) raws [8, 7 .. 1]
-   in Text.unlines $ (Text.pack <$> rows) <> ["  abcdefgh"]
+class Render r where
+  render :: r -> Text
+
+instance Render Position where
+  render (Pos r c) = pack [chr (ord 'a' + fromInteger c), chr (ord '1' + fromInteger r)]
+
+instance Render Move where
+  render (Move f t) = render f <> "-" <> render t
+
+instance Render Game where
+  render game =
+    let allPos = [character (pieceAt (Pos r c) game) | r <- [0 .. 7], c <- [0 .. 7]]
+        raws = reverse $ splitEvery 8 allPos
+        rows = zipWith (\cs n -> intToDigit n : ' ' : cs) raws [8, 7 .. 1]
+     in Text.unlines $ (Text.pack <$> rows) <> ["  abcdefgh"]
 
 splitEvery :: Int -> [Char] -> [String]
 splitEvery _ [] = []

@@ -1,6 +1,8 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
+-- | A very simple console-based interface to play Black-jack.
+-- This module is mainly useful for testing purpose.
 module BlackJack where
 
 import BlackJack.Contract.Game (BlackJack, Card, Outcome (..), Play (Quit), PlayerId, possibleActions)
