@@ -26,6 +26,7 @@ library
   ghc-options:     -Wall -Werror
   exposed-modules:
     Games.Run
+    Games.Run.Cardano
   build-depends:
                   QuickCheck
                 , aeson
@@ -35,6 +36,8 @@ library
                 , black-jack-client
                 , bytestring
                 , containers
+                , directory
+                , filepath
                 , generic-random
                 , http-client
                 , http-conduit
@@ -42,12 +45,13 @@ library
                 , megaparsec
                 , mtl
                 , mtl
+                , process
                 , random
                 , text
                 , websockets
 
-executable games-hydra
-  ghc-options:      -Wall -Werror
+executable hygames
+  ghc-options:      -Wall -Werror -threaded -rtsopts -with-rtsopts=-N
   main-is:          games-hydra.hs
 
   -- Modules included in this executable, other than Main.
