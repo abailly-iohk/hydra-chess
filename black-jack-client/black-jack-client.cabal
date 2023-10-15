@@ -33,6 +33,7 @@ library
     Game.Server.Hydra
 
     Game.BlackJack
+    Game.Chess
   build-depends:
                   QuickCheck
                 , aeson
