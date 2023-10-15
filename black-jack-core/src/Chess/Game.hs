@@ -1,3 +1,6 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -9,6 +12,8 @@ module Chess.Game where
 import PlutusTx.Prelude
 
 import Control.Monad (guard)
+import Data.Aeson (FromJSON, ToJSON)
+import GHC.Generics (Generic)
 import qualified PlutusTx
 import qualified Prelude as Haskell
 
@@ -16,7 +21,7 @@ type Row = Integer
 type Col = Integer
 
 data Position = Pos Row Col
-  deriving (Haskell.Eq, Haskell.Show)
+  deriving (Haskell.Eq, Haskell.Show, Generic, ToJSON, FromJSON)
 
 PlutusTx.unstableMakeIsData ''Position
 
@@ -30,7 +35,8 @@ instance Eq Path where
   Path p == Path p' = p == p'
 
 data Piece = Pawn
-  deriving (Haskell.Eq, Haskell.Show)
+  deriving (Haskell.Eq, Haskell.Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)
 
 PlutusTx.unstableMakeIsData ''Piece
 
@@ -38,7 +44,8 @@ instance Eq Piece where
   Pawn == Pawn = True
 
 data Side = White | Black
-  deriving (Haskell.Eq, Haskell.Show)
+  deriving (Haskell.Eq, Haskell.Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)
 
 PlutusTx.unstableMakeIsData ''Side
 
@@ -52,7 +59,8 @@ flipSide White = Black
 flipSide Black = White
 
 data PieceOnBoard = PieceOnBoard {piece :: Piece, side :: Side, pos :: Position}
-  deriving (Haskell.Eq, Haskell.Show)
+  deriving (Haskell.Eq, Haskell.Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)
 
 PlutusTx.unstableMakeIsData ''PieceOnBoard
 
@@ -63,7 +71,8 @@ data Game = Game
   { curSide :: Side
   , pieces :: [PieceOnBoard]
   }
-  deriving (Haskell.Eq, Haskell.Show)
+  deriving (Haskell.Eq, Haskell.Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)
 
 PlutusTx.unstableMakeIsData ''Game
 
@@ -81,7 +90,7 @@ findPieces piece' side' Game{pieces} =
   filter (\PieceOnBoard{piece, side} -> piece == piece' && side == side') pieces
 
 data Move = Move Position Position
-  deriving (Haskell.Eq, Haskell.Show)
+  deriving (Haskell.Eq, Haskell.Show, Generic, ToJSON, FromJSON)
 
 PlutusTx.unstableMakeIsData ''Move
 
@@ -180,3 +189,13 @@ hasPieceOn :: Game -> Path -> Bool
 hasPieceOn Game{pieces} =
   any (\p -> isJust $ find (\PieceOnBoard{pos} -> p == pos) pieces) . positions
 {-# INLINEABLE hasPieceOn #-}
+
+possibleMoves :: Position -> Game -> [Move]
+possibleMoves pos@(Pos r c) game =
+  let allMoves =
+        [ Move pos (Pos r' c')
+        | r' <- [0 .. 7]
+        , c' <- [0 .. 7]
+        , (r, c) /= (r', c')
+        ]
+   in filter (\move -> isRight $ apply move game) allMoves

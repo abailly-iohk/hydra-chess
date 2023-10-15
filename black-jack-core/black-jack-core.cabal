@@ -97,7 +97,9 @@ test-suite tests
   other-modules:
      BlackJack.GameSpec
      BlackJack.Contract.GameSpec
+
      Chess.GameSpec
+     Chess.GoldenSpec
      Chess.ParseSpec
   main-is:            Spec.hs
   type:               exitcode-stdio-1.0

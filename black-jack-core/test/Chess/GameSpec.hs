@@ -5,7 +5,6 @@ module Chess.GameSpec where
 
 import Chess.Game
 
-import Data.Either (isRight)
 import Data.Function ((&))
 import Test.Hspec (Spec, describe, parallel)
 import Test.Hspec.QuickCheck (prop)
@@ -117,16 +116,6 @@ generateMove pos game =
   case possibleMoves pos game of
     [] -> error $ "no possible moves from " <> show pos <> "in game " <> show game
     other -> elements other
-
-possibleMoves :: Position -> Game -> [Move]
-possibleMoves pos@(Pos r c) game =
-  let allMoves =
-        [ Move pos (Pos r' c')
-        | r' <- [0 .. 7]
-        , c' <- [0 .. 7]
-        , (r, c) /= (r', c')
-        ]
-   in filter (\move -> isRight $ apply move game) allMoves
 
 prop_can_move_pawn_one_square_after_start :: Side -> Property
 prop_can_move_pawn_one_square_after_start side =
