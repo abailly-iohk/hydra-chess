@@ -43,7 +43,7 @@ withHydraNode CardanoNode{nodeSocket} k =
       \_stdin _stdout _stderr processHandle ->
         race
           (checkProcessHasNotDied "hydra-node" processHandle)
-          (k (HydraNode (Host "localhost" 34567)))
+          (k (HydraNode (Host "127.0.0.1" 34567)))
           >>= \case
             Left{} -> error "should never been reached"
             Right a -> pure a
@@ -60,12 +60,15 @@ hydraNodeProcess executableFile nodeSocket = do
   let
     nodeId = "hydra"
     hydraPort :: Int = 5551
+    apiPort :: Int = 34567
     monitoringPort :: Int = 6001
     args =
       [ "--node-id"
       , nodeId
       , "--api-host"
       , "127.0.0.1"
+      , "--api-port"
+      , show apiPort
       , "--host"
       , "0.0.0.0"
       , "--port"

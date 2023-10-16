@@ -1,25 +1,21 @@
-{-# LANGUAGE NumericUnderscores #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Games.Run where
 
-import Control.Monad (forever)
-import Control.Monad.Class.MonadTimer (threadDelay)
+import Game.Client (runClient)
+import Game.Client.Console (mkImpureIO)
+import Game.Server.Hydra (withHydraServer)
 import Games.Run.Cardano (withCardanoNode)
+import Games.Run.Hydra (HydraNode (..), withHydraNode)
 import System.IO (BufferMode (..), hSetBuffering, stdout)
-import Games.Run.Hydra (withHydraNode)
+import Game.BlackJack (BlackJack)
 
 run :: IO ()
 run = do
   hSetBuffering stdout NoBuffering
-  runGame
- where
-  runGame :: IO ()
-  runGame =
-    withCardanoNode $ \cardano ->
-      withHydraNode cardano $ \hydra ->
-        -- server <- ContT $ withHydraServer (hydraHost hydra)
-        -- lift $ runClient @Chess @_ @_ server mkImpureIO
-        forever $ do
-          putStrLn $ "running " <> show hydra
-          threadDelay 1_000_000
+  withCardanoNode $ \cardano ->
+    withHydraNode cardano $ \HydraNode{hydraHost} ->
+      withHydraServer hydraHost $ \server -> do
+        putStrLn "Starting client"
+        runClient @BlackJack @_ @_ server mkImpureIO

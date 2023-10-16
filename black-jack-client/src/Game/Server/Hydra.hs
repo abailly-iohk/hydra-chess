@@ -4,6 +4,7 @@
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -11,37 +12,41 @@
 
 module Game.Server.Hydra where
 
+import Control.Concurrent.Class.MonadSTM (
+  TVar,
+  atomically,
+  modifyTVar',
+  newTVarIO,
+  readTVar,
+  readTVarIO,
+  retry,
+ )
+import Control.Exception (IOException)
+import Control.Monad (forever)
+import Control.Monad.Class.MonadAsync (withAsync)
+import Control.Monad.Class.MonadThrow (MonadCatch (catch), throwIO)
+import Control.Monad.Class.MonadTime (UTCTime)
+import Control.Monad.Class.MonadTimer (threadDelay, timeout)
+import Data.Aeson (FromJSON, ToJSON (..), eitherDecode', encode, object, (.=))
+import Data.Foldable (toList)
+import Data.IORef (atomicWriteIORef, newIORef, readIORef)
+import Data.Sequence (Seq ((:|>)), (|>))
+import qualified Data.Sequence as Seq
+import Data.Text (Text, unpack)
+import GHC.Generics (Generic)
 import Game.Server (
   FromChain (..),
   HeadId,
   Host (..),
   Indexed (..),
   IsChain (..),
-  Server (..), ServerException (..)
+  Server (..),
+  ServerException (..),
  )
-import Control.Concurrent.Class.MonadSTM (
-  TVar,
-  atomically,
-  modifyTVar',
-  newTVarIO,
-  readTVar, retry, readTVarIO,
- )
-import Control.Exception (IOException, catch)
-import Control.Monad (forever)
-import Control.Monad.Class.MonadAsync (withAsync)
-import Control.Monad.Class.MonadThrow (throwIO)
-import Control.Monad.Class.MonadTime (UTCTime)
-import Control.Monad.Class.MonadTimer (timeout)
-import Data.Aeson (FromJSON, ToJSON(..), object, (.=), eitherDecode', encode)
-import Data.Sequence (Seq ((:|>)), (|>))
-import Data.Text (Text, unpack)
-import GHC.Generics (Generic)
+import Game.Server.Mock (MockCoin (..))
 import Network.WebSockets (Connection, runClient)
 import qualified Network.WebSockets as WS
 import Numeric.Natural (Natural)
-import Game.Server.Mock(MockCoin(..))
-import qualified Data.Sequence as Seq
-import Data.Foldable (toList)
 
 -- | The type of backend provide by Hydra
 data Hydra
@@ -103,7 +108,6 @@ withHydraServer host k = do
             }
     pure indexed
 
-
   sendCommit :: Connection -> Integer -> HeadId -> IO ()
   sendCommit = error "not implemented"
 
@@ -118,7 +122,7 @@ data Request = Init
   deriving stock (Eq, Show, Generic)
 
 instance ToJSON Request where
-  toJSON Init = object [ "tag" .= ("Init" :: Text)]
+  toJSON Init = object ["tag" .= ("Init" :: Text)]
 
 data Response = Response
   { output :: !Output
@@ -195,9 +199,20 @@ data Output = HeadIsInitializing {headId :: HeadId, parties :: [Text]}
 --   | RolledBack
 --   deriving (Generic)
 
-withClient :: Host -> (Connection -> IO ()) -> IO ()
-withClient Host{host, port} action = go
+withClient :: Host -> (Connection -> IO a) -> IO a
+withClient Host{host, port} action = do
+  connectedOnce <- newIORef False
+  tryConnect connectedOnce
  where
-  go =
-    runClient (unpack host) (fromIntegral port) "/" action
-      `catch` \(_ :: IOException) -> go
+  tryConnect connectedOnce =
+    doConnect connectedOnce `catch` \(e :: IOException) -> do
+      readIORef connectedOnce >>= \case
+        False -> putStrLn ("Failed to connect, retrying " <> unpack host <> ":" <> show port) >> threadDelay 1_000_000 >> tryConnect connectedOnce
+        True -> throwIO e
+
+  doConnect connectedOnce = runClient (unpack host) port "/" $ \connection -> do
+    atomicWriteIORef connectedOnce True
+    putStrLn $ "Connected to " <> unpack host <> ":" <> show port
+    res <- action connection
+    WS.sendClose connection ("Bye" :: Text)
+    pure res
