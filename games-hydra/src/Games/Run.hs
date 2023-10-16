@@ -7,6 +7,7 @@ import Control.Monad (forever)
 import Control.Monad.Class.MonadTimer (threadDelay)
 import Games.Run.Cardano (withCardanoNode)
 import System.IO (BufferMode (..), hSetBuffering, stdout)
+import Games.Run.Hydra (withHydraNode)
 
 run :: IO ()
 run = do
@@ -16,9 +17,9 @@ run = do
   runGame :: IO ()
   runGame =
     withCardanoNode $ \cardano ->
-      -- hydra <- withHydraNode cardano
-      -- server <- ContT $ withHydraServer (hydraHost hydra)
-      -- lift $ runClient @Chess @_ @_ server mkImpureIO
-      forever $ do
-        putStrLn $ "running " <> show cardano
-        threadDelay 1_000_000
+      withHydraNode cardano $ \hydra ->
+        -- server <- ContT $ withHydraServer (hydraHost hydra)
+        -- lift $ runClient @Chess @_ @_ server mkImpureIO
+        forever $ do
+          putStrLn $ "running " <> show hydra
+          threadDelay 1_000_000

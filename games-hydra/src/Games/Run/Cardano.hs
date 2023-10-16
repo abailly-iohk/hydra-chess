@@ -10,14 +10,14 @@ import Control.Monad (unless, when)
 import Control.Monad.Class.MonadAsync (race)
 import Control.Monad.Class.MonadTimer (threadDelay)
 import qualified Data.ByteString.Lazy as LBS
-import Data.Text (Text)
+import Data.Text (Text, unpack)
 import Data.Void (Void)
 import Network.HTTP.Simple (getResponseBody, httpLBS, parseRequest)
 import System.Directory (XdgDirectory (..), createDirectoryIfMissing, doesFileExist, getXdgDirectory, removeFile, Permissions (..), getPermissions, setPermissions, setOwnerExecutable)
 import System.Exit (ExitCode (..))
-import System.FilePath ((</>))
+import System.FilePath ((</>), (<.>))
 import System.IO (BufferMode (..), Handle, IOMode (..), hSetBuffering, withFile)
-import System.Process (CreateProcess (..), ProcessHandle, StdStream (..), proc, waitForProcess, withCreateProcess)
+import System.Process (CreateProcess (..), ProcessHandle, StdStream (..), proc, waitForProcess, withCreateProcess, terminateProcess)
 import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Compression.GZip as GZip
 
@@ -28,7 +28,7 @@ data CardanoNode = CardanoNode
 
 withCardanoNode :: (CardanoNode -> IO a) -> IO a
 withCardanoNode k =
-  withLogFile $ \out -> do
+  withLogFile "cardano-node" $ \out -> do
     exe <- findCardanoExecutable
     socketPath <- findSocketPath
     process <- cardanoNodeProcess exe
@@ -41,7 +41,7 @@ withCardanoNode k =
               Left{} -> error "should never been reached"
               Right a -> pure a
         )
-          `finally` cleanupSocketFile socketPath
+          `finally` (cleanupSocketFile socketPath >> terminateProcess processHandle)
  where
   waitForNode socketPath cont = do
     let rn = CardanoNode{nodeSocket = socketPath}
@@ -54,7 +54,7 @@ withCardanoNode k =
 
 findSocketPath :: IO FilePath
 findSocketPath = do
-  socketDir <- getXdgDirectory XdgCache "cardano"
+  socketDir <- getXdgDirectory XdgCache "cardano-node"
   createDirectoryIfMissing True socketDir
   pure $ socketDir </> "node.socket"
 
@@ -68,6 +68,14 @@ findCardanoExecutable = do
   permissions <- getPermissions cardanoExecutable
   unless (executable permissions) $ setPermissions cardanoExecutable (setOwnerExecutable True permissions)
   pure cardanoExecutable
+
+findCardanoCliExecutable :: IO FilePath
+findCardanoCliExecutable = do
+  dataDir <- getXdgDirectory XdgData "cardano"
+  let cardanoCliExecutable = dataDir </> "cardano-cli"
+  permissions <- getPermissions cardanoCliExecutable
+  unless (executable permissions) $ setPermissions cardanoCliExecutable (setOwnerExecutable True permissions)
+  pure cardanoCliExecutable
 
 downloadCardanoExecutable :: FilePath -> IO ()
 downloadCardanoExecutable destDir = do
@@ -135,21 +143,21 @@ cardanoNodeProcess exe = do
           , nodeSocket
           ]
 
-findLogFile :: IO FilePath
-findLogFile = do
-  logDir <- getXdgDirectory XdgCache "cardano"
+findLogFile :: String -> IO FilePath
+findLogFile namespace = do
+  logDir <- getXdgDirectory XdgCache namespace
   createDirectoryIfMissing True logDir
-  pure $ logDir </> "cardano-node.log"
+  pure $ logDir </> namespace <.> "log"
 
-withLogFile :: (Handle -> IO a) -> IO a
-withLogFile k = do
-  logFile <- findLogFile
+withLogFile :: String -> (Handle -> IO a) -> IO a
+withLogFile namespace k = do
+  logFile <- findLogFile namespace
   withFile logFile AppendMode (\out -> hSetBuffering out NoBuffering >> k out)
     `onException` putStrLn ("Logfile written to: " <> logFile)
 
 checkProcessHasNotDied :: Text -> ProcessHandle -> IO Void
 checkProcessHasNotDied name processHandle = do
-  logFile <- findLogFile
+  logFile <- findLogFile (unpack name)
   waitForProcess processHandle >>= \case
     ExitSuccess -> error "Process has died"
     ExitFailure exit -> error $ "Process " <> show name <> " exited with failure code: " <> show exit <> ", check logs in " <> logFile

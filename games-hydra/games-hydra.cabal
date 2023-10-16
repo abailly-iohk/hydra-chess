@@ -27,6 +27,7 @@ library
   exposed-modules:
     Games.Run
     Games.Run.Cardano
+    Games.Run.Hydra
   build-depends:
                   QuickCheck
                 , aeson
@@ -35,12 +36,14 @@ library
                 , black-jack-core
                 , black-jack-client
                 , bytestring
+                , cardano-binary
                 , containers
                 , directory
                 , filepath
                 , generic-random
                 , http-client
                 , http-conduit
+                , cardano-crypto-class
                 , io-classes
                 , megaparsec
                 , mtl
