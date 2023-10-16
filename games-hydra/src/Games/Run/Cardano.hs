@@ -13,11 +13,13 @@ import qualified Data.ByteString.Lazy as LBS
 import Data.Text (Text)
 import Data.Void (Void)
 import Network.HTTP.Simple (getResponseBody, httpLBS, parseRequest)
-import System.Directory (XdgDirectory (..), createDirectoryIfMissing, doesFileExist, getXdgDirectory, removeFile)
+import System.Directory (XdgDirectory (..), createDirectoryIfMissing, doesFileExist, getXdgDirectory, removeFile, Permissions (..), getPermissions, setPermissions, setOwnerExecutable)
 import System.Exit (ExitCode (..))
 import System.FilePath ((</>))
 import System.IO (BufferMode (..), Handle, IOMode (..), hSetBuffering, withFile)
 import System.Process (CreateProcess (..), ProcessHandle, StdStream (..), proc, waitForProcess, withCreateProcess)
+import qualified Codec.Archive.Tar as Tar
+import qualified Codec.Compression.GZip as GZip
 
 data CardanoNode = CardanoNode
   { nodeSocket :: FilePath
@@ -60,7 +62,21 @@ findCardanoExecutable :: IO FilePath
 findCardanoExecutable = do
   dataDir <- getXdgDirectory XdgData "cardano"
   createDirectoryIfMissing True dataDir
-  pure $ dataDir </> "cardano-node"
+  let cardanoExecutable = dataDir </> "cardano-node"
+  exists <- doesFileExist cardanoExecutable
+  unless exists $ downloadCardanoExecutable dataDir
+  permissions <- getPermissions cardanoExecutable
+  unless (executable permissions) $ setPermissions cardanoExecutable (setOwnerExecutable True permissions)
+  pure cardanoExecutable
+
+downloadCardanoExecutable :: FilePath -> IO ()
+downloadCardanoExecutable destDir = do
+  let binariesUrl = "https://github.com/input-output-hk/cardano-node/releases/download/8.1.2/cardano-node-8.1.2-macos.tar.gz"
+  request <- parseRequest $ "GET " <> binariesUrl
+  putStr "Downloading cardano executables"
+  httpLBS request >>= Tar.unpack destDir . Tar.read . GZip.decompress . getResponseBody
+  putStrLn " done"
+
 
 -- | Wait for the node socket file to become available.
 waitForSocket :: CardanoNode -> IO ()
@@ -97,7 +113,7 @@ findConfigFiles = do
     request <- parseRequest $ "GET " <> envUrl </> config
     let configFile = configDir </> config
     httpLBS request >>= LBS.writeFile configFile . getResponseBody
-    putStrLn $ "Retrieving " <> configFile
+    putStrLn $ "Retrieved " <> configFile
 
 -- | Generate command-line arguments for launching @cardano-node@.
 cardanoNodeProcess :: FilePath -> IO CreateProcess

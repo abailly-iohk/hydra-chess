@@ -47,8 +47,10 @@ library
                 , mtl
                 , process
                 , random
+                , tar
                 , text
                 , websockets
+                , zlib
 
 executable hygames
   ghc-options:      -Wall -Werror -threaded -rtsopts -with-rtsopts=-N
