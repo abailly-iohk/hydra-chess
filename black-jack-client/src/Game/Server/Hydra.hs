@@ -27,7 +27,17 @@ import Control.Monad.Class.MonadAsync (withAsync)
 import Control.Monad.Class.MonadThrow (MonadCatch (catch), throwIO)
 import Control.Monad.Class.MonadTime (UTCTime)
 import Control.Monad.Class.MonadTimer (threadDelay, timeout)
-import Data.Aeson (FromJSON, ToJSON (..), eitherDecode', encode, object, (.=))
+import Data.Aeson (
+  FromJSON,
+  ToJSON (..),
+  eitherDecode',
+  encode,
+  object,
+  withObject,
+  (.:),
+  (.=),
+ )
+import Data.Aeson.Types (FromJSON (..))
 import Data.Foldable (toList)
 import Data.IORef (atomicWriteIORef, newIORef, readIORef)
 import Data.Sequence (Seq ((:|>)), (|>))
@@ -47,6 +57,7 @@ import Game.Server.Mock (MockCoin (..))
 import Network.WebSockets (Connection, runClient)
 import qualified Network.WebSockets as WS
 import Numeric.Natural (Natural)
+import Prelude hiding (seq)
 
 -- | The type of backend provide by Hydra
 data Hydra
@@ -81,12 +92,13 @@ withHydraServer host k = do
       WS.receiveData cnx >>= \dat ->
         case eitherDecode' dat of
           Left err -> putStrLn (show err <> ", data: " <> show dat)
-          Right (HeadIsInitializing headId parties) -> atomically (modifyTVar' events (|> HeadCreated headId parties))
+          Right (Response{output = HeadIsInitializing headId parties}) ->
+            atomically (modifyTVar' events (|> HeadCreated headId parties))
 
   sendInit :: Connection -> TVar IO (Seq (FromChain g Hydra)) -> [Text] -> IO HeadId
   sendInit cnx events parties = do
     WS.sendTextData cnx (encode Init)
-    timeout 60 (waitForHeadId events parties)
+    timeout 60_000_000 (waitForHeadId events parties)
       >>= maybe (throwIO $ ServerException "Timeout (60s) waiting for head Id") pure
 
   sendClose :: Connection -> HeadId -> IO ()
@@ -130,32 +142,17 @@ data Response = Response
   , timestamp :: !UTCTime
   }
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromJSON)
 
 data Output = HeadIsInitializing {headId :: HeadId, parties :: [Text]}
   deriving stock (Eq, Show, Generic)
   deriving anyclass (FromJSON)
 
---   data TimedServerOutput tx = TimedServerOutput
---   { output :: ServerOutput tx
---   , seq :: Natural
---   , time :: UTCTime
---   }
---   deriving stock (Eq, Show, Generic)
-
--- instance Arbitrary (ServerOutput tx) => Arbitrary (TimedServerOutput tx) where
---   arbitrary = genericArbitrary
-
--- instance (ToJSON tx, IsChainState tx) => ToJSON (TimedServerOutput tx) where
---   toJSON TimedServerOutput{output, seq, time} =
---     case toJSON output of
---       Object o ->
---         Object $ o <> KeyMap.fromList [("seq", toJSON seq), ("timestamp", toJSON time)]
---       _NotAnObject -> error "expected ServerOutput to serialize to an Object"
-
--- instance (FromJSON tx, IsChainState tx) => FromJSON (TimedServerOutput tx) where
---   parseJSON v = flip (withObject "TimedServerOutput") v $ \o ->
---     TimedServerOutput <$> parseJSON v <*> o .: "seq" <*> o .: "timestamp"
+instance FromJSON Response where
+  parseJSON v = flip (withObject "Response") v $ \o -> do
+    output <- parseJSON v
+    seq <- o .: "seq"
+    timestamp <- o .: "timestamp"
+    pure $ Response{output, seq, timestamp}
 
 -- -- | Individual server output messages as produced by the 'Hydra.HeadLogic' in
 -- -- the 'ClientEffect'.
@@ -207,7 +204,10 @@ withClient Host{host, port} action = do
   tryConnect connectedOnce =
     doConnect connectedOnce `catch` \(e :: IOException) -> do
       readIORef connectedOnce >>= \case
-        False -> putStrLn ("Failed to connect, retrying " <> unpack host <> ":" <> show port) >> threadDelay 1_000_000 >> tryConnect connectedOnce
+        False -> do
+          putStrLn ("Failed to connect, retrying " <> unpack host <> ":" <> show port)
+          threadDelay 1_000_000
+          tryConnect connectedOnce
         True -> throwIO e
 
   doConnect connectedOnce = runClient (unpack host) port "/" $ \connection -> do
