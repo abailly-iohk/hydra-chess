@@ -12,7 +12,7 @@ import Cardano.Crypto.DSIGN (Ed25519DSIGN, genKeyDSIGN, seedSizeDSIGN)
 import Cardano.Crypto.Seed (readSeedFromSystemEntropy)
 import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Compression.GZip as GZip
-import Control.Monad (unless)
+import Control.Monad (unless, when)
 import Control.Monad.Class.MonadAsync (race)
 import Data.Aeson (Value (Number), eitherDecode, encode, object, (.=))
 import Data.Aeson.KeyMap (KeyMap, insert, (!?))
@@ -25,11 +25,33 @@ import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Encoding as Lazy
 import Game.Server (Host (..))
-import Games.Run.Cardano (CardanoNode (..), checkProcessHasNotDied, findCardanoCliExecutable, findSocketPath, withLogFile)
+import Games.Run.Cardano (
+  CardanoNode (..),
+  checkProcessHasNotDied,
+  findCardanoCliExecutable,
+  findSocketPath,
+  withLogFile,
+ )
 import Network.HTTP.Simple (getResponseBody, httpLBS, parseRequest)
-import System.Directory (Permissions (..), XdgDirectory (..), createDirectoryIfMissing, doesFileExist, getPermissions, getXdgDirectory, setOwnerExecutable, setPermissions)
+import System.Directory (
+  Permissions (..),
+  XdgDirectory (..),
+  createDirectoryIfMissing,
+  doesFileExist,
+  getPermissions,
+  getXdgDirectory,
+  setOwnerExecutable,
+  setPermissions,
+ )
 import System.FilePath ((</>))
-import System.Process (CreateProcess (..), StdStream (..), proc, readProcess, withCreateProcess)
+import System.Process (
+  CreateProcess (..),
+  StdStream (..),
+  callProcess,
+  proc,
+  readProcess,
+  withCreateProcess,
+ )
 
 data HydraNode = HydraNode {hydraHost :: Host}
   deriving (Show)
@@ -55,6 +77,8 @@ hydraNodeProcess :: FilePath -> FilePath -> IO CreateProcess
 hydraNodeProcess executableFile nodeSocket = do
   hydraSkFile <- findHydraSigningKey
   cardanoSkFile <- findCardanoSigningKey
+  cardanoVkFile <- findCardanoVerificationKey
+  checkFundsAreAvailable cardanoSkFile cardanoVkFile
   protocolParametersFile <- findProtocolParametersFile
   hydraPersistenceDir <- findHydraPersistenceDir
   let
@@ -91,6 +115,29 @@ hydraNodeProcess executableFile nodeSocket = do
       , nodeSocket
       ]
   pure $ proc executableFile args
+
+checkFundsAreAvailable :: FilePath -> FilePath -> IO ()
+checkFundsAreAvailable signingKeyFile verificationKeyFile = do
+  cardanoCliExe <- findCardanoCliExecutable
+  socketPath <- findSocketPath
+  ownAddress <- readProcess cardanoCliExe ["address", "build", "--verification-key-file", verificationKeyFile, "--testnet-magic", "2"] ""
+  output <-
+    drop 2 . lines
+      <$> readProcess
+        cardanoCliExe
+        [ "query"
+        , "utxo"
+        , "--address"
+        , ownAddress
+        , "--testnet-magic"
+        , "2"
+        , "--socket-path"
+        , socketPath
+        ]
+        ""
+  when (length output < 2) $
+    putStrLn $
+      "Hydra needs some funds to fuel the process, please send at least 2 UTxOs with over 10 ADAs each to " <> ownAddress
 
 ed2559seedsize :: Word
 ed2559seedsize = seedSizeDSIGN (Proxy @Ed25519DSIGN)
@@ -132,6 +179,18 @@ findCardanoSigningKey = do
 
     LBS.writeFile cardanoSk (encode jsonEnvelope)
   pure cardanoSk
+
+findCardanoVerificationKey :: IO FilePath
+findCardanoVerificationKey = do
+  configDir <- getXdgDirectory XdgConfig "hydra-node"
+  createDirectoryIfMissing True configDir
+  let cardanoVk = configDir </> "cardano.vk"
+  exists <- doesFileExist cardanoVk
+  unless exists $ do
+    cardanoSk <- findCardanoSigningKey
+    cardanoCliExe <- findCardanoCliExecutable
+    callProcess cardanoCliExe ["key", "verification-key", "--signing-key-file", cardanoSk, "--verification-key-file", cardanoVk]
+  pure cardanoVk
 
 findHydraPersistenceDir :: IO FilePath
 findHydraPersistenceDir = do
