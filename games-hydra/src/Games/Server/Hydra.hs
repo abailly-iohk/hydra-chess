@@ -7,6 +7,7 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
@@ -53,6 +54,7 @@ import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import GHC.Generics (Generic)
 import Game.Server (
   FromChain (..),
+  Game (initialGame),
   HeadId,
   Host (..),
   Indexed (..),
@@ -106,7 +108,7 @@ instance IsChain Hydra where
 
   coinValue (MockCoin c) = c
 
-withHydraServer :: HydraParty -> Host -> (Server g Hydra IO -> IO ()) -> IO ()
+withHydraServer :: forall g. Game g => HydraParty -> Host -> (Server g Hydra IO -> IO ()) -> IO ()
 withHydraServer me host k = do
   events <- newTVarIO mempty
   withClient host $ \cnx ->
@@ -132,6 +134,16 @@ withHydraServer me host k = do
             atomically (modifyTVar' events (|> HeadCreated headId parties))
           Right (Response{output = Committed headId party _utxo}) ->
             atomically (modifyTVar' events (|> FundCommitted headId party 0))
+          Right (Response{output = HeadIsOpen headId utxo}) ->
+            atomically
+              ( modifyTVar'
+                  events
+                  ( \es ->
+                      es
+                        |> HeadOpened headId
+                        |> GameStarted headId (initialGame @g 2) []
+                  )
+              )
 
   sendInit :: Connection -> TVar IO (Seq (FromChain g Hydra)) -> [Text] -> IO HeadId
   sendInit cnx events _unusedParties = do
@@ -200,7 +212,6 @@ withHydraServer me host k = do
       timeout
         60_000_000
         ( waitFor events $ \case
-            -- where does our party identifier comes from
             FundCommitted _ party _ | party == me -> Just ()
             _ -> Nothing
         )
@@ -248,6 +259,7 @@ data Response = Response
 data Output
   = HeadIsInitializing {headId :: HeadId, parties :: [HydraParty]}
   | Committed {headId :: HeadId, party :: HydraParty, utxo :: Value}
+  | HeadIsOpen {headId :: HeadId, utxo :: Value}
   deriving stock (Eq, Show, Generic)
   deriving anyclass (FromJSON)
 

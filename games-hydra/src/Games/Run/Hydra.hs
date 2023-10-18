@@ -125,7 +125,7 @@ hydraNodeProcess executableFile nodeSocket = do
       , "--node-socket"
       , nodeSocket
       ]
-  pure $ (me, proc executableFile args)
+  pure (me, proc executableFile args)
 
 checkFundsAreAvailable :: FilePath -> FilePath -> IO ()
 checkFundsAreAvailable signingKeyFile verificationKeyFile = do
@@ -263,8 +263,7 @@ mkZeroFeeParams = \case
           "executionUnitPrices"
           ( Object $
               insert "pricesMemory" zero $
-                insert "pricesSteps" zero $
-                  obj
+                insert "pricesSteps" zero obj
           )
           m
       _ -> m

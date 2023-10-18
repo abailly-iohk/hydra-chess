@@ -90,6 +90,9 @@ class
   -- | The situation at end of game
   type GameEnd g :: Type
 
+  -- | Starting game state.
+  initialGame :: Int -> GameState g
+
 -- | A handle to some underlying server for a single Head.
 data Server g c m = Server
   { initHead :: [Text] -> m HeadId

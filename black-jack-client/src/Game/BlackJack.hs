@@ -38,3 +38,5 @@ instance Game BlackJack where
   type GameState BlackJack = BlackJack
   type GamePlay BlackJack = Play
   type GameEnd BlackJack = BlackJackEnd
+
+  initialGame = newGame . fromIntegral
