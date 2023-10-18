@@ -12,9 +12,12 @@ import Game.Server.Mock (MockChain)
 import qualified Data.Text as Text
 import Test.Hspec (Spec, it, shouldBe)
 import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck (Small (Small))
+import Test.QuickCheck (Small (Small), (===), tabulate)
 import Test.QuickCheck.Modifiers (Positive (Positive))
-import Data.Aeson (ToJSON(..))
+import Data.Aeson (encode)
+import qualified Data.Text.Lazy.Encoding as LT
+import qualified Data.Text.Lazy as LT
+import Data.Function ((&))
 
 spec :: Spec
 spec = do
@@ -29,8 +32,9 @@ spec = do
   prop "parses 'fundTable' command" $ \(HeadId headId) (Positive (Small n)) ->
     readInput ("fundTable " <> headId <> " " <> Text.pack (show n)) `shouldBe` Right (FundTable headId n)
 
-  prop "parses 'play' command" $ \(HeadId headId) (Positive (n :: Integer)) ->
-    readInput ("play " <> headId <> " " <> Text.pack (show n)) `shouldBe` Right (Play headId (toJSON n))
+  prop "parses 'play' command" $ \(HeadId headId) json ->
+    readInput ("play " <> headId <> " " <> LT.toStrict (LT.decodeUtf8 $ encode json)) === Right (Play headId json)
+     & tabulate "Values" [ head $ words $ show json ]
 
   prop "parses 'newGame' command" $ \(HeadId headId) ->
     readInput ("newGame " <> headId) `shouldBe` Right (NewGame headId)
