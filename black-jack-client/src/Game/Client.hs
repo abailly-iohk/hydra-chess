@@ -52,8 +52,8 @@ handleCommand Server{initHead, commit, play, closeHead, newGame} = \case
     initHead peers <&> (\HeadId{headId} -> Ok . ("head initialised with id " <>) $ headId)
   FundTable tableId amount ->
     commit amount (HeadId tableId) >> pure (Ok "committed")
-  Play tableId n ->
-    play (HeadId tableId) n >> pure (Ok "played")
+  Play tableId p ->
+    play (HeadId tableId) p >> pure (Ok "played")
   NewGame tableId ->
     newGame (HeadId tableId) >> pure (Ok "new game")
   Stop tableId ->

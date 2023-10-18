@@ -9,8 +9,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
+{-# OPTIONS_GHC -Wno-unused-matches #-}
 
-module Game.Server.Hydra where
+module Games.Server.Hydra where
 
 import Control.Concurrent.Class.MonadSTM (
   TVar,
@@ -30,6 +32,7 @@ import Control.Monad.Class.MonadTimer (threadDelay, timeout)
 import Data.Aeson (
   FromJSON,
   ToJSON (..),
+  Value,
   eitherDecode',
   encode,
   object,
@@ -38,11 +41,15 @@ import Data.Aeson (
   (.=),
  )
 import Data.Aeson.Types (FromJSON (..))
+import Data.ByteString (ByteString)
+import qualified Data.ByteString.Base16 as Hex
+import qualified Data.ByteString.Lazy as LBS
 import Data.Foldable (toList)
 import Data.IORef (atomicWriteIORef, newIORef, readIORef)
 import Data.Sequence (Seq ((:|>)), (|>))
 import qualified Data.Sequence as Seq
-import Data.Text (Text, unpack)
+import Data.Text (Text, pack, unpack)
+import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import GHC.Generics (Generic)
 import Game.Server (
   FromChain (..),
@@ -54,24 +61,53 @@ import Game.Server (
   ServerException (..),
  )
 import Game.Server.Mock (MockCoin (..))
+import Games.Run.Cardano (findCardanoCliExecutable, findSocketPath)
+import Games.Run.Hydra (findCardanoSigningKey)
+import Network.HTTP.Client (responseBody)
+import Network.HTTP.Simple (httpLBS, parseRequest, setRequestBodyJSON)
 import Network.WebSockets (Connection, runClient)
 import qualified Network.WebSockets as WS
 import Numeric.Natural (Natural)
+import System.FilePath ((<.>))
+import System.IO (hClose)
+import System.Posix (mkstemp)
+import System.Process (callProcess)
 import Prelude hiding (seq)
 
 -- | The type of backend provide by Hydra
 data Hydra
 
+-- | A hydra party is identified by its hydra verification key
+data HydraParty = HydraParty {vkey :: ByteString}
+  deriving (Eq)
+
+instance Show HydraParty where
+  show HydraParty{vkey} = unpack . decodeUtf8 . Hex.encode $ vkey
+
+instance ToJSON HydraParty where
+  toJSON HydraParty{vkey} =
+    object ["vkey" .= (unpack . decodeUtf8 . Hex.encode $ vkey)]
+
+instance FromJSON HydraParty where
+  parseJSON = withObject "HydraParty" $ \obj ->
+    (obj .: "vkey")
+      >>= ( \case
+              Left err -> fail err
+              Right v -> pure $ HydraParty v
+          )
+        . Hex.decode
+        . encodeUtf8
+
 instance IsChain Hydra where
-  type Party Hydra = Text
+  type Party Hydra = HydraParty
   type Coin Hydra = MockCoin
 
-  partyId = id
+  partyId = pack . show . vkey
 
   coinValue (MockCoin c) = c
 
-withHydraServer :: Host -> (Server g Hydra IO -> IO ()) -> IO ()
-withHydraServer host k = do
+withHydraServer :: HydraParty -> Host -> (Server g Hydra IO -> IO ()) -> IO ()
+withHydraServer me host k = do
   events <- newTVarIO mempty
   withClient host $ \cnx ->
     withAsync (pullEventsFromWs events cnx) $ \_ ->
@@ -79,7 +115,7 @@ withHydraServer host k = do
             Server
               { initHead = sendInit cnx events
               , poll = pollEvents events
-              , commit = sendCommit cnx
+              , commit = sendCommit cnx events host
               , play = playGame cnx
               , newGame = restartGame cnx
               , closeHead = sendClose cnx
@@ -94,12 +130,81 @@ withHydraServer host k = do
           Left err -> putStrLn (show err <> ", data: " <> show dat)
           Right (Response{output = HeadIsInitializing headId parties}) ->
             atomically (modifyTVar' events (|> HeadCreated headId parties))
+          Right (Response{output = Committed headId party _utxo}) ->
+            atomically (modifyTVar' events (|> FundCommitted headId party 0))
 
   sendInit :: Connection -> TVar IO (Seq (FromChain g Hydra)) -> [Text] -> IO HeadId
-  sendInit cnx events parties = do
+  sendInit cnx events _unusedParties = do
     WS.sendTextData cnx (encode Init)
-    timeout 60_000_000 (waitForHeadId events parties)
+    timeout
+      60_000_000
+      ( waitFor events $ \case
+          HeadCreated headId _ -> Just headId
+          _ -> Nothing
+      )
       >>= maybe (throwIO $ ServerException "Timeout (60s) waiting for head Id") pure
+
+  sendCommit :: Connection -> TVar IO (Seq (FromChain g Hydra)) -> Host -> Integer -> HeadId -> IO ()
+  sendCommit cnx events Host{host, port} amount _headId = go
+   where
+    go = do
+      -- commit is now external, so we need to handle query to the server, signature and then
+      -- submission via the cardano-cli
+      request <- parseRequest ("POST http://" <> unpack host <> ":" <> show port <> "/commit")
+      -- where does the committed UTxO comes from?
+      -- can go for empty commit for now
+      response <- httpLBS $ setRequestBodyJSON (object []) request
+
+      txFileRaw <-
+        mkstemp "tx.raw" >>= \(fp, hdl) -> do
+          LBS.hPutStr hdl $ responseBody response
+          hClose hdl
+          pure fp
+
+      putStrLn $ "Wrote raw commit tx file " <> txFileRaw
+
+      cardanoCliExe <- findCardanoCliExecutable
+      skFile <- findCardanoSigningKey
+      socketPath <- findSocketPath
+
+      callProcess
+        cardanoCliExe
+        [ "transaction"
+        , "sign"
+        , "--tx-file"
+        , txFileRaw
+        , "--signing-key-file"
+        , skFile
+        , "--testnet-magic"
+        , "2"
+        , "--out-file"
+        , txFileRaw <.> "signed"
+        ]
+
+      putStrLn $ "Signed commit tx file " <> (txFileRaw <.> "signed")
+
+      callProcess
+        cardanoCliExe
+        [ "transaction"
+        , "submit"
+        , "--tx-file"
+        , txFileRaw <.> "signed"
+        , "--testnet-magic"
+        , "2"
+        , "--socket-path"
+        , socketPath
+        ]
+
+      putStrLn $ "Submitted commit tx file " <> txFileRaw <.> "signed"
+
+      timeout
+        60_000_000
+        ( waitFor events $ \case
+            -- where does our party identifier comes from
+            FundCommitted _ party _ | party == me -> Just ()
+            _ -> Nothing
+        )
+        >>= maybe (putStrLn "Timeout (60s) waiting for commit to appear, please try again") pure
 
   sendClose :: Connection -> HeadId -> IO ()
   sendClose = error "not implemented"
@@ -107,7 +212,7 @@ withHydraServer host k = do
   restartGame :: Connection -> HeadId -> IO ()
   restartGame = error "not implemented"
 
-  playGame :: Connection -> HeadId -> Int -> IO ()
+  playGame :: Connection -> HeadId -> Value -> IO ()
   playGame = error "not implemented"
 
   pollEvents :: TVar IO (Seq (FromChain g Hydra)) -> Integer -> Integer -> IO (Indexed g Hydra)
@@ -120,14 +225,11 @@ withHydraServer host k = do
             }
     pure indexed
 
-  sendCommit :: Connection -> Integer -> HeadId -> IO ()
-  sendCommit = error "not implemented"
-
-waitForHeadId :: TVar IO (Seq (FromChain g Hydra)) -> [Text] -> IO HeadId
-waitForHeadId events parties =
+waitFor :: TVar IO (Seq (FromChain g Hydra)) -> (FromChain g Hydra -> Maybe a) -> IO a
+waitFor events predicate =
   atomically $ do
     readTVar events >>= \case
-      (_ :|> HeadCreated headId ps) | ps == parties -> pure headId
+      (_ :|> event) -> maybe retry pure (predicate event)
       _ -> retry
 
 data Request = Init
@@ -143,7 +245,9 @@ data Response = Response
   }
   deriving stock (Eq, Show, Generic)
 
-data Output = HeadIsInitializing {headId :: HeadId, parties :: [Text]}
+data Output
+  = HeadIsInitializing {headId :: HeadId, parties :: [HydraParty]}
+  | Committed {headId :: HeadId, party :: HydraParty, utxo :: Value}
   deriving stock (Eq, Show, Generic)
   deriving anyclass (FromJSON)
 

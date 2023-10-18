@@ -7,21 +7,29 @@
 
 module Games.Run.Hydra where
 
-import Cardano.Binary (serialize')
-import Cardano.Crypto.DSIGN (Ed25519DSIGN, genKeyDSIGN, seedSizeDSIGN)
+import Cardano.Binary (fromCBOR, serialize')
+import Cardano.Crypto.DSIGN (
+  DSIGNAlgorithm (SignKeyDSIGN),
+  Ed25519DSIGN,
+  VerKeyDSIGN,
+  deriveVerKeyDSIGN,
+  genKeyDSIGN,
+  seedSizeDSIGN,
+ )
 import Cardano.Crypto.Seed (readSeedFromSystemEntropy)
 import qualified Codec.Archive.Tar as Tar
+import Codec.CBOR.Read (deserialiseFromBytes)
 import qualified Codec.Compression.GZip as GZip
 import Control.Monad (unless, when)
 import Control.Monad.Class.MonadAsync (race)
-import Data.Aeson (Value (Number), eitherDecode, encode, object, (.=))
+import Data.Aeson (Value (Number, String), eitherDecode, encode, object, (.=))
 import Data.Aeson.KeyMap (KeyMap, insert, (!?))
 import Data.Aeson.Types (Value (Object))
 import qualified Data.ByteString.Base16 as Hex
 import qualified Data.ByteString.Lazy as LBS
 import Data.Data (Proxy (..))
-import Data.Text (Text)
-import Data.Text.Encoding (decodeUtf8)
+import Data.Text (Text, unpack)
+import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Encoding as Lazy
 import Game.Server (Host (..))
@@ -53,19 +61,22 @@ import System.Process (
   withCreateProcess,
  )
 
-data HydraNode = HydraNode {hydraHost :: Host}
+data HydraNode = HydraNode
+  { hydraParty :: VerKeyDSIGN Ed25519DSIGN
+  , hydraHost :: Host
+  }
   deriving (Show)
 
 withHydraNode :: CardanoNode -> (HydraNode -> IO a) -> IO a
 withHydraNode CardanoNode{nodeSocket} k =
   withLogFile "hydra-node" $ \out -> do
     exe <- findHydraExecutable
-    process <- hydraNodeProcess exe nodeSocket
+    (me, process) <- hydraNodeProcess exe nodeSocket
     withCreateProcess process{std_out = UseHandle out, std_err = UseHandle out} $
       \_stdin _stdout _stderr processHandle ->
         race
           (checkProcessHasNotDied "hydra-node" processHandle)
-          (k (HydraNode (Host "127.0.0.1" 34567)))
+          (k (HydraNode me (Host "127.0.0.1" 34567)))
           >>= \case
             Left{} -> error "should never been reached"
             Right a -> pure a
@@ -73,9 +84,9 @@ withHydraNode CardanoNode{nodeSocket} k =
 hydraScriptsTxId :: String
 hydraScriptsTxId = "4793d318ec98741c0eebff7c62af6389a860c6e51c4fa1961cc5b7eab5a46f58"
 
-hydraNodeProcess :: FilePath -> FilePath -> IO CreateProcess
+hydraNodeProcess :: FilePath -> FilePath -> IO (VerKeyDSIGN Ed25519DSIGN, CreateProcess)
 hydraNodeProcess executableFile nodeSocket = do
-  hydraSkFile <- findHydraSigningKey
+  (me, hydraSkFile) <- findHydraSigningKey
   cardanoSkFile <- findCardanoSigningKey
   cardanoVkFile <- findCardanoVerificationKey
   checkFundsAreAvailable cardanoSkFile cardanoVkFile
@@ -114,7 +125,7 @@ hydraNodeProcess executableFile nodeSocket = do
       , "--node-socket"
       , nodeSocket
       ]
-  pure $ proc executableFile args
+  pure $ (me, proc executableFile args)
 
 checkFundsAreAvailable :: FilePath -> FilePath -> IO ()
 checkFundsAreAvailable signingKeyFile verificationKeyFile = do
@@ -142,24 +153,41 @@ checkFundsAreAvailable signingKeyFile verificationKeyFile = do
 ed2559seedsize :: Word
 ed2559seedsize = seedSizeDSIGN (Proxy @Ed25519DSIGN)
 
-findHydraSigningKey :: IO FilePath
+findHydraSigningKey :: IO (VerKeyDSIGN Ed25519DSIGN, FilePath)
 findHydraSigningKey = do
   configDir <- getXdgDirectory XdgConfig "hydra-node"
   createDirectoryIfMissing True configDir
   let hydraSk = configDir </> "hydra.sk"
   exists <- doesFileExist hydraSk
-  unless exists $ do
-    seed <- readSeedFromSystemEntropy ed2559seedsize
-    let sk = genKeyDSIGN @Ed25519DSIGN seed
-        jsonEnvelope =
-          object
-            [ "type" .= ("HydraSigningKey_ed25519" :: Text)
-            , "description" .= ("" :: Text)
-            , "cborHex" .= decodeUtf8 (Hex.encode (serialize' sk))
-            ]
+  if not exists
+    then do
+      seed <- readSeedFromSystemEntropy ed2559seedsize
+      let sk = genKeyDSIGN @Ed25519DSIGN seed
+          jsonEnvelope =
+            object
+              [ "type" .= ("HydraSigningKey_ed25519" :: Text)
+              , "description" .= ("" :: Text)
+              , "cborHex" .= decodeUtf8 (Hex.encode (serialize' sk))
+              ]
 
-    LBS.writeFile hydraSk (encode jsonEnvelope)
-  pure hydraSk
+      LBS.writeFile hydraSk (encode jsonEnvelope)
+      pure (deriveVerKeyDSIGN sk, hydraSk)
+    else do
+      envelope <- eitherDecode <$> LBS.readFile hydraSk
+      let sk = case envelope of
+            Right (Object val) -> do
+              case val !? "cborHex" of
+                Just (String str) ->
+                  case Hex.decode (encodeUtf8 str) of
+                    Right bs ->
+                      either
+                        (\err -> error $ "Failed to deserialised signing key " <> show bs <> " : " <> show err)
+                        snd
+                        $ deserialiseFromBytes @(SignKeyDSIGN Ed25519DSIGN) fromCBOR (LBS.fromStrict bs)
+                    Left err -> error $ "Failed to deserialised signing key " <> unpack str <> " : " <> err
+                other -> error $ "Failed to deserialised signing key " <> show other
+            other -> error $ "Failed to read Hydra signing key file " <> hydraSk <> ", " <> show other
+      pure (deriveVerKeyDSIGN sk, hydraSk)
 
 findCardanoSigningKey :: IO FilePath
 findCardanoSigningKey = do

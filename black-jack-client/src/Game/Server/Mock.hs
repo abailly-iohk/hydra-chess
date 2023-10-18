@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -10,11 +11,18 @@ module Game.Server.Mock where
 
 import Control.Exception (Exception, throwIO)
 import Control.Monad (when)
-import Data.Aeson (FromJSON, ToJSON)
+import Data.Aeson (FromJSON, ToJSON, Value)
 import Data.Semigroup (Sum (..))
 import Data.Text (Text, pack, unpack)
 import GHC.Generics (Generic)
-import Game.Server (Game, HeadId (HeadId), Host (..), Indexed, IsChain (..), Server (..))
+import Game.Server (
+  Game,
+  HeadId (HeadId),
+  Host (..),
+  Indexed,
+  IsChain (..),
+  Server (..),
+ )
 import Network.HTTP.Simple (
   getResponseBody,
   getResponseStatusCode,
@@ -23,7 +31,7 @@ import Network.HTTP.Simple (
   parseRequest,
   setRequestBodyJSON,
  )
-import Test.QuickCheck (Arbitrary (..), getPositive, listOf, arbitraryPrintableChar)
+import Test.QuickCheck (Arbitrary (..), arbitraryPrintableChar, getPositive, listOf)
 import Test.QuickCheck.Gen (Gen)
 
 withMockServer :: Game g => MockParty -> (Server g MockChain IO -> IO ()) -> IO ()
@@ -79,11 +87,11 @@ sendCommit Host{host, port} myId amount (HeadId headId) = do
   response <- httpLBS request
   when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to commit for peers " <> show myId)
 
-playGame :: Host -> Text -> HeadId -> Int -> IO ()
-playGame Host{host, port} myId (HeadId hid) playIndex = do
-  request <- parseRequest $ "POST http://" <> unpack host <> ":" <> show port <> "/play/" <> unpack hid <> "/" <> unpack myId <> "/" <> show playIndex
-  response <- httpLBS request
-  when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to play " <> show playIndex <> " for player " <> show myId)
+playGame :: Host -> Text -> HeadId -> Value -> IO ()
+playGame Host{host, port} myId (HeadId hid) play = do
+  request <- parseRequest $ "POST http://" <> unpack host <> ":" <> show port <> "/play/" <> unpack hid <> "/" <> unpack myId
+  response <- httpLBS $ setRequestBodyJSON play request
+  when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to play " <> show play <> " for player " <> show myId)
 
 restartGame :: Host -> HeadId -> IO ()
 restartGame Host{host, port} (HeadId hid) = do
@@ -105,7 +113,7 @@ pollEvents Host{host, port} index num = do
 data MockChain = MockChain
 
 newtype MockCoin = MockCoin Integer
-  deriving newtype (Eq, Show, ToJSON, FromJSON)
+  deriving newtype (Eq, Show, Num, ToJSON, FromJSON)
   deriving (Semigroup, Monoid) via Sum Integer
 
 instance Arbitrary MockCoin where

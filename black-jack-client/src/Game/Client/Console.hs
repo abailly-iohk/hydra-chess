@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Game.Client.Console where
 
@@ -12,9 +13,12 @@ import Data.Text (Text, pack)
 import qualified Data.Text.IO as Text
 import Data.Void (Void)
 import System.IO.Error (isEOFError)
-import Text.Megaparsec (Parsec, empty, many, parse, sepBy, try)
+import Text.Megaparsec (Parsec, empty, many, parse, sepBy, try, takeRest)
 import Text.Megaparsec.Char (alphaNumChar, space, space1, string)
 import qualified Text.Megaparsec.Char.Lexer as L
+import Data.Aeson (Value, eitherDecode)
+import Data.Text.Encoding (encodeUtf8)
+import qualified Data.ByteString.Lazy as LBS
 
 type Parser = Parsec Void Text
 
@@ -62,7 +66,13 @@ fundTableParser = do
 playParser :: Parser Command
 playParser = do
   string "play" >> spaceConsumer
-  Play <$> (identifier <* spaceConsumer) <*> L.decimal
+  Play <$> (identifier <* spaceConsumer) <*> parsePlay
+ where
+   parsePlay :: Parser Value
+   parsePlay = takeRest >>= (\case
+     Left err -> fail err
+     Right v -> pure v) . eitherDecode . LBS.fromStrict . encodeUtf8
+
 
 newGameParser :: Parser Command
 newGameParser = do

@@ -14,7 +14,7 @@
 module Game.Server where
 
 import Control.Exception (Exception)
-import Data.Aeson (FromJSON, ToJSON)
+import Data.Aeson (FromJSON, ToJSON, Value)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as Hex
 import Data.Kind (Type)
@@ -101,9 +101,8 @@ data Server g c m = Server
   -- The server is responsible for finding a suitable `Coin` that will fit the
   -- amount funded.
   -- Might throw a `ServerException` if something goes wrong.
-  , play :: HeadId -> Int -> m ()
-  -- ^ When the game is opened, do one play identified by its index in the list
-  -- of `possibleActions`.
+  , play :: HeadId -> Value -> m ()
+  -- ^ When the game is opened, do one play which is game dependent
   -- Might throw a `ServerException` if the play is invalid.
   , newGame :: HeadId -> m ()
   -- ^ When the game has ended, restarts a new one with initial state and possible

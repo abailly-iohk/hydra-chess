@@ -30,7 +30,6 @@ library
     Game.Client.IO
     Game.Server
     Game.Server.Mock
-    Game.Server.Hydra
 
     Game.BlackJack
     Game.Chess

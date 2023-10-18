@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Game.Client.ConsoleSpec where
 
@@ -13,6 +14,7 @@ import Test.Hspec (Spec, it, shouldBe)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (Small (Small))
 import Test.QuickCheck.Modifiers (Positive (Positive))
+import Data.Aeson (ToJSON(..))
 
 spec :: Spec
 spec = do
@@ -27,8 +29,8 @@ spec = do
   prop "parses 'fundTable' command" $ \(HeadId headId) (Positive (Small n)) ->
     readInput ("fundTable " <> headId <> " " <> Text.pack (show n)) `shouldBe` Right (FundTable headId n)
 
-  prop "parses 'play' command" $ \(HeadId headId) (Positive (Small n)) ->
-    readInput ("play " <> headId <> " " <> Text.pack (show n)) `shouldBe` Right (Play headId n)
+  prop "parses 'play' command" $ \(HeadId headId) (Positive (n :: Integer)) ->
+    readInput ("play " <> headId <> " " <> Text.pack (show n)) `shouldBe` Right (Play headId (toJSON n))
 
   prop "parses 'newGame' command" $ \(HeadId headId) ->
     readInput ("newGame " <> headId) `shouldBe` Right (NewGame headId)

@@ -28,6 +28,8 @@ library
     Games.Run
     Games.Run.Cardano
     Games.Run.Hydra
+
+    Games.Server.Hydra
   build-depends:
                   QuickCheck
                 , aeson
@@ -37,6 +39,7 @@ library
                 , black-jack-client
                 , bytestring
                 , cardano-binary
+                , cborg
                 , containers
                 , directory
                 , filepath
@@ -52,6 +55,7 @@ library
                 , random
                 , tar
                 , text
+                , unix
                 , websockets
                 , zlib
 
