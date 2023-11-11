@@ -63,7 +63,7 @@ import Game.Server (
   ServerException (..),
  )
 import Game.Server.Mock (MockCoin (..))
-import Games.Run.Cardano (findCardanoCliExecutable, findSocketPath)
+import Games.Run.Cardano (findCardanoCliExecutable, findSocketPath, Network)
 import Games.Run.Hydra (findCardanoSigningKey)
 import Network.HTTP.Client (responseBody)
 import Network.HTTP.Simple (httpLBS, parseRequest, setRequestBodyJSON)
@@ -108,8 +108,8 @@ instance IsChain Hydra where
 
   coinValue (MockCoin c) = c
 
-withHydraServer :: forall g. Game g => HydraParty -> Host -> (Server g Hydra IO -> IO ()) -> IO ()
-withHydraServer me host k = do
+withHydraServer :: forall g. Game g => Network -> HydraParty -> Host -> (Server g Hydra IO -> IO ()) -> IO ()
+withHydraServer network me host k = do
   events <- newTVarIO mempty
   withClient host $ \cnx ->
     withAsync (pullEventsFromWs events cnx) $ \_ ->
@@ -177,7 +177,7 @@ withHydraServer me host k = do
 
       cardanoCliExe <- findCardanoCliExecutable
       skFile <- findCardanoSigningKey
-      socketPath <- findSocketPath
+      socketPath <- findSocketPath network
 
       callProcess
         cardanoCliExe

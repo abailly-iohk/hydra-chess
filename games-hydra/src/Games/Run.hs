@@ -11,13 +11,19 @@ import Games.Run.Hydra (HydraNode (..), withHydraNode)
 import System.IO (BufferMode (..), hSetBuffering, stdout)
 import Game.Chess (Chess)
 import Cardano.Binary (serialize')
+import Games.Options (Options(..), hydraGamesInfo)
+import Options.Applicative (execParser)
+import Control.Monad (forever)
+import Control.Monad.Class.MonadTimer (threadDelay)
 
 run :: IO ()
 run = do
+  Options{cardanoNetwork} <- execParser hydraGamesInfo
   hSetBuffering stdout NoBuffering
-  withCardanoNode $ \cardano ->
-    withHydraNode cardano $ \HydraNode{hydraParty, hydraHost} -> do
-      let party = HydraParty $ serialize' hydraParty
-      withHydraServer party hydraHost $ \server -> do
-        putStrLn $ "Starting client for " <> show party <> " and host " <> show hydraHost
-        runClient @Chess @_ @_ server mkImpureIO
+  withCardanoNode cardanoNetwork $ \cardano ->
+    forever $ threadDelay 10
+    -- withHydraNode cardano $ \HydraNode{hydraParty, hydraHost} -> do
+    --   let party = HydraParty $ serialize' hydraParty
+    --   withHydraServer party hydraHost $ \server -> do
+    --     putStrLn $ "Starting client for " <> show party <> " and host " <> show hydraHost
+    --     runClient @Chess @_ @_ server mkImpureIO

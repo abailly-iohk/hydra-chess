@@ -25,6 +25,7 @@ library
   hs-source-dirs:  src
   ghc-options:     -Wall -Werror
   exposed-modules:
+    Games.Options
     Games.Run
     Games.Run.Cardano
     Games.Run.Hydra
@@ -51,6 +52,7 @@ library
                 , megaparsec
                 , mtl
                 , mtl
+                , optparse-applicative
                 , process
                 , random
                 , tar
