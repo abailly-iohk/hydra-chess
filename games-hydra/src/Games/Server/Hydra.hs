@@ -217,14 +217,20 @@ withHydraServer me host k = do
         )
         >>= maybe (putStrLn "Timeout (60s) waiting for commit to appear, please try again") pure
 
+  playGame :: Connection -> HeadId -> Value -> IO ()
+  playGame cnx _headId play =
+    -- need to put the play as a redeemer for a transaction that consumes the current
+    -- game state datum attached to game script, which implies this UTxO should exist
+    -- somewhere, which means we need to create it at the opening of the head and /then/
+    -- notify the game has started. Also, the server should maintain some state to retrieve
+    -- the UTxO attached to the game
+    error "not implemented"
+
   sendClose :: Connection -> HeadId -> IO ()
   sendClose = error "not implemented"
 
   restartGame :: Connection -> HeadId -> IO ()
   restartGame = error "not implemented"
-
-  playGame :: Connection -> HeadId -> Value -> IO ()
-  playGame = error "not implemented"
 
   pollEvents :: TVar IO (Seq (FromChain g Hydra)) -> Integer -> Integer -> IO (Indexed g Hydra)
   pollEvents events (fromInteger -> start) (fromInteger -> count) = do

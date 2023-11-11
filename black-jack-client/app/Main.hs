@@ -10,7 +10,6 @@ import Game.BlackJack (BlackJack)
 import Game.Client (runClient)
 import Game.Client.Console (mkImpureIO)
 import Game.Server (Host (..))
-import Game.Server.Hydra (withHydraServer)
 import Game.Server.Mock (MockParty (..), withMockServer)
 import Options.Applicative (
   Parser,
@@ -115,7 +114,7 @@ main = do
   hSetBuffering stdout NoBuffering
   hSetBuffering stderr NoBuffering
   execParser blackJackClientInfo >>= \case
-    HydraOptions{hydraServer} ->
-      withHydraServer hydraServer $ flip (runClient @BlackJack) mkImpureIO
+    HydraOptions{} ->
+      undefined -- withHydraServer hydraServer $ flip (runClient @BlackJack) mkImpureIO
     MockOptions{pid, host} ->
       withMockServer (Party host pid) $ flip (runClient @BlackJack) mkImpureIO
