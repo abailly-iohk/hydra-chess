@@ -35,10 +35,13 @@ import qualified Data.Text.Lazy.Encoding as Lazy
 import Game.Server (Host (..))
 import Games.Run.Cardano (
   CardanoNode (..),
+  Network (..),
   checkProcessHasNotDied,
   findCardanoCliExecutable,
   findSocketPath,
-  withLogFile, Network, networkDir,
+  networkDir,
+  networkMagicArgs,
+  withLogFile,
  )
 import Network.HTTP.Simple (getResponseBody, httpLBS, parseRequest)
 import System.Directory (
@@ -81,70 +84,75 @@ withHydraNode CardanoNode{network, nodeSocket} k =
             Left{} -> error "should never been reached"
             Right a -> pure a
 
-hydraScriptsTxId :: String
-hydraScriptsTxId = "4793d318ec98741c0eebff7c62af6389a860c6e51c4fa1961cc5b7eab5a46f58"
+findHydraScriptsTxId :: Network -> IO String
+findHydraScriptsTxId = \case
+  -- TODO: those should be pulled from some remotely published source
+  Preview -> pure "1e00c627ec4b2ad0b4aa68068d3818ca0e41338c87e5504cda118c4050a98763"
+  Preprod -> pure "f917dcd1fa2653e33d6d0ca5a067468595b546120c3085fab60848c34f92c265"
+  Mainnet -> pure "989e3ab136a2cdd3132a99975e76e02f62bcb03ba64ddbb5d2dfddffca8d390d"
 
 hydraNodeProcess :: Network -> FilePath -> FilePath -> IO (VerKeyDSIGN Ed25519DSIGN, CreateProcess)
 hydraNodeProcess network executableFile nodeSocket = do
-  (me, hydraSkFile) <- findHydraSigningKey
-  cardanoSkFile <- findCardanoSigningKey
-  cardanoVkFile <- findCardanoVerificationKey
+  (me, hydraSkFile) <- findHydraSigningKey network
+  cardanoSkFile <- findCardanoSigningKey network
+  cardanoVkFile <- findCardanoVerificationKey network
   checkFundsAreAvailable network cardanoSkFile cardanoVkFile
   protocolParametersFile <- findProtocolParametersFile network
-  hydraPersistenceDir <- findHydraPersistenceDir
+  hydraPersistenceDir <- findHydraPersistenceDir network
+  hydraScriptsTxId <- findHydraScriptsTxId network
   let
     nodeId = "hydra"
     hydraPort :: Int = 5551
     apiPort :: Int = 34567
     monitoringPort :: Int = 6001
     args =
-      [ "--node-id"
-      , nodeId
-      , "--api-host"
-      , "127.0.0.1"
-      , "--api-port"
-      , show apiPort
-      , "--host"
-      , "0.0.0.0"
-      , "--port"
-      , show hydraPort
-      , "--monitoring-port"
-      , show monitoringPort
-      , "--persistence-dir"
-      , hydraPersistenceDir
-      , "--hydra-signing-key"
-      , hydraSkFile
-      , "--cardano-signing-key"
-      , cardanoSkFile
-      , "--ledger-protocol-parameters"
-      , protocolParametersFile
-      , "--testnet-magic"
-      , "2"
-      , "--hydra-scripts-tx-id"
-      , hydraScriptsTxId
-      , "--node-socket"
-      , nodeSocket
-      ]
+      ( [ "--node-id"
+        , nodeId
+        , "--api-host"
+        , "127.0.0.1"
+        , "--api-port"
+        , show apiPort
+        , "--host"
+        , "0.0.0.0"
+        , "--port"
+        , show hydraPort
+        , "--monitoring-port"
+        , show monitoringPort
+        , "--persistence-dir"
+        , hydraPersistenceDir
+        , "--hydra-signing-key"
+        , hydraSkFile
+        , "--cardano-signing-key"
+        , cardanoSkFile
+        , "--ledger-protocol-parameters"
+        , protocolParametersFile
+        , "--hydra-scripts-tx-id"
+        , hydraScriptsTxId
+        , "--node-socket"
+        , nodeSocket
+        ]
+          <> networkMagicArgs network
+      )
   pure (me, proc executableFile args)
 
-checkFundsAreAvailable :: Network -> FilePath -> FilePath  -> IO ()
+checkFundsAreAvailable :: Network -> FilePath -> FilePath -> IO ()
 checkFundsAreAvailable network signingKeyFile verificationKeyFile = do
   cardanoCliExe <- findCardanoCliExecutable
   socketPath <- findSocketPath network
-  ownAddress <- readProcess cardanoCliExe ["address", "build", "--verification-key-file", verificationKeyFile, "--testnet-magic", "2"] ""
+  ownAddress <- readProcess cardanoCliExe (["address", "build", "--verification-key-file", verificationKeyFile] <> networkMagicArgs network) ""
   output <-
     drop 2 . lines
       <$> readProcess
         cardanoCliExe
-        [ "query"
-        , "utxo"
-        , "--address"
-        , ownAddress
-        , "--testnet-magic"
-        , "2"
-        , "--socket-path"
-        , socketPath
-        ]
+        ( [ "query"
+          , "utxo"
+          , "--address"
+          , ownAddress
+          , "--socket-path"
+          , socketPath
+          ]
+            <> networkMagicArgs network
+        )
         ""
   when (length output < 2) $
     putStrLn $
@@ -153,9 +161,9 @@ checkFundsAreAvailable network signingKeyFile verificationKeyFile = do
 ed2559seedsize :: Word
 ed2559seedsize = seedSizeDSIGN (Proxy @Ed25519DSIGN)
 
-findHydraSigningKey :: IO (VerKeyDSIGN Ed25519DSIGN, FilePath)
-findHydraSigningKey = do
-  configDir <- getXdgDirectory XdgConfig "hydra-node"
+findHydraSigningKey :: Network -> IO (VerKeyDSIGN Ed25519DSIGN, FilePath)
+findHydraSigningKey network = do
+  configDir <- getXdgDirectory XdgConfig ("hydra-node" </> networkDir network)
   createDirectoryIfMissing True configDir
   let hydraSk = configDir </> "hydra.sk"
   exists <- doesFileExist hydraSk
@@ -189,9 +197,9 @@ findHydraSigningKey = do
             other -> error $ "Failed to read Hydra signing key file " <> hydraSk <> ", " <> show other
       pure (deriveVerKeyDSIGN sk, hydraSk)
 
-findCardanoSigningKey :: IO FilePath
-findCardanoSigningKey = do
-  configDir <- getXdgDirectory XdgConfig "hydra-node"
+findCardanoSigningKey :: Network -> IO FilePath
+findCardanoSigningKey network = do
+  configDir <- getXdgDirectory XdgConfig ("hydra-node" </> networkDir network)
   createDirectoryIfMissing True configDir
   let cardanoSk = configDir </> "cardano.sk"
   exists <- doesFileExist cardanoSk
@@ -208,21 +216,21 @@ findCardanoSigningKey = do
     LBS.writeFile cardanoSk (encode jsonEnvelope)
   pure cardanoSk
 
-findCardanoVerificationKey :: IO FilePath
-findCardanoVerificationKey = do
-  configDir <- getXdgDirectory XdgConfig "hydra-node"
+findCardanoVerificationKey :: Network -> IO FilePath
+findCardanoVerificationKey network = do
+  configDir <- getXdgDirectory XdgConfig ("hydra-node" </> networkDir network)
   createDirectoryIfMissing True configDir
   let cardanoVk = configDir </> "cardano.vk"
   exists <- doesFileExist cardanoVk
   unless exists $ do
-    cardanoSk <- findCardanoSigningKey
+    cardanoSk <- findCardanoSigningKey network
     cardanoCliExe <- findCardanoCliExecutable
     callProcess cardanoCliExe ["key", "verification-key", "--signing-key-file", cardanoSk, "--verification-key-file", cardanoVk]
   pure cardanoVk
 
-findHydraPersistenceDir :: IO FilePath
-findHydraPersistenceDir = do
-  persistenceDir <- getXdgDirectory XdgCache "hydra-node"
+findHydraPersistenceDir :: Network -> IO FilePath
+findHydraPersistenceDir network = do
+  persistenceDir <- getXdgDirectory XdgCache ("hydra-node" </> networkDir network)
   createDirectoryIfMissing True persistenceDir
   pure persistenceDir
 
@@ -237,7 +245,7 @@ findProtocolParametersFile network = do
     socketPath <- findSocketPath network
     out <-
       eitherDecode . Lazy.encodeUtf8 . LT.pack
-        <$> readProcess cardanoCliExe ["query", "protocol-parameters", "--testnet-magic", "2", "--socket-path", socketPath] ""
+        <$> readProcess cardanoCliExe (["query", "protocol-parameters", "--socket-path", socketPath] <> networkMagicArgs network) ""
     either
       (\err -> error $ "Failed to extract protocol parameters: " <> show err)
       (LBS.writeFile hydraSk . encode)
@@ -281,6 +289,7 @@ findHydraExecutable = do
 
 downloadHydraExecutable :: FilePath -> IO ()
 downloadHydraExecutable destDir = do
+  -- TODO: generalise URL when binaries are published
   let binariesUrl = "https://github.com/input-output-hk/hydra/releases/download/0.12.0/tutorial-binaries-aarch64-darwin.tar.gz"
   request <- parseRequest $ "GET " <> binariesUrl
   putStr "Downloading hydra executables"

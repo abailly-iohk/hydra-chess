@@ -176,7 +176,7 @@ withHydraServer network me host k = do
       putStrLn $ "Wrote raw commit tx file " <> txFileRaw
 
       cardanoCliExe <- findCardanoCliExecutable
-      skFile <- findCardanoSigningKey
+      skFile <- findCardanoSigningKey network
       socketPath <- findSocketPath network
 
       callProcess

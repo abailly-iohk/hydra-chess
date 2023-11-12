@@ -9,11 +9,15 @@ module Games.Run.Cardano where
 import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Compression.GZip as GZip
 import Control.Exception (finally, onException)
-import Control.Monad (unless, when)
+import Control.Monad (unless, when, (>=>))
 import Control.Monad.Class.MonadAsync (race)
 import Control.Monad.Class.MonadTimer (threadDelay)
+import Data.Aeson (Value (..), eitherDecode, encode)
+import Data.Aeson.KeyMap ((!?))
 import qualified Data.ByteString.Lazy as LBS
 import Data.Text (Text, unpack)
+import qualified Data.Text.Lazy as LT
+import qualified Data.Text.Lazy.Encoding as Lazy
 import Data.Void (Void)
 import Network.HTTP.Simple (getResponseBody, httpLBS, parseRequest)
 import System.Directory (
@@ -30,7 +34,7 @@ import System.Directory (
 import System.Exit (ExitCode (..))
 import System.FilePath ((<.>), (</>))
 import System.IO (BufferMode (..), Handle, IOMode (..), hSetBuffering, withFile)
-import System.Process (CreateProcess (..), ProcessHandle, StdStream (..), proc, terminateProcess, waitForProcess, withCreateProcess)
+import System.Process (CreateProcess (..), ProcessHandle, StdStream (..), proc, readProcess, terminateProcess, waitForProcess, withCreateProcess)
 
 data CardanoNode = CardanoNode
   { nodeSocket :: FilePath
@@ -43,7 +47,7 @@ data Network = Preview | Preprod | Mainnet
 
 withCardanoNode :: Network -> (CardanoNode -> IO a) -> IO a
 withCardanoNode network k =
-  withLogFile ("cardano-node" </> networkDir network)  $ \out -> do
+  withLogFile ("cardano-node" </> networkDir network) $ \out -> do
     exe <- findCardanoExecutable
     socketPath <- findSocketPath network
     process <- cardanoNodeProcess exe network
@@ -61,6 +65,7 @@ withCardanoNode network k =
   waitForNode socketPath cont = do
     let rn = CardanoNode{nodeSocket = socketPath, network}
     waitForSocket rn
+    waitForFullSync rn
     cont rn
 
   cleanupSocketFile socketPath = do
@@ -105,9 +110,35 @@ waitForSocket :: CardanoNode -> IO ()
 waitForSocket node@CardanoNode{nodeSocket} = do
   exists <- doesFileExist nodeSocket
   unless exists $ do
-    putStrLn "Cardano node syncing"
+    putStrLn "Cardano node launching"
     threadDelay 1_000_000
     waitForSocket node
+
+-- | Wait for the node to be fully synchronized.
+waitForFullSync :: CardanoNode -> IO ()
+waitForFullSync node = do
+  tip <- queryPercentSync node
+  unless (tip == 100.0) $ do
+    putStrLn $ "Cardano node syncing: " <> show tip <> "%"
+    threadDelay 10_000_000
+    waitForFullSync node
+
+queryPercentSync :: CardanoNode -> IO Double
+queryPercentSync CardanoNode{network} = do
+  cardanoCliExe <- findCardanoCliExecutable
+  socketPath <- findSocketPath network
+  out <-
+    (eitherDecode >=> extractSyncPercent) . Lazy.encodeUtf8 . LT.pack
+      <$> readProcess cardanoCliExe (["query", "tip", "--socket-path", socketPath] <> networkMagicArgs network) ""
+  either error pure out
+
+extractSyncPercent :: Value -> Either String Double
+extractSyncPercent = \case
+  Object obj ->
+    case obj !? "syncProgress" of
+      Just (String txt) -> pure $ (read $ unpack txt)
+      _ -> Left "Did not find 'syncProgress' field"
+  v -> Left $ "query returned something odd: " <> LT.unpack (Lazy.decodeUtf8 $ encode v)
 
 findConfigFiles :: Network -> IO (FilePath, FilePath)
 findConfigFiles network = do
@@ -118,7 +149,7 @@ findConfigFiles network = do
       nodeAlonzoGenesis = "alonzo-genesis.json"
       nodeConwayGenesis = "conway-genesis.json"
       envUrl = "https://book.world.dev.cardano.org/environments" </> networkDir network
-  configDir <- getXdgDirectory XdgConfig ("cardano" </>  networkDir network)
+  configDir <- getXdgDirectory XdgConfig ("cardano" </> networkDir network)
   createDirectoryIfMissing True configDir
   mapM_
     (retrieveConfigFile envUrl configDir)
@@ -162,6 +193,12 @@ networkDir = \case
   Preview -> "preview"
   Preprod -> "preprod"
   Mainnet -> "mainnet"
+
+networkMagicArgs :: Network -> [String]
+networkMagicArgs = \case
+  Preview -> ["--testnet-magic", "2"]
+  Preprod -> ["--testnet-magic", "1"]
+  Mainnet -> ["--mainnet"]
 
 findLogFile :: String -> IO FilePath
 findLogFile namespace = do
