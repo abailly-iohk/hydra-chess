@@ -21,9 +21,9 @@ run = do
   Options{cardanoNetwork} <- execParser hydraGamesInfo
   hSetBuffering stdout NoBuffering
   withCardanoNode cardanoNetwork $ \cardano ->
-    forever $ threadDelay 10
-    -- withHydraNode cardano $ \HydraNode{hydraParty, hydraHost} -> do
-    --   let party = HydraParty $ serialize' hydraParty
+    withHydraNode cardano $ \HydraNode{hydraParty, hydraHost} -> do
+      let party = HydraParty $ serialize' hydraParty
+      forever $ threadDelay 10
     --   withHydraServer party hydraHost $ \server -> do
     --     putStrLn $ "Starting client for " <> show party <> " and host " <> show hydraHost
     --     runClient @Chess @_ @_ server mkImpureIO

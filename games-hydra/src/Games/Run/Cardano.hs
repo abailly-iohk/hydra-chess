@@ -8,7 +8,7 @@ module Games.Run.Cardano where
 
 import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Compression.GZip as GZip
-import Control.Exception (finally, onException)
+import Control.Exception (finally)
 import Control.Monad (unless, when, (>=>))
 import Control.Monad.Class.MonadAsync (race)
 import Control.Monad.Class.MonadTimer (threadDelay)
@@ -32,7 +32,7 @@ import System.Directory (
   setPermissions,
  )
 import System.Exit (ExitCode (..))
-import System.FilePath ((<.>), (</>))
+import System.FilePath ((</>))
 import System.IO (BufferMode (..), Handle, IOMode (..), hSetBuffering, withFile)
 import System.Process (CreateProcess (..), ProcessHandle, StdStream (..), proc, readProcess, terminateProcess, waitForProcess, withCreateProcess)
 
@@ -54,7 +54,7 @@ withCardanoNode network k =
     withCreateProcess process{std_out = UseHandle out, std_err = UseHandle out} $
       \_stdin _stdout _stderr processHandle ->
         ( race
-            (checkProcessHasNotDied "cardano-node" processHandle)
+            (checkProcessHasNotDied network "cardano-node" processHandle)
             (waitForNode socketPath k)
             >>= \case
               Left{} -> error "should never been reached"
@@ -200,21 +200,21 @@ networkMagicArgs = \case
   Preprod -> ["--testnet-magic", "1"]
   Mainnet -> ["--mainnet"]
 
+withLogFile :: String -> (Handle -> IO a) -> IO a
+withLogFile namespace k = do
+  logFile <- findLogFile namespace
+  putStrLn ("Logfile written to: " <> logFile)
+  withFile logFile AppendMode (\out -> hSetBuffering out NoBuffering >> k out)
+
 findLogFile :: String -> IO FilePath
 findLogFile namespace = do
   logDir <- getXdgDirectory XdgCache namespace
   createDirectoryIfMissing True logDir
-  pure $ logDir </> "cardano-node.log"
+  pure $ logDir </> "node.log"
 
-withLogFile :: String -> (Handle -> IO a) -> IO a
-withLogFile namespace k = do
-  logFile <- findLogFile namespace
-  withFile logFile AppendMode (\out -> hSetBuffering out NoBuffering >> k out)
-    `onException` putStrLn ("Logfile written to: " <> logFile)
-
-checkProcessHasNotDied :: Text -> ProcessHandle -> IO Void
-checkProcessHasNotDied name processHandle = do
-  logFile <- findLogFile (unpack name)
+checkProcessHasNotDied :: Network -> String -> ProcessHandle -> IO Void
+checkProcessHasNotDied network name processHandle = do
+  logFile <- findLogFile (name </> networkDir network)
   waitForProcess processHandle >>= \case
     ExitSuccess -> error "Process has died"
     ExitFailure exit -> error $ "Process " <> show name <> " exited with failure code: " <> show exit <> ", check logs in " <> logFile

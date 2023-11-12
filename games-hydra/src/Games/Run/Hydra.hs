@@ -72,13 +72,13 @@ data HydraNode = HydraNode
 
 withHydraNode :: CardanoNode -> (HydraNode -> IO a) -> IO a
 withHydraNode CardanoNode{network, nodeSocket} k =
-  withLogFile "hydra-node" $ \out -> do
+  withLogFile ("hydra-node" </> networkDir network) $ \out -> do
     exe <- findHydraExecutable
     (me, process) <- hydraNodeProcess network exe nodeSocket
     withCreateProcess process{std_out = UseHandle out, std_err = UseHandle out} $
       \_stdin _stdout _stderr processHandle ->
         race
-          (checkProcessHasNotDied "hydra-node" processHandle)
+          (checkProcessHasNotDied network "hydra-node" processHandle)
           (k (HydraNode me (Host "127.0.0.1" 34567)))
           >>= \case
             Left{} -> error "should never been reached"
