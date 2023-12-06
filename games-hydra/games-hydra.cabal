@@ -59,6 +59,7 @@ library
                 , text
                 , unix
                 , websockets
+                , zip-archive
                 , zlib
 
 executable hygames

@@ -17,9 +17,8 @@ import Cardano.Crypto.DSIGN (
   seedSizeDSIGN,
  )
 import Cardano.Crypto.Seed (readSeedFromSystemEntropy)
-import qualified Codec.Archive.Tar as Tar
+import qualified Codec.Archive.Zip as Zip
 import Codec.CBOR.Read (deserialiseFromBytes)
-import qualified Codec.Compression.GZip as GZip
 import Control.Monad (unless, when)
 import Control.Monad.Class.MonadAsync (race)
 import Data.Aeson (Value (Number, String), eitherDecode, encode, object, (.=))
@@ -87,9 +86,10 @@ withHydraNode CardanoNode{network, nodeSocket} k =
 findHydraScriptsTxId :: Network -> IO String
 findHydraScriptsTxId = \case
   -- TODO: those should be pulled from some remotely published source
-  Preview -> pure "1e00c627ec4b2ad0b4aa68068d3818ca0e41338c87e5504cda118c4050a98763"
-  Preprod -> pure "f917dcd1fa2653e33d6d0ca5a067468595b546120c3085fab60848c34f92c265"
-  Mainnet -> pure "989e3ab136a2cdd3132a99975e76e02f62bcb03ba64ddbb5d2dfddffca8d390d"
+  -- FIXME: This is actually tied to the version
+  Preview -> pure "64deee72cd424d957ea0fddf71508429ecb65fea83a041fe9b708fc2ca973a8e"
+  Preprod -> pure "d8ba8c488f52228b200df48fe28305bc311d0507da2c2420b10835bf00d21948"
+  Mainnet -> pure "3ac58d3f9f35d8f2cb38d39639232c10cfe0b986728f672d26ffced944d74560"
 
 hydraNodeProcess :: Network -> FilePath -> FilePath -> IO (VerKeyDSIGN Ed25519DSIGN, CreateProcess)
 hydraNodeProcess network executableFile nodeSocket = do
@@ -290,8 +290,8 @@ findHydraExecutable = do
 downloadHydraExecutable :: FilePath -> IO ()
 downloadHydraExecutable destDir = do
   -- TODO: generalise URL when binaries are published
-  let binariesUrl = "https://github.com/input-output-hk/hydra/releases/download/0.12.0/tutorial-binaries-aarch64-darwin.tar.gz"
+  let binariesUrl = "https://github.com/input-output-hk/hydra/releases/download/0.14.0/hydra-aarch64-darwin-0.14.0.zip"
   request <- parseRequest $ "GET " <> binariesUrl
   putStr "Downloading hydra executables"
-  httpLBS request >>= Tar.unpack destDir . Tar.read . GZip.decompress . getResponseBody
+  httpLBS request >>= Zip.extractFilesFromArchive [Zip.OptDestination destDir]  . Zip.toArchive . getResponseBody
   putStrLn " done"
