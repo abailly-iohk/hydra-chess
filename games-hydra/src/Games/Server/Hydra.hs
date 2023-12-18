@@ -144,17 +144,18 @@ withHydraServer network me host k = do
                         |> GameStarted headId (initialGame @g 2) []
                   )
               )
+          Right (Response{ output = Greetings{}}) -> pure ()
 
   sendInit :: Connection -> TVar IO (Seq (FromChain g Hydra)) -> [Text] -> IO HeadId
   sendInit cnx events _unusedParties = do
     WS.sendTextData cnx (encode Init)
     timeout
-      60_000_000
+      600_000_000
       ( waitFor events $ \case
           HeadCreated headId _ -> Just headId
           _ -> Nothing
       )
-      >>= maybe (throwIO $ ServerException "Timeout (60s) waiting for head Id") pure
+      >>= maybe (throwIO $ ServerException "Timeout (10m) waiting for head Id") pure
 
   sendCommit :: Connection -> TVar IO (Seq (FromChain g Hydra)) -> Host -> Integer -> HeadId -> IO ()
   sendCommit cnx events Host{host, port} amount _headId = go
@@ -266,6 +267,7 @@ data Output
   = HeadIsInitializing {headId :: HeadId, parties :: [HydraParty]}
   | Committed {headId :: HeadId, party :: HydraParty, utxo :: Value}
   | HeadIsOpen {headId :: HeadId, utxo :: Value}
+  | Greetings {me :: HydraParty}
   deriving stock (Eq, Show, Generic)
   deriving anyclass (FromJSON)
 

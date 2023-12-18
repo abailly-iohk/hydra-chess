@@ -23,7 +23,6 @@ run = do
   withCardanoNode cardanoNetwork $ \cardano ->
     withHydraNode cardano $ \HydraNode{hydraParty, hydraHost} -> do
       let party = HydraParty $ serialize' hydraParty
-      forever $ threadDelay 10
-    --   withHydraServer party hydraHost $ \server -> do
-    --     putStrLn $ "Starting client for " <> show party <> " and host " <> show hydraHost
-    --     runClient @Chess @_ @_ server mkImpureIO
+      withHydraServer cardanoNetwork party hydraHost $ \server -> do
+        putStrLn $ "Starting client for " <> show party <> " and host " <> show hydraHost
+        runClient @Chess @_ @_ server mkImpureIO
