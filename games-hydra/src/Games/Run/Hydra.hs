@@ -4,6 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-unused-matches #-}
+{-# LANGUAGE NumericUnderscores #-}
 
 module Games.Run.Hydra where
 
@@ -62,6 +63,7 @@ import System.Process (
   readProcess,
   withCreateProcess,
  )
+import Control.Monad.Class.MonadTimer (threadDelay)
 
 data HydraNode = HydraNode
   { hydraParty :: VerKeyDSIGN Ed25519DSIGN
@@ -78,7 +80,9 @@ withHydraNode CardanoNode{network, nodeSocket} k =
       \_stdin _stdout _stderr processHandle ->
         race
           (checkProcessHasNotDied network "hydra-node" processHandle)
-          (k (HydraNode me (Host "127.0.0.1" 34567)))
+          (do
+              putStrLn "Hydra node started"
+              k (HydraNode me (Host "127.0.0.1" 34567)))
           >>= \case
             Left{} -> error "should never been reached"
             Right a -> pure a
@@ -154,9 +158,11 @@ checkFundsAreAvailable network signingKeyFile verificationKeyFile = do
             <> networkMagicArgs network
         )
         ""
-  when (length output < 2) $
+  when (length output < 2) $ do
     putStrLn $
       "Hydra needs some funds to fuel the process, please send at least 2 UTxOs with over 10 ADAs each to " <> ownAddress
+    threadDelay 60_000_000
+    checkFundsAreAvailable network signingKeyFile verificationKeyFile
 
 ed2559seedsize :: Word
 ed2559seedsize = seedSizeDSIGN (Proxy @Ed25519DSIGN)
