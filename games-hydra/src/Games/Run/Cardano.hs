@@ -34,7 +34,7 @@ import System.Directory (
 import System.Exit (ExitCode (..))
 import System.FilePath ((</>))
 import System.IO (BufferMode (..), Handle, IOMode (..), hSetBuffering, withFile)
-import System.Process (CreateProcess (..), ProcessHandle, StdStream (..), proc, readProcess, terminateProcess, waitForProcess, withCreateProcess)
+import System.Process (CreateProcess (..), ProcessHandle, StdStream (..), proc, readCreateProcess, readProcess, terminateProcess, waitForProcess, withCreateProcess)
 
 data CardanoNode = CardanoNode
   { nodeSocket :: FilePath
@@ -45,10 +45,15 @@ data CardanoNode = CardanoNode
 data Network = Preview | Preprod | Mainnet
   deriving stock (Eq, Show, Read)
 
+cardanoNodeVersion :: Network -> String
+cardanoNodeVersion Preview = "8.7.1"
+cardanoNodeVersion Preprod = "8.7.1"
+cardanoNodeVersion Mainnet = "8.7.1"
+
 withCardanoNode :: Network -> (CardanoNode -> IO a) -> IO a
 withCardanoNode network k =
   withLogFile ("cardano-node" </> networkDir network) $ \out -> do
-    exe <- findCardanoExecutable
+    exe <- findCardanoExecutable (cardanoNodeVersion network)
     socketPath <- findSocketPath network
     process <- cardanoNodeProcess exe network
     withCreateProcess process{std_out = UseHandle out, std_err = UseHandle out} $
@@ -78,16 +83,25 @@ findSocketPath network = do
   createDirectoryIfMissing True socketDir
   pure $ socketDir </> "node.socket"
 
-findCardanoExecutable :: IO FilePath
-findCardanoExecutable = do
+findCardanoExecutable :: String -> IO FilePath
+findCardanoExecutable version = do
   dataDir <- getXdgDirectory XdgData "cardano"
   createDirectoryIfMissing True dataDir
   let cardanoExecutable = dataDir </> "cardano-node"
   exists <- doesFileExist cardanoExecutable
-  unless exists $ downloadCardanoExecutable dataDir
-  permissions <- getPermissions cardanoExecutable
-  unless (executable permissions) $ setPermissions cardanoExecutable (setOwnerExecutable True permissions)
+  hasRightVersion <-
+    if exists
+      then (== version) <$> getVersion cardanoExecutable
+      else pure True
+  when (not exists || not hasRightVersion) $ do
+    downloadCardanoExecutable version dataDir
+    permissions <- getPermissions cardanoExecutable
+    unless (executable permissions) $ setPermissions cardanoExecutable (setOwnerExecutable True permissions)
   pure cardanoExecutable
+
+getVersion :: FilePath -> IO String
+getVersion exe =
+  readProcess exe ["--version"] "" >>= pure . takeWhile (/= ' ') . drop 13
 
 findCardanoCliExecutable :: IO FilePath
 findCardanoCliExecutable = do
@@ -97,11 +111,16 @@ findCardanoCliExecutable = do
   unless (executable permissions) $ setPermissions cardanoCliExecutable (setOwnerExecutable True permissions)
   pure cardanoCliExecutable
 
-downloadCardanoExecutable :: FilePath -> IO ()
-downloadCardanoExecutable destDir = do
-  let binariesUrl = "https://github.com/input-output-hk/cardano-node/releases/download/8.1.2/cardano-node-8.1.2-macos.tar.gz"
+downloadCardanoExecutable :: String -> FilePath -> IO ()
+downloadCardanoExecutable version destDir = do
+  let binariesUrl =
+        "https://github.com/intersectMBO/cardano-node/releases/download/"
+          <> version <> "-pre"
+          <> "/cardano-node-"
+          <> version
+          <> "-macos.tar.gz"
   request <- parseRequest $ "GET " <> binariesUrl
-  putStr "Downloading cardano executables"
+  putStr $ "Downloading cardano executables from " <> binariesUrl
   httpLBS request >>= Tar.unpack destDir . Tar.read . GZip.decompress . getResponseBody
   putStrLn " done"
 
