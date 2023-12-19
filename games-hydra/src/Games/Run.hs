@@ -1,28 +1,37 @@
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Games.Run where
 
-import Game.Client (runClient)
-import Game.Client.Console (mkImpureIO)
-import Games.Server.Hydra (withHydraServer, HydraParty (..))
-import Games.Run.Cardano (withCardanoNode)
-import Games.Run.Hydra (HydraNode (..), withHydraNode)
-import System.IO (BufferMode (..), hSetBuffering, stdout)
-import Game.Chess (Chess)
 import Cardano.Binary (serialize')
-import Games.Options (Options(..), hydraGamesInfo)
-import Options.Applicative (execParser)
 import Control.Monad (forever)
 import Control.Monad.Class.MonadTimer (threadDelay)
+import Game.Chess (Chess)
+import Game.Client (runClient)
+import Game.Client.Console (mkImpureIO)
+import Games.Options (Options (..), hydraGamesInfo)
+import Games.Run.Cardano (CardanoNode (..), withCardanoNode)
+import Games.Run.Hydra (HydraNode (..), withHydraNode)
+import Games.Server.Hydra (HydraParty (..), withHydraServer)
+import Options.Applicative (execParser)
+import System.IO (BufferMode (..), hSetBuffering, stdout)
 
 run :: IO ()
 run = do
-  Options{cardanoNetwork} <- execParser hydraGamesInfo
+  Options{cardanoNetwork, onlyCardano} <- execParser hydraGamesInfo
   hSetBuffering stdout NoBuffering
   withCardanoNode cardanoNetwork $ \cardano ->
+    if onlyCardano
+      then waitForever
+      else startServers cardano
+ where
+  waitForever =
+    forever (threadDelay 60_000_000)
+
+  startServers cardano@CardanoNode{network} =
     withHydraNode cardano $ \HydraNode{hydraParty, hydraHost} -> do
       let party = HydraParty $ serialize' hydraParty
-      withHydraServer cardanoNetwork party hydraHost $ \server -> do
+      withHydraServer network party hydraHost $ \server -> do
         putStrLn $ "Starting client for " <> show party <> " and host " <> show hydraHost
         runClient @Chess @_ @_ server mkImpureIO

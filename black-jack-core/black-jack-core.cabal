@@ -38,7 +38,9 @@ library
     Chess.Contract
     Chess.Game
     Chess.Parse
+    Chess.Plutus
     Chess.Render
+    Chess.Token
 
   build-depends:
     , aeson

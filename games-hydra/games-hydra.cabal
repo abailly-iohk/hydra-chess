@@ -55,6 +55,7 @@ library
                 , optparse-applicative
                 , process
                 , random
+                , serialise
                 , tar
                 , text
                 , unix

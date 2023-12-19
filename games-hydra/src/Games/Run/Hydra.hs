@@ -1,12 +1,16 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-unused-matches #-}
-{-# LANGUAGE NumericUnderscores #-}
 
-module Games.Run.Hydra where
+module Games.Run.Hydra (
+  withHydraNode,
+  findCardanoSigningKey,
+  HydraNode (..),
+) where
 
 import Cardano.Binary (fromCBOR, serialize')
 import Cardano.Crypto.DSIGN (
@@ -18,10 +22,13 @@ import Cardano.Crypto.DSIGN (
   seedSizeDSIGN,
  )
 import Cardano.Crypto.Seed (readSeedFromSystemEntropy)
+import qualified Chess.Token as Token
 import qualified Codec.Archive.Zip as Zip
 import Codec.CBOR.Read (deserialiseFromBytes)
+import Codec.Serialise (serialise)
 import Control.Monad (unless, when)
 import Control.Monad.Class.MonadAsync (race)
+import Control.Monad.Class.MonadTimer (threadDelay)
 import Data.Aeson (Value (Number, String), eitherDecode, encode, object, (.=))
 import Data.Aeson.KeyMap (KeyMap, insert, (!?))
 import Data.Aeson.Types (Value (Object))
@@ -29,6 +36,7 @@ import qualified Data.ByteString.Base16 as Hex
 import qualified Data.ByteString.Lazy as LBS
 import Data.Data (Proxy (..))
 import Data.Text (Text, unpack)
+import qualified Data.Text as Text
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Encoding as Lazy
@@ -54,7 +62,9 @@ import System.Directory (
   setOwnerExecutable,
   setPermissions,
  )
-import System.FilePath ((</>))
+import System.FilePath ((<.>), (</>))
+import System.IO (hClose)
+import System.Posix (mkstemp)
 import System.Process (
   CreateProcess (..),
   StdStream (..),
@@ -63,7 +73,6 @@ import System.Process (
   readProcess,
   withCreateProcess,
  )
-import Control.Monad.Class.MonadTimer (threadDelay)
 
 data HydraNode = HydraNode
   { hydraParty :: VerKeyDSIGN Ed25519DSIGN
@@ -80,9 +89,10 @@ withHydraNode CardanoNode{network, nodeSocket} k =
       \_stdin _stdout _stderr processHandle ->
         race
           (checkProcessHasNotDied network "hydra-node" processHandle)
-          (do
+          ( do
               putStrLn "Hydra node started"
-              k (HydraNode me (Host "127.0.0.1" 34567)))
+              k (HydraNode me (Host "127.0.0.1" 34567))
+          )
           >>= \case
             Left{} -> error "should never been reached"
             Right a -> pure a
@@ -98,9 +108,13 @@ findHydraScriptsTxId = \case
 hydraNodeProcess :: Network -> FilePath -> FilePath -> IO (VerKeyDSIGN Ed25519DSIGN, CreateProcess)
 hydraNodeProcess network executableFile nodeSocket = do
   (me, hydraSkFile) <- findHydraSigningKey network
-  cardanoSkFile <- findCardanoSigningKey network
-  cardanoVkFile <- findCardanoVerificationKey network
+
+  (cardanoSkFile, cardanoVkFile) <- findKeys Fuel network
   checkFundsAreAvailable network cardanoSkFile cardanoVkFile
+
+  (gameSkFile, gameVkFile) <- findKeys Game network
+  checkGameTokenIsAvailable network gameSkFile gameVkFile
+
   protocolParametersFile <- findProtocolParametersFile network
   hydraPersistenceDir <- findHydraPersistenceDir network
   hydraScriptsTxId <- findHydraScriptsTxId network
@@ -139,8 +153,109 @@ hydraNodeProcess network executableFile nodeSocket = do
       )
   pure (me, proc executableFile args)
 
-checkFundsAreAvailable :: Network -> FilePath -> FilePath -> IO ()
-checkFundsAreAvailable network signingKeyFile verificationKeyFile = do
+checkGameTokenIsAvailable :: Network -> FilePath -> FilePath -> IO ()
+checkGameTokenIsAvailable network gameSkFile gameVkFile = do
+  hasOutputAt network gameVkFile >>= \case
+    True -> pure ()
+    False -> do
+      putStrLn $ "No game token registered on " <> show network <> ", creating it"
+      registerGameToken network gameSkFile gameVkFile
+      waitForToken
+   where
+     waitForToken = do
+       putStrLn $ "Wait for token creation tx"
+       threadDelay 10_000_000
+       hasOutputAt network gameVkFile >>= \case
+         True -> pure ()
+         False -> waitForToken
+
+hasOutputAt :: Network -> FilePath -> IO Bool
+hasOutputAt network gameVkFile = do
+  cardanoCliExe <- findCardanoCliExecutable
+  socketPath <- findSocketPath network
+  ownAddress <- readProcess cardanoCliExe (["address", "build", "--verification-key-file", gameVkFile] <> networkMagicArgs network) ""
+  output <-
+    drop 2 . lines
+      <$> readProcess
+        cardanoCliExe
+        ( [ "query"
+          , "utxo"
+          , "--address"
+          , ownAddress
+          , "--socket-path"
+          , socketPath
+          ]
+            <> networkMagicArgs network
+        )
+        ""
+  pure (length output == 1)
+
+registerGameToken :: Network -> FilePath -> FilePath -> IO ()
+registerGameToken network gameSkFile gameVkFile = do
+  (fundSk, fundVk) <- findKeys Fuel network
+  (gameSk, gameVk) <- findKeys Game network
+  utxo <- queryUTxOFor network fundVk
+  when (null utxo) $ error "No UTxO with funds"
+  let txin = head $ snd utxo
+  cardanoCliExe <- findCardanoCliExecutable
+
+  socketPath <- findSocketPath network
+  gameAddress <- readProcess cardanoCliExe (["address", "build", "--verification-key-file", gameVk] <> networkMagicArgs network) ""
+  fundAddress <- readProcess cardanoCliExe (["address", "build", "--verification-key-file", fundVk] <> networkMagicArgs network) ""
+
+  txFileRaw <- mkstemp "tx.raw" >>= \(fp, hdl) -> hClose hdl >> pure fp
+
+  let policyHexId = Text.unpack $ decodeUtf8 $ Hex.encode $ LBS.toStrict $ serialise Token.validatorBytes
+      tokenName = "foo" -- TODO: pubkey hash of gameVk
+  callProcess
+    cardanoCliExe
+    $ [ "transaction"
+      , "build"
+      , "--tx-in"
+      , txin
+      , "--tx-out"
+      , gameAddress <> "+1000000+" <> policyHexId <.> tokenName
+      , "--change-address"
+      , fundAddress
+      , "--out-file"
+      , txFileRaw <.> "raw"
+      , "--socket-path"
+      , socketPath
+      ]
+      <> networkMagicArgs network
+
+  putStrLn $ "Create token creation tx " <> (txFileRaw <.> "raw")
+
+  callProcess
+    cardanoCliExe
+    $ [ "transaction"
+      , "sign"
+      , "--signing-key-file"
+      , fundSk
+      , "--tx-file"
+      , txFileRaw <.> "raw"
+      , "--out-file"
+      , txFileRaw <.> "signed"
+      ]
+      <> networkMagicArgs network
+
+  putStrLn $ "Sign token creation tx " <> (txFileRaw <.> "signed")
+
+  callProcess
+    cardanoCliExe
+    $ [ "transaction"
+      , "submit"
+      , "--tx-file"
+      , txFileRaw <.> "signed"
+      , "--socket-path"
+      , socketPath
+      ]
+      <> networkMagicArgs network
+
+  putStrLn $ "Submitted token creation tx"
+
+queryUTxOFor :: Network -> String -> IO (String, [String])
+queryUTxOFor network verificationKeyFile = do
   cardanoCliExe <- findCardanoCliExecutable
   socketPath <- findSocketPath network
   ownAddress <- readProcess cardanoCliExe (["address", "build", "--verification-key-file", verificationKeyFile] <> networkMagicArgs network) ""
@@ -158,14 +273,19 @@ checkFundsAreAvailable network signingKeyFile verificationKeyFile = do
             <> networkMagicArgs network
         )
         ""
+  pure (ownAddress, output)
+
+checkFundsAreAvailable :: Network -> FilePath -> FilePath -> IO ()
+checkFundsAreAvailable network signingKeyFile verificationKeyFile = do
+  (ownAddress, output) <- queryUTxOFor network verificationKeyFile
   when (length output < 2) $ do
     putStrLn $
       "Hydra needs some funds to fuel the process, please send at least 2 UTxOs with over 10 ADAs each to " <> ownAddress
     threadDelay 60_000_000
     checkFundsAreAvailable network signingKeyFile verificationKeyFile
 
-ed2559seedsize :: Word
-ed2559seedsize = seedSizeDSIGN (Proxy @Ed25519DSIGN)
+ed25519seedsize :: Word
+ed25519seedsize = seedSizeDSIGN (Proxy @Ed25519DSIGN)
 
 findHydraSigningKey :: Network -> IO (VerKeyDSIGN Ed25519DSIGN, FilePath)
 findHydraSigningKey network = do
@@ -175,7 +295,7 @@ findHydraSigningKey network = do
   exists <- doesFileExist hydraSk
   if not exists
     then do
-      seed <- readSeedFromSystemEntropy ed2559seedsize
+      seed <- readSeedFromSystemEntropy ed25519seedsize
       let sk = genKeyDSIGN @Ed25519DSIGN seed
           jsonEnvelope =
             object
@@ -203,12 +323,24 @@ findHydraSigningKey network = do
             other -> error $ "Failed to read Hydra signing key file " <> hydraSk <> ", " <> show other
       pure (deriveVerKeyDSIGN sk, hydraSk)
 
-findCardanoSigningKey :: Network -> IO FilePath
-findCardanoSigningKey network = do
+data KeyRole = Fuel | Game
+
+signingKeyFilePath :: FilePath -> KeyRole -> FilePath
+signingKeyFilePath dir = \case
+  Fuel -> dir </> "cardano.sk"
+  Game -> dir </> "game.sk"
+
+verificationKeyFilePath :: FilePath -> KeyRole -> FilePath
+verificationKeyFilePath dir = \case
+  Fuel -> dir </> "cardano.vk"
+  Game -> dir </> "game.vk"
+
+findKeys :: KeyRole -> Network -> IO (FilePath, FilePath)
+findKeys keyRole network = do
   configDir <- getXdgDirectory XdgConfig ("hydra-node" </> networkDir network)
   createDirectoryIfMissing True configDir
-  let cardanoSk = configDir </> "cardano.sk"
-  exists <- doesFileExist cardanoSk
+  let signingKeyFile = signingKeyFilePath configDir keyRole
+  exists <- doesFileExist signingKeyFile
   unless exists $ do
     seed <- readSeedFromSystemEntropy (seedSizeDSIGN (Proxy @Ed25519DSIGN))
     let sk = genKeyDSIGN @Ed25519DSIGN seed
@@ -219,20 +351,18 @@ findCardanoSigningKey network = do
             , "cborHex" .= decodeUtf8 (Hex.encode (serialize' sk))
             ]
 
-    LBS.writeFile cardanoSk (encode jsonEnvelope)
-  pure cardanoSk
+    LBS.writeFile signingKeyFile (encode jsonEnvelope)
 
-findCardanoVerificationKey :: Network -> IO FilePath
-findCardanoVerificationKey network = do
-  configDir <- getXdgDirectory XdgConfig ("hydra-node" </> networkDir network)
-  createDirectoryIfMissing True configDir
-  let cardanoVk = configDir </> "cardano.vk"
-  exists <- doesFileExist cardanoVk
-  unless exists $ do
-    cardanoSk <- findCardanoSigningKey network
+  let verificationKeyFile = verificationKeyFilePath configDir keyRole
+  vkExists <- doesFileExist verificationKeyFile
+  unless vkExists $ do
     cardanoCliExe <- findCardanoCliExecutable
-    callProcess cardanoCliExe ["key", "verification-key", "--signing-key-file", cardanoSk, "--verification-key-file", cardanoVk]
-  pure cardanoVk
+    callProcess cardanoCliExe ["key", "verification-key", "--signing-key-file", signingKeyFile, "--verification-key-file", verificationKeyFile]
+
+  pure (signingKeyFile, verificationKeyFile)
+
+findCardanoSigningKey :: Network -> IO FilePath
+findCardanoSigningKey network = fst <$> findKeys Fuel network
 
 findHydraPersistenceDir :: Network -> IO FilePath
 findHydraPersistenceDir network = do
@@ -299,5 +429,5 @@ downloadHydraExecutable destDir = do
   let binariesUrl = "https://github.com/input-output-hk/hydra/releases/download/0.14.0/hydra-aarch64-darwin-0.14.0.zip"
   request <- parseRequest $ "GET " <> binariesUrl
   putStr "Downloading hydra executables"
-  httpLBS request >>= Zip.extractFilesFromArchive [Zip.OptDestination destDir]  . Zip.toArchive . getResponseBody
+  httpLBS request >>= Zip.extractFilesFromArchive [Zip.OptDestination destDir] . Zip.toArchive . getResponseBody
   putStrLn " done"

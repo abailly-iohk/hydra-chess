@@ -15,7 +15,7 @@ import Control.Monad.Class.MonadTimer (threadDelay)
 import Data.Aeson (Value (..), eitherDecode, encode)
 import Data.Aeson.KeyMap ((!?))
 import qualified Data.ByteString.Lazy as LBS
-import Data.Text (Text, unpack)
+import Data.Text (unpack)
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Encoding as Lazy
 import Data.Void (Void)
@@ -34,7 +34,7 @@ import System.Directory (
 import System.Exit (ExitCode (..))
 import System.FilePath ((</>))
 import System.IO (BufferMode (..), Handle, IOMode (..), hSetBuffering, withFile)
-import System.Process (CreateProcess (..), ProcessHandle, StdStream (..), proc, readCreateProcess, readProcess, terminateProcess, waitForProcess, withCreateProcess)
+import System.Process (CreateProcess (..), ProcessHandle, StdStream (..), proc, readProcess, terminateProcess, waitForProcess, withCreateProcess)
 
 data CardanoNode = CardanoNode
   { nodeSocket :: FilePath
@@ -69,8 +69,12 @@ withCardanoNode network k =
  where
   waitForNode socketPath cont = do
     let rn = CardanoNode{nodeSocket = socketPath, network}
+    putStr "Cardano node launching "
     waitForSocket rn
+    putStrLn ""
+    putStr "Cardano node syncing "
     waitForFullSync rn
+    putStrLn ""
     cont rn
 
   cleanupSocketFile socketPath = do
@@ -129,7 +133,7 @@ waitForSocket :: CardanoNode -> IO ()
 waitForSocket node@CardanoNode{nodeSocket} = do
   exists <- doesFileExist nodeSocket
   unless exists $ do
-    putStrLn "Cardano node launching"
+    putStr "."
     threadDelay 1_000_000
     waitForSocket node
 
@@ -138,7 +142,7 @@ waitForFullSync :: CardanoNode -> IO ()
 waitForFullSync node = do
   tip <- queryPercentSync node
   unless (tip == 100.0) $ do
-    putStrLn $ "Cardano node syncing: " <> show tip <> "%"
+    putStr $ show tip <> "% "
     threadDelay 10_000_000
     waitForFullSync node
 

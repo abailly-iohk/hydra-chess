@@ -63,7 +63,7 @@ import Game.Server (
   ServerException (..),
  )
 import Game.Server.Mock (MockCoin (..))
-import Games.Run.Cardano (findCardanoCliExecutable, findSocketPath, Network)
+import Games.Run.Cardano (findCardanoCliExecutable, findSocketPath, Network, networkMagicArgs)
 import Games.Run.Hydra (findCardanoSigningKey)
 import Network.HTTP.Client (responseBody)
 import Network.HTTP.Simple (httpLBS, parseRequest, setRequestBodyJSON)
@@ -75,6 +75,7 @@ import System.IO (hClose)
 import System.Posix (mkstemp)
 import System.Process (callProcess)
 import Prelude hiding (seq)
+import qualified Data.Text as Text
 
 -- | The type of backend provide by Hydra
 data Hydra
@@ -181,32 +182,28 @@ withHydraServer network me host k = do
       socketPath <- findSocketPath network
 
       callProcess
-        cardanoCliExe
+        cardanoCliExe $
         [ "transaction"
         , "sign"
         , "--tx-file"
         , txFileRaw
         , "--signing-key-file"
         , skFile
-        , "--testnet-magic"
-        , "2"
         , "--out-file"
         , txFileRaw <.> "signed"
-        ]
+        ] <> networkMagicArgs network
 
       putStrLn $ "Signed commit tx file " <> (txFileRaw <.> "signed")
 
       callProcess
-        cardanoCliExe
+        cardanoCliExe $
         [ "transaction"
         , "submit"
         , "--tx-file"
         , txFileRaw <.> "signed"
-        , "--testnet-magic"
-        , "2"
         , "--socket-path"
         , socketPath
-        ]
+        ] <> networkMagicArgs network
 
       putStrLn $ "Submitted commit tx file " <> txFileRaw <.> "signed"
 
@@ -225,7 +222,7 @@ withHydraServer network me host k = do
     -- somewhere, which means we need to create it at the opening of the head and /then/
     -- notify the game has started. Also, the server should maintain some state to retrieve
     -- the UTxO attached to the game
-    error "not implemented"
+    putStrLn $ "playing " <> (Text.unpack $ decodeUtf8 $ LBS.toStrict $ encode play)
 
   sendClose :: Connection -> HeadId -> IO ()
   sendClose = error "not implemented"
