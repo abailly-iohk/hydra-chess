@@ -34,6 +34,7 @@ import Data.Aeson.KeyMap (KeyMap, insert, (!?))
 import Data.Aeson.Types (Value (Object))
 import qualified Data.ByteString.Base16 as Hex
 import qualified Data.ByteString.Lazy as LBS
+import Data.Char (isDigit, isHexDigit, isSpace, toUpper)
 import Data.Data (Proxy (..))
 import Data.Text (Text, unpack)
 import qualified Data.Text as Text
@@ -73,6 +74,7 @@ import System.Process (
   readProcess,
   withCreateProcess,
  )
+import Chess.Plutus (MintAction(Mint))
 
 data HydraNode = HydraNode
   { hydraParty :: VerKeyDSIGN Ed25519DSIGN
@@ -161,13 +163,13 @@ checkGameTokenIsAvailable network gameSkFile gameVkFile = do
       putStrLn $ "No game token registered on " <> show network <> ", creating it"
       registerGameToken network gameSkFile gameVkFile
       waitForToken
-   where
-     waitForToken = do
-       putStrLn $ "Wait for token creation tx"
-       threadDelay 10_000_000
-       hasOutputAt network gameVkFile >>= \case
-         True -> pure ()
-         False -> waitForToken
+ where
+  waitForToken = do
+    putStrLn $ "Wait for token creation tx"
+    threadDelay 10_000_000
+    hasOutputAt network gameVkFile >>= \case
+      True -> pure ()
+      False -> waitForToken
 
 hasOutputAt :: Network -> FilePath -> IO Bool
 hasOutputAt network gameVkFile = do
@@ -196,35 +198,48 @@ registerGameToken network gameSkFile gameVkFile = do
   (gameSk, gameVk) <- findKeys Game network
   utxo <- queryUTxOFor network fundVk
   when (null utxo) $ error "No UTxO with funds"
-  let txin = head $ snd utxo
+  let txin = mkTxIn $ head $ snd utxo
   cardanoCliExe <- findCardanoCliExecutable
 
   socketPath <- findSocketPath network
   gameAddress <- readProcess cardanoCliExe (["address", "build", "--verification-key-file", gameVk] <> networkMagicArgs network) ""
   fundAddress <- readProcess cardanoCliExe (["address", "build", "--verification-key-file", fundVk] <> networkMagicArgs network) ""
 
+  mintScriptFile <- findMintScriptFile network
+
   txFileRaw <- mkstemp "tx.raw" >>= \(fp, hdl) -> hClose hdl >> pure fp
 
-  let policyHexId = Text.unpack $ decodeUtf8 $ Hex.encode $ LBS.toStrict $ serialise Token.validatorBytes
-      tokenName = "foo" -- TODO: pubkey hash of gameVk
-  callProcess
-    cardanoCliExe
-    $ [ "transaction"
-      , "build"
-      , "--tx-in"
-      , txin
-      , "--tx-out"
-      , gameAddress <> "+1000000+" <> policyHexId <.> tokenName
-      , "--change-address"
-      , fundAddress
-      , "--out-file"
-      , txFileRaw <.> "raw"
-      , "--socket-path"
-      , socketPath
-      ]
-      <> networkMagicArgs network
+  let policyHexId = fmap toUpper Token.validatorHashHex
+      tokenName = fmap toUpper $ Text.unpack $ decodeUtf8 $ Hex.encode "foo" -- TODO: pubkey hash of gameVk
+      token = "1 " <> policyHexId <.> tokenName
+      mintRedeemerValue = Text.unpack $ decodeUtf8 $ LBS.toStrict $ Token.mintActionJSON Mint
+      args =
+        [ "transaction"
+        , "build"
+        , "--tx-in"
+        , txin
+        , "--tx-in-collateral"
+        , txin
+        , "--tx-out"
+        , gameAddress <> "+1000000+" <> token
+        , "--mint"
+        , token
+        , "--mint-script-file"
+        , mintScriptFile
+        , "--mint-redeemer-value"
+        , mintRedeemerValue
+        , "--change-address"
+        , fundAddress
+        , "--out-file"
+        , txFileRaw <.> "raw"
+        , "--socket-path"
+        , socketPath
+        ]
+          <> networkMagicArgs network
 
-  putStrLn $ "Create token creation tx " <> (txFileRaw <.> "raw")
+  putStrLn $ "Building transaction " <> (txFileRaw <.> "raw") <> " with arguments: " <> unwords args
+
+  callProcess cardanoCliExe args
 
   callProcess
     cardanoCliExe
@@ -253,6 +268,21 @@ registerGameToken network gameSkFile gameVkFile = do
       <> networkMagicArgs network
 
   putStrLn $ "Submitted token creation tx"
+
+findMintScriptFile :: Network -> IO String
+findMintScriptFile network = do
+  configDir <- getXdgDirectory XdgConfig ("hydra-node" </> networkDir network)
+  let mintScriptFile = configDir </> "chess-token.plutus"
+  exists <- doesFileExist mintScriptFile
+  unless exists $
+    LBS.writeFile mintScriptFile Token.validatorBytes
+  pure mintScriptFile
+
+mkTxIn :: String -> String
+mkTxIn cliOutput = txId <> "#" <> txIx
+ where
+  txId = takeWhile (not . isSpace) cliOutput
+  txIx = takeWhile isDigit $ dropWhile isSpace $ dropWhile isHexDigit $ cliOutput
 
 queryUTxOFor :: Network -> String -> IO (String, [String])
 queryUTxOFor network verificationKeyFile = do

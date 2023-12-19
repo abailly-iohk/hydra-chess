@@ -46,6 +46,7 @@ library
     , aeson
     , base
     , base16-bytestring
+    , bytestring
     , cardano-api
     , containers
     , exceptions

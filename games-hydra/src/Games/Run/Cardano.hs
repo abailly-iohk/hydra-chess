@@ -74,7 +74,7 @@ withCardanoNode network k =
     putStrLn ""
     putStr "Cardano node syncing "
     waitForFullSync rn
-    putStrLn ""
+    putStrLn "100%"
     cont rn
 
   cleanupSocketFile socketPath = do
