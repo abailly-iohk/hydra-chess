@@ -25,7 +25,6 @@ import Cardano.Crypto.Seed (readSeedFromSystemEntropy)
 import qualified Chess.Token as Token
 import qualified Codec.Archive.Zip as Zip
 import Codec.CBOR.Read (deserialiseFromBytes)
-import Codec.Serialise (serialise)
 import Control.Monad (unless, when)
 import Control.Monad.Class.MonadAsync (race)
 import Control.Monad.Class.MonadTimer (threadDelay)
@@ -34,6 +33,7 @@ import Data.Aeson.KeyMap (KeyMap, insert, (!?))
 import Data.Aeson.Types (Value (Object))
 import qualified Data.ByteString.Base16 as Hex
 import qualified Data.ByteString.Lazy as LBS
+import qualified Data.ByteString as BS
 import Data.Char (isDigit, isHexDigit, isSpace, toUpper)
 import Data.Data (Proxy (..))
 import Data.Text (Text, unpack)
@@ -206,13 +206,14 @@ registerGameToken network gameSkFile gameVkFile = do
   fundAddress <- readProcess cardanoCliExe (["address", "build", "--verification-key-file", fundVk] <> networkMagicArgs network) ""
 
   mintScriptFile <- findMintScriptFile network
+  mintRedeemerFile <- findMintRedeermeFile network
 
   txFileRaw <- mkstemp "tx.raw" >>= \(fp, hdl) -> hClose hdl >> pure fp
 
-  let policyHexId = fmap toUpper Token.validatorHashHex
-      tokenName = fmap toUpper $ Text.unpack $ decodeUtf8 $ Hex.encode "foo" -- TODO: pubkey hash of gameVk
-      token = "1 " <> policyHexId <.> tokenName
-      mintRedeemerValue = Text.unpack $ decodeUtf8 $ LBS.toStrict $ Token.mintActionJSON Mint
+  let tokenName = fmap toUpper $ Text.unpack $ decodeUtf8 $ Hex.encode "foo" -- TODO: pubkey hash of gameVk
+      tokenPolicyId = Text.unpack $ decodeUtf8 $ Hex.encode $ Token.policyId
+      token = "1 " <> tokenPolicyId <.> tokenName
+
       args =
         [ "transaction"
         , "build"
@@ -221,13 +222,13 @@ registerGameToken network gameSkFile gameVkFile = do
         , "--tx-in-collateral"
         , txin
         , "--tx-out"
-        , gameAddress <> "+1000000+" <> token
+        , gameAddress <> " + 1200000 lovelace + " <> token
         , "--mint"
         , token
         , "--mint-script-file"
         , mintScriptFile
-        , "--mint-redeemer-value"
-        , mintRedeemerValue
+        , "--mint-redeemer-file"
+        , mintRedeemerFile
         , "--change-address"
         , fundAddress
         , "--out-file"
@@ -269,13 +270,19 @@ registerGameToken network gameSkFile gameVkFile = do
 
   putStrLn $ "Submitted token creation tx"
 
+findMintRedeermeFile :: Network -> IO String
+findMintRedeermeFile network = do
+  configDir <- getXdgDirectory XdgConfig ("hydra-node" </> networkDir network)
+  let redeemerScriptFile = configDir </> "chess-token-redeemer.json"
+  BS.writeFile redeemerScriptFile $ Token.mintActionJSON Mint
+  pure redeemerScriptFile
+
 findMintScriptFile :: Network -> IO String
 findMintScriptFile network = do
   configDir <- getXdgDirectory XdgConfig ("hydra-node" </> networkDir network)
   let mintScriptFile = configDir </> "chess-token.plutus"
-  exists <- doesFileExist mintScriptFile
-  unless exists $
-    LBS.writeFile mintScriptFile Token.validatorBytes
+  -- always overwrite file with latest version?
+  BS.writeFile mintScriptFile Token.validatorBytes
   pure mintScriptFile
 
 mkTxIn :: String -> String
