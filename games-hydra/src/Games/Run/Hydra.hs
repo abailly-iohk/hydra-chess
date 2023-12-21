@@ -12,7 +12,6 @@ module Games.Run.Hydra (
   getUTxOFor,
   HydraNode (..),
   KeyRole (..),
-  parseQueryUTxO,
 ) where
 
 import Cardano.Binary (fromCBOR, serialize')
@@ -478,6 +477,3 @@ downloadHydraExecutable destDir = do
   putStr "Downloading hydra executables"
   httpLBS request >>= Zip.extractFilesFromArchive [Zip.OptDestination destDir] . Zip.toArchive . getResponseBody
   putStrLn " done"
-
-parseQueryUTxO :: String -> Either String Value
-parseQueryUTxO input = Left "TODO"

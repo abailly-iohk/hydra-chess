@@ -95,6 +95,7 @@ test-suite tests
   build-depends:
     , aeson
     , base
+    , black-jack-client
     , games-hydra
     , bytestring
     , containers

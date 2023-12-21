@@ -3,8 +3,8 @@
 module Games.Server.HydraSpec where
 
 import Data.Aeson (object, (.=))
-import Games.Run.Hydra (parseQueryUTxO)
 import Test.Hspec (Spec, it, shouldBe)
+import Game.Client.Console (parseQueryUTxO)
 
 spec :: Spec
 spec =
