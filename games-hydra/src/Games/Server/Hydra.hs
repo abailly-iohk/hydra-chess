@@ -50,6 +50,7 @@ import Data.IORef (atomicWriteIORef, newIORef, readIORef)
 import Data.Sequence (Seq ((:|>)), (|>))
 import qualified Data.Sequence as Seq
 import Data.Text (Text, pack, unpack)
+import qualified Data.Text as Text
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import GHC.Generics (Generic)
 import Game.Server (
@@ -63,7 +64,7 @@ import Game.Server (
   ServerException (..),
  )
 import Game.Server.Mock (MockCoin (..))
-import Games.Run.Cardano (findCardanoCliExecutable, findSocketPath, Network, networkMagicArgs)
+import Games.Run.Cardano (Network, findCardanoCliExecutable, findSocketPath, networkMagicArgs)
 import Games.Run.Hydra (findCardanoSigningKey)
 import Network.HTTP.Client (responseBody)
 import Network.HTTP.Simple (httpLBS, parseRequest, setRequestBodyJSON)
@@ -75,7 +76,6 @@ import System.IO (hClose)
 import System.Posix (mkstemp)
 import System.Process (callProcess)
 import Prelude hiding (seq)
-import qualified Data.Text as Text
 
 -- | The type of backend provide by Hydra
 data Hydra
@@ -109,7 +109,7 @@ instance IsChain Hydra where
 
   coinValue (MockCoin c) = c
 
-withHydraServer :: forall g. Game g => Network -> HydraParty -> Host -> (Server g Hydra IO -> IO ()) -> IO ()
+withHydraServer :: forall g. (Game g) => Network -> HydraParty -> Host -> (Server g Hydra IO -> IO ()) -> IO ()
 withHydraServer network me host k = do
   events <- newTVarIO mempty
   withClient host $ \cnx ->
@@ -131,21 +131,26 @@ withHydraServer network me host k = do
       WS.receiveData cnx >>= \dat ->
         case eitherDecode' dat of
           Left err -> putStrLn (show err <> ", data: " <> show dat)
-          Right (Response{output = HeadIsInitializing headId parties}) ->
-            atomically (modifyTVar' events (|> HeadCreated headId parties))
-          Right (Response{output = Committed headId party _utxo}) ->
-            atomically (modifyTVar' events (|> FundCommitted headId party 0))
-          Right (Response{output = HeadIsOpen headId utxo}) ->
-            atomically
-              ( modifyTVar'
-                  events
-                  ( \es ->
-                      es
-                        |> HeadOpened headId
-                        |> GameStarted headId (initialGame @g 2) []
-                  )
-              )
-          Right (Response{ output = Greetings{}}) -> pure ()
+          Right (Response{output}) -> case output of
+            HeadIsInitializing headId parties ->
+              atomically (modifyTVar' events (|> HeadCreated headId parties))
+            HeadIsAborted headId _ ->
+              atomically (modifyTVar' events (|> HeadClosed headId))
+            HeadIsFinalized headId _ ->
+              atomically (modifyTVar' events (|> HeadClosed headId))
+            Committed headId party _utxo ->
+              atomically (modifyTVar' events (|> FundCommitted headId party 0))
+            HeadIsOpen headId utxo ->
+              atomically (modifyTVar' events (|> HeadOpened headId))
+            CommandFailed{} ->
+              putStrLn "Command failed"
+            PostTxOnChainFailed{postTxError} ->
+              putStrLn $ "On-chain Tx failed: " <> (Text.unpack $ decodeUtf8 $ LBS.toStrict $ encode postTxError)
+            Greetings{} -> pure ()
+            HeadIsClosed{} -> pure ()
+            ReadyToFanout{} -> pure ()
+            GetUTxOResponse{} -> pure ()
+            RolledBack{} -> pure ()
 
   sendInit :: Connection -> TVar IO (Seq (FromChain g Hydra)) -> [Text] -> IO HeadId
   sendInit cnx events _unusedParties = do
@@ -182,28 +187,30 @@ withHydraServer network me host k = do
       socketPath <- findSocketPath network
 
       callProcess
-        cardanoCliExe $
-        [ "transaction"
-        , "sign"
-        , "--tx-file"
-        , txFileRaw
-        , "--signing-key-file"
-        , skFile
-        , "--out-file"
-        , txFileRaw <.> "signed"
-        ] <> networkMagicArgs network
+        cardanoCliExe
+        $ [ "transaction"
+          , "sign"
+          , "--tx-file"
+          , txFileRaw
+          , "--signing-key-file"
+          , skFile
+          , "--out-file"
+          , txFileRaw <.> "signed"
+          ]
+          <> networkMagicArgs network
 
       putStrLn $ "Signed commit tx file " <> (txFileRaw <.> "signed")
 
       callProcess
-        cardanoCliExe $
-        [ "transaction"
-        , "submit"
-        , "--tx-file"
-        , txFileRaw <.> "signed"
-        , "--socket-path"
-        , socketPath
-        ] <> networkMagicArgs network
+        cardanoCliExe
+        $ [ "transaction"
+          , "submit"
+          , "--tx-file"
+          , txFileRaw <.> "signed"
+          , "--socket-path"
+          , socketPath
+          ]
+          <> networkMagicArgs network
 
       putStrLn $ "Submitted commit tx file " <> txFileRaw <.> "signed"
 
@@ -253,6 +260,12 @@ data Request = Init
 instance ToJSON Request where
   toJSON Init = object ["tag" .= ("Init" :: Text)]
 
+instance FromJSON Request where
+  parseJSON = withObject "Request" $ \obj ->
+    obj .: "tag" >>= \case
+      ("Init" :: String) -> pure Init
+      other -> fail $ "Unknown request type: " <> other
+
 data Response = Response
   { output :: !Output
   , seq :: !Natural
@@ -265,8 +278,16 @@ data Output
   | Committed {headId :: HeadId, party :: HydraParty, utxo :: Value}
   | HeadIsOpen {headId :: HeadId, utxo :: Value}
   | Greetings {me :: HydraParty}
+  | HeadIsAborted {headId :: HeadId, utxo :: Value}
+  | HeadIsFinalized {headId :: HeadId, utxo :: Value}
+  | HeadIsClosed {headId :: HeadId, snapshotNumber :: Int, contestationDeadline :: UTCTime}
+  | ReadyToFanout {headId :: HeadId}
+  | PostTxOnChainFailed {postChainTx :: Value, postTxError :: Value}
+  | RolledBack
+  | CommandFailed {clientInput :: Request}
+  | GetUTxOResponse {headId :: HeadId, utxo :: Value}
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromJSON)
+  deriving anyclass (ToJSON, FromJSON)
 
 instance FromJSON Response where
   parseJSON v = flip (withObject "Response") v $ \o -> do
@@ -280,24 +301,7 @@ instance FromJSON Response where
 -- data ServerOutput tx
 --   = PeerConnected {peer :: NodeId}
 --   | PeerDisconnected {peer :: NodeId}
---   | HeadIsInitializing {headId :: HeadId, parties :: Set Party}
---   | Committed {headId :: HeadId, party :: Party, utxo :: UTxOType tx}
---   | HeadIsOpen {headId :: HeadId, utxo :: UTxOType tx}
---   | HeadIsClosed
---       { headId :: HeadId
---       , snapshotNumber :: SnapshotNumber
---       , -- | Nominal deadline until which contest can be submitted and after
---         -- which fanout is possible. NOTE: Use this only for informational
---         -- purpose and wait for 'ReadyToFanout' instead before sending 'Fanout'
---         -- as the ledger of our cardano-node might not have progressed
---         -- sufficiently in time yet and we do not re-submit transactions (yet).
---         contestationDeadline :: UTCTime
---       }
 --   | HeadIsContested {headId :: HeadId, snapshotNumber :: SnapshotNumber}
---   | ReadyToFanout {headId :: HeadId}
---   | HeadIsAborted {headId :: HeadId, utxo :: UTxOType tx}
---   | HeadIsFinalized {headId :: HeadId, utxo :: UTxOType tx}
---   | CommandFailed {clientInput :: ClientInput tx}
 --   | TxSeen {headId :: HeadId, transaction :: tx}
 --   | TxValid {headId :: HeadId, transaction :: tx}
 --   | TxInvalid {headId :: HeadId, utxo :: UTxOType tx, transaction :: tx, validationError :: ValidationError}
@@ -307,14 +311,7 @@ instance FromJSON Response where
 --       , snapshot :: Snapshot tx
 --       , signatures :: MultiSignature (Snapshot tx)
 --       }
---   | GetUTxOResponse {headId :: HeadId, utxo :: UTxOType tx}
 --   | InvalidInput {reason :: String, input :: Text}
---   | -- | A friendly welcome message which tells a client something about the
---     -- node. Currently used for knowing what signing key the server uses (it
---     -- only knows one).
---     Greetings {me :: Party}
---   | PostTxOnChainFailed {postChainTx :: PostChainTx tx, postTxError :: PostTxError tx}
---   | RolledBack
 --   deriving (Generic)
 
 withClient :: Host -> (Connection -> IO a) -> IO a
