@@ -8,8 +8,11 @@
 
 module Games.Run.Hydra (
   withHydraNode,
-  findCardanoSigningKey,
+  findKeys,
+  getUTxOFor,
   HydraNode (..),
+  KeyRole (..),
+  parseQueryUTxO,
 ) where
 
 import Cardano.Binary (fromCBOR, serialize')
@@ -22,6 +25,7 @@ import Cardano.Crypto.DSIGN (
   seedSizeDSIGN,
  )
 import Cardano.Crypto.Seed (readSeedFromSystemEntropy)
+import Chess.Plutus (MintAction (Mint))
 import qualified Chess.Token as Token
 import qualified Codec.Archive.Zip as Zip
 import Codec.CBOR.Read (deserialiseFromBytes)
@@ -31,9 +35,9 @@ import Control.Monad.Class.MonadTimer (threadDelay)
 import Data.Aeson (Value (Number, String), eitherDecode, encode, object, (.=))
 import Data.Aeson.KeyMap (KeyMap, insert, (!?))
 import Data.Aeson.Types (Value (Object))
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as Hex
 import qualified Data.ByteString.Lazy as LBS
-import qualified Data.ByteString as BS
 import Data.Char (isDigit, isHexDigit, isSpace, toUpper)
 import Data.Data (Proxy (..))
 import Data.Text (Text, unpack)
@@ -74,7 +78,6 @@ import System.Process (
   readProcess,
   withCreateProcess,
  )
-import Chess.Plutus (MintAction(Mint))
 
 data HydraNode = HydraNode
   { hydraParty :: VerKeyDSIGN Ed25519DSIGN
@@ -158,8 +161,8 @@ hydraNodeProcess network executableFile nodeSocket = do
 checkGameTokenIsAvailable :: Network -> FilePath -> FilePath -> IO ()
 checkGameTokenIsAvailable network gameSkFile gameVkFile = do
   hasOutputAt network gameVkFile >>= \case
-    True -> pure ()
-    False -> do
+    Just{} -> pure ()
+    Nothing -> do
       putStrLn $ "No game token registered on " <> show network <> ", creating it"
       registerGameToken network gameSkFile gameVkFile
       waitForToken
@@ -167,30 +170,34 @@ checkGameTokenIsAvailable network gameSkFile gameVkFile = do
   waitForToken = do
     putStrLn $ "Wait for token creation tx"
     threadDelay 10_000_000
-    hasOutputAt network gameVkFile >>= \case
-      True -> pure ()
-      False -> waitForToken
+    hasOutputAt network gameVkFile
+      >>= maybe waitForToken (const $ pure ())
 
-hasOutputAt :: Network -> FilePath -> IO Bool
+hasOutputAt :: Network -> FilePath -> IO (Maybe String)
 hasOutputAt network gameVkFile = do
+  output <- getUTxOFor network gameVkFile
+  if (length output == 1)
+    then pure $ Just $ head output
+    else pure Nothing
+
+getUTxOFor :: Network -> FilePath -> IO [String]
+getUTxOFor network gameVkFile = do
   cardanoCliExe <- findCardanoCliExecutable
   socketPath <- findSocketPath network
   ownAddress <- readProcess cardanoCliExe (["address", "build", "--verification-key-file", gameVkFile] <> networkMagicArgs network) ""
-  output <-
-    drop 2 . lines
-      <$> readProcess
-        cardanoCliExe
-        ( [ "query"
-          , "utxo"
-          , "--address"
-          , ownAddress
-          , "--socket-path"
-          , socketPath
-          ]
-            <> networkMagicArgs network
-        )
-        ""
-  pure (length output == 1)
+  drop 2 . lines
+    <$> readProcess
+      cardanoCliExe
+      ( [ "query"
+        , "utxo"
+        , "--address"
+        , ownAddress
+        , "--socket-path"
+        , socketPath
+        ]
+          <> networkMagicArgs network
+      )
+      ""
 
 registerGameToken :: Network -> FilePath -> FilePath -> IO ()
 registerGameToken network gameSkFile gameVkFile = do
@@ -401,6 +408,9 @@ findKeys keyRole network = do
 findCardanoSigningKey :: Network -> IO FilePath
 findCardanoSigningKey network = fst <$> findKeys Fuel network
 
+findGameSigningKey :: Network -> IO FilePath
+findGameSigningKey network = fst <$> findKeys Game network
+
 findHydraPersistenceDir :: Network -> IO FilePath
 findHydraPersistenceDir network = do
   persistenceDir <- getXdgDirectory XdgCache ("hydra-node" </> networkDir network)
@@ -468,3 +478,6 @@ downloadHydraExecutable destDir = do
   putStr "Downloading hydra executables"
   httpLBS request >>= Zip.extractFilesFromArchive [Zip.OptDestination destDir] . Zip.toArchive . getResponseBody
   putStrLn " done"
+
+parseQueryUTxO :: String -> Either String Value
+parseQueryUTxO input = Left "TODO"

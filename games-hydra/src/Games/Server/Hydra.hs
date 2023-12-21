@@ -65,7 +65,7 @@ import Game.Server (
  )
 import Game.Server.Mock (MockCoin (..))
 import Games.Run.Cardano (Network, findCardanoCliExecutable, findSocketPath, networkMagicArgs)
-import Games.Run.Hydra (findCardanoSigningKey)
+import Games.Run.Hydra (findKeys, KeyRole(Game), getUTxOFor)
 import Network.HTTP.Client (responseBody)
 import Network.HTTP.Simple (httpLBS, parseRequest, setRequestBodyJSON)
 import Network.WebSockets (Connection, runClient)
@@ -167,6 +167,13 @@ withHydraServer network me host k = do
   sendCommit cnx events Host{host, port} amount _headId = go
    where
     go = do
+      cardanoCliExe <- findCardanoCliExecutable
+      (skFile, vkFile) <- findKeys Game network
+      socketPath <- findSocketPath network
+
+      -- find game token UTxO
+      gameToken <- getUTxOFor network vkFile
+
       -- commit is now external, so we need to handle query to the server, signature and then
       -- submission via the cardano-cli
       request <- parseRequest ("POST http://" <> unpack host <> ":" <> show port <> "/commit")
@@ -181,10 +188,6 @@ withHydraServer network me host k = do
           pure fp
 
       putStrLn $ "Wrote raw commit tx file " <> txFileRaw
-
-      cardanoCliExe <- findCardanoCliExecutable
-      skFile <- findCardanoSigningKey network
-      socketPath <- findSocketPath network
 
       callProcess
         cardanoCliExe
