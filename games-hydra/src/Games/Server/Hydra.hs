@@ -125,7 +125,7 @@ withHydraServer network me host k = do
               , commit = sendCommit cnx events host
               , play = playGame cnx
               , newGame = restartGame cnx
-              , closeHead = sendClose cnx
+              , closeHead = sendClose cnx events
               }
        in k server
  where
@@ -164,7 +164,8 @@ withHydraServer network me host k = do
                   )
             Greetings{} -> pure ()
             HeadIsClosed{} -> pure ()
-            ReadyToFanout{} -> pure ()
+            ReadyToFanout headId ->
+              atomically (modifyTVar' events (|> HeadClosing headId))
             GetUTxOResponse{} -> pure ()
             RolledBack{} -> pure ()
 
@@ -250,8 +251,16 @@ withHydraServer network me host k = do
     -- the UTxO attached to the game
     putStrLn $ "playing " <> (Text.unpack $ decodeUtf8 $ LBS.toStrict $ encode play)
 
-  sendClose :: Connection -> HeadId -> IO ()
-  sendClose = error "not implemented"
+  sendClose :: Connection -> TVar IO (Seq (FromChain g Hydra)) -> HeadId -> IO ()
+  sendClose cnx events _unusedHeadId = do
+    WS.sendTextData cnx (encode Close)
+    timeout
+      600_000_000
+      ( waitFor events $ \case
+          HeadClosing headId -> Just ()
+          _ -> Nothing
+      )
+      >>= maybe (throwIO $ ServerException "Timeout (10m) waiting for head Id") (const $ WS.sendTextData cnx (encode Fanout))
 
   restartGame :: Connection -> HeadId -> IO ()
   restartGame = error "not implemented"
@@ -273,16 +282,21 @@ waitFor events predicate =
       (_ :|> event) -> maybe retry pure (predicate event)
       _ -> retry
 
-data Request = Init
+data Request = Init | Close | Fanout
   deriving stock (Eq, Show, Generic)
 
 instance ToJSON Request where
-  toJSON Init = object ["tag" .= ("Init" :: Text)]
+  toJSON = \case
+    Init -> object ["tag" .= ("Init" :: Text)]
+    Close -> object ["tag" .= ("Close" :: Text)]
+    Fanout -> object ["tag" .= ("Fanout" :: Text)]
 
 instance FromJSON Request where
   parseJSON = withObject "Request" $ \obj ->
     obj .: "tag" >>= \case
       ("Init" :: String) -> pure Init
+      ("Close" :: String) -> pure Close
+      ("Fanout" :: String) -> pure Close
       other -> fail $ "Unknown request type: " <> other
 
 data Response = Response

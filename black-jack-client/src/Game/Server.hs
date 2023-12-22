@@ -130,6 +130,7 @@ data FromChain g c
   | GameStarted {headId :: HeadId, game :: GameState g, plays :: [GamePlay g]}
   | GameChanged {headId :: HeadId, game :: GameState g, plays :: [GamePlay g]}
   | GameEnded {headId :: HeadId, gameEnd :: GameEnd g}
+  | HeadClosing {headId :: HeadId}
   | HeadClosed {headId :: HeadId}
   | OtherMessage {content :: Content}
   deriving (Generic)
