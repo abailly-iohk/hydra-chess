@@ -36,6 +36,7 @@ library
 
     Chess
     Chess.Contract
+    Chess.ELO
     Chess.Game
     Chess.Parse
     Chess.Plutus

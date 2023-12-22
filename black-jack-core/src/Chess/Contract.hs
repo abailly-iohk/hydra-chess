@@ -6,18 +6,12 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_GHC -fno-specialize -fdefer-type-errors #-}
+{-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:target-version=1.0.0 #-}
 
 module Chess.Contract where
 
 import PlutusTx.Prelude
 
-import Cardano.Api (
-  PlutusScriptVersion (PlutusScriptV2),
-  SerialiseAsRawBytes (serialiseToRawBytes),
-  hashScript,
-  pattern PlutusScript,
- )
-import Cardano.Api.Shelley (PlutusScript (PlutusScriptSerialised))
 import Chess.Game (Game, Move, apply)
 import PlutusLedgerApi.V2 (
   Datum (Datum),
@@ -26,16 +20,15 @@ import PlutusLedgerApi.V2 (
   ScriptHash (..),
   SerialisedScript,
   ToData,
-  UnsafeFromData,
   getDatum,
   serialiseCompiledCode,
   toBuiltinData,
   txOutDatum,
-  unsafeFromBuiltinData,
  )
 import PlutusLedgerApi.V2.Contexts (findDatumHash, getContinuingOutputs)
 import PlutusTx (CompiledCode)
 import qualified PlutusTx
+import Chess.Plutus (ValidatorType, wrapValidator, scriptValidatorHash)
 
 type DatumType = Game
 type RedeemerType = Move
@@ -70,9 +63,6 @@ checkGameOutput ctx d =
   ScriptContext{scriptContextTxInfo = txInfo} = ctx
 {-# INLINEABLE checkGameOutput #-}
 
--- | Signature of an untyped validator script.
-type ValidatorType = BuiltinData -> BuiltinData -> BuiltinData -> ()
-
 compiledValidator :: CompiledCode ValidatorType
 compiledValidator =
   $$(PlutusTx.compile [||wrap validator||])
@@ -84,28 +74,3 @@ validatorScript = serialiseCompiledCode compiledValidator
 
 validatorHash :: ScriptHash
 validatorHash = scriptValidatorHash validatorScript
-
-wrapValidator ::
-  (UnsafeFromData datum, UnsafeFromData redeemer, UnsafeFromData context) =>
-  (datum -> redeemer -> context -> Bool) ->
-  ValidatorType
-wrapValidator f d r c =
-  check $ f datum redeemer context
- where
-  datum = unsafeFromBuiltinData d
-  redeemer = unsafeFromBuiltinData r
-  context = unsafeFromBuiltinData c
-{-# INLINEABLE wrapValidator #-}
-
--- * Similar utilities as plutus-ledger
-
--- | Compute the on-chain 'ScriptHash' for a given serialised plutus script. Use
--- this to refer to another validator script.
-scriptValidatorHash :: SerialisedScript -> ScriptHash
-scriptValidatorHash =
-  ScriptHash
-    . toBuiltin
-    . serialiseToRawBytes
-    . hashScript
-    . PlutusScript PlutusScriptV2
-    . PlutusScriptSerialised

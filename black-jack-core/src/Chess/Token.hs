@@ -36,14 +36,11 @@ import Cardano.Api (
  )
 import qualified Cardano.Api as Api
 import Cardano.Api.Shelley (
-  PlutusScript (PlutusScriptSerialised),
   fromPlutusData,
-  serialiseToTextEnvelope,
  )
 import qualified Data.Aeson as Aeson
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as Lazy
-import Data.String (IsString (fromString))
 import PlutusTx (CompiledCode)
 import qualified PlutusTx
 import Prelude (Show (show), String)
@@ -75,15 +72,9 @@ policyId =
     Api.hashScript $
       PlutusScript Api.PlutusScriptV2 serialisedScript
 
-serialisedScript :: PlutusScript Api.PlutusScriptV2
-serialisedScript = PlutusScriptSerialised @Api.PlutusScriptV2 validatorScript
-
 validatorBytes :: ByteString
 validatorBytes =
-  Lazy.toStrict $
-    Aeson.encode $
-      serialiseToTextEnvelope (Just $ fromString "Chess Token Policy") $
-        serialisedScript
+   validatorToBytes validatorScript
 
 mintActionJSON :: MintAction -> ByteString
 mintActionJSON =
