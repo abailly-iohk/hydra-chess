@@ -5,26 +5,28 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-unused-matches #-}
+{-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
 
 module Games.Run.Hydra (
   withHydraNode,
   findKeys,
-  getUTxOFor, queryUTxOFor,
+  getUTxOFor,
+  queryUTxOFor,
   HydraNode (..),
   KeyRole (..),
 ) where
 
-import Cardano.Binary (fromCBOR, serialize')
+import Cardano.Binary (FromCBOR, fromCBOR, serialize')
 import Cardano.Crypto.DSIGN (
   DSIGNAlgorithm (SignKeyDSIGN),
   Ed25519DSIGN,
   VerKeyDSIGN,
   deriveVerKeyDSIGN,
   genKeyDSIGN,
-  seedSizeDSIGN,
+  seedSizeDSIGN, hashVerKeyDSIGN,
  )
 import Cardano.Crypto.Seed (readSeedFromSystemEntropy)
-import Chess.Plutus (MintAction (Mint))
+import Chess.Plutus (pubKeyHash, MintAction (Mint))
 import qualified Chess.Token as Token
 import qualified Codec.Archive.Zip as Zip
 import Codec.CBOR.Read (deserialiseFromBytes)
@@ -39,11 +41,13 @@ import qualified Data.ByteString.Base16 as Hex
 import qualified Data.ByteString.Lazy as LBS
 import Data.Char (isDigit, isHexDigit, isSpace, toUpper)
 import Data.Data (Proxy (..))
+import Data.Either (rights)
 import Data.Text (Text, unpack)
 import qualified Data.Text as Text
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Encoding as Lazy
+import Game.Client.Console (Coins (..), SimpleTxOut (..), parseQueryUTxO)
 import Game.Server (Host (..))
 import Games.Run.Cardano (
   CardanoNode (..),
@@ -77,10 +81,8 @@ import System.Process (
   readProcess,
   withCreateProcess,
  )
-import Game.Client.Console (parseQueryUTxO, SimpleTxOut)
-import Data.Either (rights)
-import Game.Client.Console (SimpleTxOut(..))
-import Game.Client.Console (Coins(..))
+import Cardano.Crypto.Hash (Blake2b_256, Blake2b_224)
+import qualified Chess.ELO as ELO
 
 data HydraNode = HydraNode
   { hydraParty :: VerKeyDSIGN Ed25519DSIGN
@@ -163,44 +165,55 @@ hydraNodeProcess network executableFile nodeSocket = do
 
 checkGameTokenIsAvailable :: Network -> FilePath -> FilePath -> IO ()
 checkGameTokenIsAvailable network gameSkFile gameVkFile = do
-  hasOutputAt network gameVkFile >>= \case
+  (_, eloScriptFile) <- findEloScriptFile gameVkFile network
+  eloScriptAddress <- getScriptAddress eloScriptFile network
+  hasOutputAt network eloScriptAddress >>= \case
     Just{} -> pure ()
     Nothing -> do
       putStrLn $ "No game token registered on " <> show network <> ", creating it"
       registerGameToken network gameSkFile gameVkFile
-      waitForToken
+      waitForToken eloScriptAddress
  where
-  waitForToken = do
+  waitForToken eloScriptAddress = do
     putStrLn $ "Wait for token creation tx"
     threadDelay 10_000_000
-    hasOutputAt network gameVkFile
-      >>= maybe waitForToken (const $ pure ())
+    hasOutputAt network eloScriptAddress
+      >>= maybe (waitForToken eloScriptAddress) (const $ pure ())
 
-hasOutputAt :: Network -> FilePath -> IO (Maybe String)
-hasOutputAt network gameVkFile = do
-  output <- getUTxOFor network gameVkFile
+hasOutputAt :: Network -> String -> IO (Maybe String)
+hasOutputAt network address = do
+  output <- getUTxOFor network address
   if (length output == 1)
     then pure $ Just $ head output
     else pure Nothing
 
-getUTxOFor :: Network -> FilePath -> IO [String]
-getUTxOFor network gameVkFile = do
+getUTxOFor :: Network -> String -> IO [String]
+getUTxOFor network address = do
   cardanoCliExe <- findCardanoCliExecutable
   socketPath <- findSocketPath network
-  ownAddress <- readProcess cardanoCliExe (["address", "build", "--verification-key-file", gameVkFile] <> networkMagicArgs network) ""
   drop 2 . lines
     <$> readProcess
       cardanoCliExe
       ( [ "query"
         , "utxo"
         , "--address"
-        , ownAddress
+        , address
         , "--socket-path"
         , socketPath
         ]
           <> networkMagicArgs network
       )
       ""
+
+getVerificationKeyAddress :: FilePath -> Network -> IO String
+getVerificationKeyAddress vkFile network = do
+  cardanoCliExe <- findCardanoCliExecutable
+  readProcess cardanoCliExe (["address", "build", "--verification-key-file", vkFile] <> networkMagicArgs network) ""
+
+getScriptAddress :: FilePath -> Network -> IO String
+getScriptAddress vkFile network = do
+  cardanoCliExe <- findCardanoCliExecutable
+  readProcess cardanoCliExe (["address", "build", "--payment-script-file", vkFile] <> networkMagicArgs network) ""
 
 registerGameToken :: Network -> FilePath -> FilePath -> IO ()
 registerGameToken network gameSkFile gameVkFile = do
@@ -212,17 +225,18 @@ registerGameToken network gameSkFile gameVkFile = do
   cardanoCliExe <- findCardanoCliExecutable
 
   socketPath <- findSocketPath network
-  gameAddress <- readProcess cardanoCliExe (["address", "build", "--verification-key-file", gameVk] <> networkMagicArgs network) ""
-  fundAddress <- readProcess cardanoCliExe (["address", "build", "--verification-key-file", fundVk] <> networkMagicArgs network) ""
+  fundAddress <- getVerificationKeyAddress fundVk network
 
   mintScriptFile <- findMintScriptFile network
   mintRedeemerFile <- findMintRedeermeFile network
 
+  (pkh, eloScriptFile) <- findEloScriptFile gameVk network
+  let eloDatumValue = "1000"
+  eloScriptAddress <- getScriptAddress eloScriptFile network
+
   txFileRaw <- mkstemp "tx.raw" >>= \(fp, hdl) -> hClose hdl >> pure fp
 
-  let tokenName = fmap toUpper $ Text.unpack $ decodeUtf8 $ Hex.encode "foo" -- TODO: pubkey hash of gameVk
-      tokenPolicyId = Text.unpack $ decodeUtf8 $ Hex.encode $ Token.policyId
-      token = "1 " <> tokenPolicyId <.> tokenName
+  let token = "1 " <> Token.validatorHashHex <.> pkh
 
       args =
         [ "transaction"
@@ -232,7 +246,10 @@ registerGameToken network gameSkFile gameVkFile = do
         , "--tx-in-collateral"
         , txin
         , "--tx-out"
-        , gameAddress <> " + 1200000 lovelace + " <> token
+        , eloScriptAddress <> " + 1200000 lovelace + " <> token
+        , -- 1.2 ADA is the minUTxO here :shrug:
+          "--tx-out-inline-datum-value"
+        , eloDatumValue
         , "--mint"
         , token
         , "--mint-script-file"
@@ -279,6 +296,17 @@ registerGameToken network gameSkFile gameVkFile = do
       <> networkMagicArgs network
 
   putStrLn $ "Submitted token creation tx"
+
+findEloScriptFile :: FilePath -> Network -> IO (String, FilePath)
+findEloScriptFile gameVkFile network = do
+  configDir <- getXdgDirectory XdgConfig ("hydra-node" </> networkDir network)
+  let eloScriptFile = configDir </> "elo-script.plutus"
+  -- overwrite script every time?
+  gameVk <- deserialiseFromEnvelope @(VerKeyDSIGN Ed25519DSIGN) gameVkFile
+  let pkh = pubKeyHash $ hashVerKeyDSIGN @_ @Blake2b_224 gameVk
+      bytes = ELO.validatorBytes pkh
+  BS.writeFile eloScriptFile bytes
+  pure (show pkh, eloScriptFile)
 
 findMintRedeermeFile :: Network -> IO String
 findMintRedeermeFile network = do
@@ -332,8 +360,8 @@ checkFundsAreAvailable network signingKeyFile verificationKeyFile = do
     threadDelay 60_000_000
     checkFundsAreAvailable network signingKeyFile verificationKeyFile
  where
-   totalLovelace :: SimpleTxOut -> Integer
-   totalLovelace SimpleTxOut {coins = Coins{lovelace}} = lovelace
+  totalLovelace :: SimpleTxOut -> Integer
+  totalLovelace SimpleTxOut{coins = Coins{lovelace}} = lovelace
 
 ed25519seedsize :: Word
 ed25519seedsize = seedSizeDSIGN (Proxy @Ed25519DSIGN)
@@ -358,21 +386,25 @@ findHydraSigningKey network = do
       LBS.writeFile hydraSk (encode jsonEnvelope)
       pure (deriveVerKeyDSIGN sk, hydraSk)
     else do
-      envelope <- eitherDecode <$> LBS.readFile hydraSk
-      let sk = case envelope of
-            Right (Object val) -> do
-              case val !? "cborHex" of
-                Just (String str) ->
-                  case Hex.decode (encodeUtf8 str) of
-                    Right bs ->
-                      either
-                        (\err -> error $ "Failed to deserialised signing key " <> show bs <> " : " <> show err)
-                        snd
-                        $ deserialiseFromBytes @(SignKeyDSIGN Ed25519DSIGN) fromCBOR (LBS.fromStrict bs)
-                    Left err -> error $ "Failed to deserialised signing key " <> unpack str <> " : " <> err
-                other -> error $ "Failed to deserialised signing key " <> show other
-            other -> error $ "Failed to read Hydra signing key file " <> hydraSk <> ", " <> show other
+      sk <- deserialiseFromEnvelope @(SignKeyDSIGN Ed25519DSIGN) hydraSk
       pure (deriveVerKeyDSIGN sk, hydraSk)
+
+deserialiseFromEnvelope :: forall a. (FromCBOR a) => FilePath -> IO a
+deserialiseFromEnvelope file = do
+  envelope <- eitherDecode <$> LBS.readFile file
+  case envelope of
+    Right (Object val) -> do
+      case val !? "cborHex" of
+        Just (String str) ->
+          case Hex.decode (encodeUtf8 str) of
+            Right bs ->
+              either
+                (\err -> error $ "Failed to deserialised key " <> show bs <> " : " <> show err)
+                (pure . snd)
+                $ deserialiseFromBytes @a fromCBOR (LBS.fromStrict bs)
+            Left err -> error $ "Failed to deserialised key " <> unpack str <> " : " <> err
+        other -> error $ "Failed to deserialised key " <> show other
+    other -> error $ "Failed to read Hydra key file " <> file <> ", " <> show other
 
 data KeyRole = Fuel | Game
 

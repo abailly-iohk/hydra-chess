@@ -24,10 +24,11 @@ import Data.String (IsString (..))
 import PlutusLedgerApi.V2 (
   ScriptHash (..),
   SerialisedScript,
-  UnsafeFromData,
+  UnsafeFromData, PubKeyHash(..),
  )
 import PlutusTx (UnsafeFromData (..))
 import qualified PlutusTx
+import Cardano.Crypto.Hash (Hash, hashToBytes)
 
 -- | Signature of an untyped validator script.
 type ValidatorType = BuiltinData -> BuiltinData -> BuiltinData -> ()
@@ -87,3 +88,6 @@ validatorToBytes =
     . Aeson.encode
     . serialiseToTextEnvelope (Just $ fromString "Chess Token Policy")
     . PlutusScriptSerialised @Api.PlutusScriptV2
+
+pubKeyHash :: Hash h keyRole -> PubKeyHash
+pubKeyHash h = PubKeyHash (toBuiltin @ByteString $ hashToBytes h)

@@ -5,7 +5,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
 {-# OPTIONS_GHC -fno-specialize -fdefer-type-errors #-}
 {-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:target-version=1.0.0 #-}
 
@@ -18,6 +17,7 @@ import Chess.Plutus (
   MintAction,
   MintingPolicyType,
   scriptValidatorHash,
+  validatorToBytes,
   wrapMintingPolicy,
  )
 import PlutusLedgerApi.V2 (
@@ -29,12 +29,10 @@ import PlutusLedgerApi.V2 (
  )
 
 import Cardano.Api (
-  Script (..),
   ScriptDataJsonSchema (..),
   scriptDataToJson,
   unsafeHashableScriptData,
  )
-import qualified Cardano.Api as Api
 import Cardano.Api.Shelley (
   fromPlutusData,
  )
@@ -66,15 +64,9 @@ validatorHash = scriptValidatorHash validatorScript
 validatorHashHex :: String
 validatorHashHex = show validatorHash
 
-policyId :: ByteString
-policyId =
-  Api.serialiseToRawBytes $
-    Api.hashScript $
-      PlutusScript Api.PlutusScriptV2 serialisedScript
-
 validatorBytes :: ByteString
 validatorBytes =
-   validatorToBytes validatorScript
+  validatorToBytes validatorScript
 
 mintActionJSON :: MintAction -> ByteString
 mintActionJSON =
