@@ -25,7 +25,7 @@ import Control.Concurrent.Class.MonadSTM (
   retry,
  )
 import Control.Exception (IOException)
-import Control.Monad (forever)
+import Control.Monad (forever, when)
 import Control.Monad.Class.MonadAsync (withAsync)
 import Control.Monad.Class.MonadThrow (MonadCatch (catch), throwIO)
 import Control.Monad.Class.MonadTime (UTCTime)
@@ -45,14 +45,17 @@ import Data.Aeson.Types (FromJSON (..))
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Base16 as Hex
 import qualified Data.ByteString.Lazy as LBS
+import Data.Either (rights)
 import Data.Foldable (toList)
 import Data.IORef (atomicWriteIORef, newIORef, readIORef)
 import Data.Sequence (Seq ((:|>)), (|>))
 import qualified Data.Sequence as Seq
+import Data.String (IsString (..))
 import Data.Text (Text, pack, unpack)
 import qualified Data.Text as Text
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import GHC.Generics (Generic)
+import Game.Client.Console (parseQueryUTxO)
 import Game.Server (
   FromChain (..),
   Game (initialGame),
@@ -65,7 +68,7 @@ import Game.Server (
  )
 import Game.Server.Mock (MockCoin (..))
 import Games.Run.Cardano (Network, findCardanoCliExecutable, findSocketPath, networkMagicArgs)
-import Games.Run.Hydra (findKeys, KeyRole(Game), getUTxOFor)
+import Games.Run.Hydra (KeyRole (Game), findKeys, getUTxOFor, queryUTxOFor)
 import Network.HTTP.Client (responseBody)
 import Network.HTTP.Simple (httpLBS, parseRequest, setRequestBodyJSON)
 import Network.WebSockets (Connection, runClient)
@@ -76,6 +79,7 @@ import System.IO (hClose)
 import System.Posix (mkstemp)
 import System.Process (callProcess)
 import Prelude hiding (seq)
+import Game.Client.Console (mkFullTxOut)
 
 -- | The type of backend provide by Hydra
 data Hydra
@@ -130,7 +134,8 @@ withHydraServer network me host k = do
     forever $
       WS.receiveData cnx >>= \dat ->
         case eitherDecode' dat of
-          Left err -> putStrLn (show err <> ", data: " <> show dat)
+          Left err ->
+            atomically $ modifyTVar' events (|> OtherMessage (fromString $ show err))
           Right (Response{output}) -> case output of
             HeadIsInitializing headId parties ->
               atomically (modifyTVar' events (|> HeadCreated headId parties))
@@ -145,7 +150,18 @@ withHydraServer network me host k = do
             CommandFailed{} ->
               putStrLn "Command failed"
             PostTxOnChainFailed{postTxError} ->
-              putStrLn $ "On-chain Tx failed: " <> (Text.unpack $ decodeUtf8 $ LBS.toStrict $ encode postTxError)
+              atomically $
+                modifyTVar'
+                  events
+                  ( |>
+                      OtherMessage
+                        ( fromString $
+                            Text.unpack $
+                              decodeUtf8 $
+                                LBS.toStrict $
+                                  encode postTxError
+                        )
+                  )
             Greetings{} -> pure ()
             HeadIsClosed{} -> pure ()
             ReadyToFanout{} -> pure ()
@@ -172,14 +188,14 @@ withHydraServer network me host k = do
       socketPath <- findSocketPath network
 
       -- find game token UTxO
-      gameToken <- getUTxOFor network vkFile
+      (address, gameUTxO) <- queryUTxOFor network vkFile
+      let gameToken = rights . fmap (parseQueryUTxO . pack) $ gameUTxO
+      when (null gameToken) $ error $ "Failed to retrieve game token to commit from:\n" <> unlines gameUTxO
 
       -- commit is now external, so we need to handle query to the server, signature and then
       -- submission via the cardano-cli
       request <- parseRequest ("POST http://" <> unpack host <> ":" <> show port <> "/commit")
-      -- where does the committed UTxO comes from?
-      -- can go for empty commit for now
-      response <- httpLBS $ setRequestBodyJSON (object []) request
+      response <- httpLBS $ setRequestBodyJSON (mkFullTxOut (Text.pack address) (head gameToken)) request
 
       txFileRaw <-
         mkstemp "tx.raw" >>= \(fp, hdl) -> do

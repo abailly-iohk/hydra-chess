@@ -24,7 +24,7 @@ import Data.Text.Encoding (decodeUtf8)
 import Data.Word (Word8, Word16)
 import GHC.Generics (Generic)
 import Generic.Random (genericArbitrary, uniform)
-import Test.QuickCheck (Arbitrary (arbitrary), Gen, vectorOf)
+import Test.QuickCheck (Arbitrary (arbitrary), Gen, vectorOf, listOf, arbitraryPrintableChar)
 
 data Message = Ping
   deriving (Eq, Show)
@@ -131,6 +131,7 @@ data FromChain g c
   | GameChanged {headId :: HeadId, game :: GameState g, plays :: [GamePlay g]}
   | GameEnded {headId :: HeadId, gameEnd :: GameEnd g}
   | HeadClosed {headId :: HeadId}
+  | OtherMessage {content :: Content}
   deriving (Generic)
 
 deriving instance (Game g, IsChain c) => Show (FromChain g c)
@@ -167,6 +168,12 @@ instance
   Arbitrary (Indexed g c)
   where
   arbitrary = genericArbitrary uniform
+
+newtype Content = Content Text
+ deriving newtype (Show, Eq, IsString, FromJSON, ToJSON)
+
+instance Arbitrary Content where
+  arbitrary = Content . pack <$> listOf arbitraryPrintableChar
 
 data Host = Host {host :: Text, port :: Int}
   deriving stock (Eq, Show, Generic)

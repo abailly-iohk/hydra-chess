@@ -1,4 +1,8 @@
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -7,15 +11,16 @@ module Game.Client.Console where
 
 import Control.Applicative ((<|>))
 import Control.Exception (IOException, handle)
-import Data.Aeson (Key, Value, eitherDecode, object, (.=))
+import Data.Aeson (ToJSON (..), Value, eitherDecode, object, (.=))
 import Data.Aeson.Key (fromText)
-import Data.Aeson.Types (Pair)
 import Data.Bifunctor (first)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Functor (void, ($>))
 import qualified Data.List as List
-import Data.String (IsString (..))
-import Data.Text (Text, pack, unpack)
+import Data.Map (Map)
+import qualified Data.Map as Map
+import Data.Maybe (catMaybes)
+import Data.Text (Text, pack)
 import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.IO as Text
 import Data.Void (Void)
@@ -24,7 +29,6 @@ import System.IO.Error (isEOFError)
 import Text.Megaparsec (Parsec, empty, many, parse, sepBy, takeRest, try)
 import Text.Megaparsec.Char (alphaNumChar, char, hexDigitChar, space, space1, string)
 import qualified Text.Megaparsec.Char.Lexer as L
-import Data.Maybe (catMaybes)
 
 type Parser = Parsec Void Text
 
@@ -106,33 +110,75 @@ spaceConsumer :: Parser ()
 spaceConsumer =
   L.space space1 (L.skipLineComment "#") empty
 
+data FullTxOut = FullTxOut {txIn :: Text, address :: Text, value :: Coins}
+  deriving stock (Eq, Show)
+
+instance ToJSON FullTxOut where
+  toJSON FullTxOut{txIn, address, value} =
+    object
+      [ fromText txIn
+          .= object
+            [ "address" .= address
+            , "value" .= value
+            ]
+      ]
+
+mkFullTxOut :: Text -> SimpleTxOut -> FullTxOut
+mkFullTxOut address SimpleTxOut{txIn, coins} = FullTxOut{txIn, address, value = coins}
+
+data SimpleTxOut = SimpleTxOut {txIn :: Text, coins :: Coins}
+  deriving stock (Eq, Show)
+
+data Coins = Coins
+  { lovelace :: Integer
+  , natives :: Map Text Coin
+  }
+  deriving stock (Eq, Show)
+
+newtype Coin = Coin (Map Text Integer)
+  deriving stock (Eq, Show)
+  deriving newtype (ToJSON)
+
+instance ToJSON SimpleTxOut where
+  toJSON (SimpleTxOut txIn coins) = object [fromText txIn .= coins]
+
+instance ToJSON Coins where
+  toJSON Coins{lovelace, natives} =
+    object $
+      ["lovelace" .= lovelace]
+        <> fmap
+          ( \(pid, coin) ->
+              fromText pid .= coin
+          )
+          (Map.toList natives)
+
 -- | Parse a single line of a UTxO for TxIn and value parts.
 -- TODO: Move this elsewhere, this has nothing to do here
-parseQueryUTxO :: Text -> Either Text Value
+parseQueryUTxO :: Text -> Either Text SimpleTxOut
 parseQueryUTxO = first (pack . show) . parse utxoParser ""
 
-utxoParser :: Parser Value
+utxoParser :: Parser SimpleTxOut
 utxoParser = do
   txIn <- txInParser <* spaceConsumer
   value <- valueParser
-  pure $ object [txIn .= value]
+  pure $ SimpleTxOut txIn value
 
-valueParser :: Parser Value
+valueParser :: Parser Coins
 valueParser = do
-  numLovelace :: Integer <- L.decimal <* spaceConsumer <* string "lovelace" <* spaceConsumer
+  lovelace :: Integer <- L.decimal <* spaceConsumer <* string "lovelace" <* spaceConsumer
   pairs <- many tokenOrDatumParser
-  pure $ object $ ["lovelace" .= numLovelace] <> makeTokens (catMaybes pairs)
+  pure $ Coins{lovelace, natives = Map.fromList $ makeTokens (catMaybes pairs)}
 
-makeTokens :: [(Text, Text, Integer)] -> [Pair]
+makeTokens :: [(Text, Text, Integer)] -> [(Text, Coin)]
 makeTokens tokens = fmap mkObject $ List.groupBy samePid tokens
  where
   samePid (p, _, _) (p', _, _) = p == p'
 
-mkObject :: [(Text, Text, Integer)] -> Pair
-mkObject tokens = fromText pid .= object tokensAndValues
+mkObject :: [(Text, Text, Integer)] -> (Text, Coin)
+mkObject tokens = (pid, Coin $ Map.fromList tokensAndValues)
  where
   (pid, _, _) = head tokens
-  tokensAndValues = fmap (\(_, tok, val) -> fromText tok .= val) tokens
+  tokensAndValues = fmap (\(_, tok, val) -> (tok, val)) tokens
 
 tokenOrDatumParser :: Parser (Maybe (Text, Text, Integer))
 tokenOrDatumParser =
@@ -149,8 +195,8 @@ tokenParser = do
   tokenName <- hexString <* spaceConsumer
   pure $ (policyId, tokenName, amount)
 
-txInParser :: Parser Key
+txInParser :: Parser Text
 txInParser = do
   txId <- hexString <* spaceConsumer
   txIx :: Integer <- L.decimal
-  pure $ fromString $ unpack txId <> "#" <> show txIx
+  pure $ txId <> "#" <> pack (show txIx)

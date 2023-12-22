@@ -9,7 +9,7 @@
 module Games.Run.Hydra (
   withHydraNode,
   findKeys,
-  getUTxOFor,
+  getUTxOFor, queryUTxOFor,
   HydraNode (..),
   KeyRole (..),
 ) where
@@ -77,6 +77,10 @@ import System.Process (
   readProcess,
   withCreateProcess,
  )
+import Game.Client.Console (parseQueryUTxO, SimpleTxOut)
+import Data.Either (rights)
+import Game.Client.Console (SimpleTxOut(..))
+import Game.Client.Console (Coins(..))
 
 data HydraNode = HydraNode
   { hydraParty :: VerKeyDSIGN Ed25519DSIGN
@@ -321,11 +325,15 @@ queryUTxOFor network verificationKeyFile = do
 checkFundsAreAvailable :: Network -> FilePath -> FilePath -> IO ()
 checkFundsAreAvailable network signingKeyFile verificationKeyFile = do
   (ownAddress, output) <- queryUTxOFor network verificationKeyFile
-  when (length output < 2) $ do
+  let maxLovelaceAvailable = maximum $ fmap totalLovelace $ rights $ fmap (parseQueryUTxO . Text.pack) output
+  when (maxLovelaceAvailable < 10_000_000) $ do
     putStrLn $
-      "Hydra needs some funds to fuel the process, please send at least 2 UTxOs with over 10 ADAs each to " <> ownAddress
+      "Hydra needs some funds to fuel the process, please ensure there's a UTxO with at least 10 ADAs at " <> ownAddress
     threadDelay 60_000_000
     checkFundsAreAvailable network signingKeyFile verificationKeyFile
+ where
+   totalLovelace :: SimpleTxOut -> Integer
+   totalLovelace SimpleTxOut {coins = Coins{lovelace}} = lovelace
 
 ed25519seedsize :: Word
 ed25519seedsize = seedSizeDSIGN (Proxy @Ed25519DSIGN)
@@ -403,12 +411,6 @@ findKeys keyRole network = do
     callProcess cardanoCliExe ["key", "verification-key", "--signing-key-file", signingKeyFile, "--verification-key-file", verificationKeyFile]
 
   pure (signingKeyFile, verificationKeyFile)
-
-findCardanoSigningKey :: Network -> IO FilePath
-findCardanoSigningKey network = fst <$> findKeys Fuel network
-
-findGameSigningKey :: Network -> IO FilePath
-findGameSigningKey network = fst <$> findKeys Game network
 
 findHydraPersistenceDir :: Network -> IO FilePath
 findHydraPersistenceDir network = do
