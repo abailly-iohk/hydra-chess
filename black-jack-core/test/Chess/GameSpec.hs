@@ -48,15 +48,31 @@ spec = parallel $ do
     prop "can take enemy piece at moved location" prop_can_take_enemy_piece
     prop "cannot take enemy piece if move is illegal" prop_cannot_take_enemy_piece_moving_illegally
     prop "cannot move if blocked by other piece" prop_cannot_move_if_blocked
+  describe "Bishop" $ do
+    prop "can move diagonally any number of squares" prop_bishop_can_move_diagonally
   describe "Side" $ do
     prop "cannot play same side twice in a row" prop_cannot_play_same_side_twice_in_a_row
   describe "General" $ do
     prop "cannot pass (move to the same position)" prop_cannot_pass
 
+prop_bishop_can_move_diagonally :: Side -> Property
+prop_bishop_can_move_diagonally side =
+  forAll anyPos $ \from ->
+    forAll (elements $ accessibleDiagonals from) $ \to ->
+      let game =
+            Game
+              side
+              [PieceOnBoard Bishop side from]
+       in isLegalMove (Move from to) game (== Game (flipSide side) [PieceOnBoard Bishop side to])
+
 prop_generate_paths_from_both_ends :: Property
 prop_generate_paths_from_both_ends =
   forAll pairOfPositionsOnPath $ \(pos1, pos2) ->
-    length (positions $ path pos1 pos2 ) == length (positions $ path pos2 pos1)
+    let path1 = path pos1 pos2
+        path2 = path pos2 pos1
+     in length (positions path1) == length (positions path2)
+          & counterexample ("path1: " <> show path1)
+          & counterexample ("path2: " <> show path2)
  where
   pairOfPositionsOnPath = do
     base@(Pos r c) <- anyPos

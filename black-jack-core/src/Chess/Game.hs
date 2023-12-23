@@ -34,7 +34,7 @@ newtype Path = Path {positions :: [Position]}
 instance Eq Path where
   Path p == Path p' = p == p'
 
-data Piece = Pawn | Rook
+data Piece = Pawn | Rook | Bishop
   deriving (Haskell.Eq, Haskell.Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
@@ -43,6 +43,7 @@ PlutusTx.unstableMakeIsData ''Piece
 instance Eq Piece where
   Pawn == Pawn = True
   Rook == Rook = True
+  Bishop == Bishop = True
   _ == _ = False
 
 data Side = White | Black
@@ -88,6 +89,8 @@ initialGame =
       <> [PieceOnBoard Pawn Black (Pos 6 c) | c <- [0 .. 7]]
       <> [PieceOnBoard Rook Black (Pos 7 0), PieceOnBoard Rook Black (Pos 7 7)]
       <> [PieceOnBoard Rook White (Pos 0 0), PieceOnBoard Rook White (Pos 0 7)]
+      <> [PieceOnBoard Bishop Black (Pos 7 2), PieceOnBoard Bishop Black (Pos 7 5)]
+      <> [PieceOnBoard Bishop White (Pos 0 2), PieceOnBoard Bishop White (Pos 0 5)]
 
 findPieces :: Piece -> Side -> Game -> [PieceOnBoard]
 findPieces piece' side' Game{pieces} =
@@ -111,6 +114,7 @@ apply move@(Move from to) game@(Game curSide _)
         Just (PieceOnBoard Pawn White _) | curSide == White -> moveWhitePawn move game
         Just (PieceOnBoard Pawn Black _) | curSide == Black -> moveBlackPawn move game
         Just (PieceOnBoard Rook side _) | curSide == side -> moveRook move game
+        Just (PieceOnBoard Bishop side _) | curSide == side -> moveBishop move game
         _ -> Left $ IllegalMove move
 {-# INLINEABLE apply #-}
 
@@ -126,6 +130,11 @@ moveRook move@(Move from@(Pos row col) to@(Pos row' col')) game =
       | otherwise ->
           Left $ IllegalMove move
 {-# INLINEABLE moveRook #-}
+
+moveBishop :: Move -> Game -> Either IllegalMove Game
+moveBishop _move@(Move from@(Pos _row _col) to@(Pos _row' _col')) game =
+  Right $ movePiece game from to
+{-# INLINEABLE moveBishop #-}
 
 moveWhitePawn :: Move -> Game -> Either IllegalMove Game
 moveWhitePawn move@(Move from@(Pos row col) to@(Pos row' col')) game =
@@ -196,9 +205,9 @@ path (Pos r c) (Pos r' c') =
             | vert == 0 && horiz > 0 ->
                 [Pos r x | x <- enumFromTo (c + 1) c']
             | vert == 0 && horiz < 0 ->
-                [Pos r x | x <- enumFromTo (c - 1) c']
+                [Pos r x | x <- enumFromTo c' (c - 1)]
             | horiz == 0 && vert < 0 ->
-                [Pos x c | x <- enumFromTo (r - 1) r']
+                [Pos x c | x <- enumFromTo r' (r - 1)]
             | horiz == 0 && vert > 0 ->
                 [Pos x c | x <- enumFromTo (r + 1) r']
             | otherwise ->
@@ -221,3 +230,15 @@ possibleMoves pos@(Pos r c) game =
         , (r, c) /= (r', c')
         ]
    in filter (\move -> isRight $ apply move game) allMoves
+{-# INLINEABLE possibleMoves #-}
+
+accessibleDiagonals :: Position -> [Position]
+accessibleDiagonals (Pos r c) =
+  [ Pos r' c'
+  | dr <- [-1, 1]
+  , dc <- [-1, 1]
+  , (r', c') <- (\ offset -> (r + offset * dr, c + offset * dc)) <$> [1 .. 6]
+  , r' >= 0 && r' <= 7 && r' /= r
+  , c' >= 0 && c' <= 7 && c' /= c
+  ]
+{-# INLINEABLE accessibleDiagonals #-}
