@@ -16,6 +16,7 @@ import Games.Run.Hydra (HydraNode (..), withHydraNode)
 import Games.Server.Hydra (HydraParty (..), withHydraServer)
 import Options.Applicative (execParser)
 import System.IO (BufferMode (..), hSetBuffering, stdout)
+import Game.Client.Console (inputParser)
 
 run :: IO ()
 run = do
@@ -23,10 +24,10 @@ run = do
   hSetBuffering stdout NoBuffering
   withCardanoNode cardanoNetwork $ \cardano ->
     if onlyCardano
-      then waitForever
+      then runCardanoClient
       else startServers cardano
  where
-  waitForever =
+  runCardanoClient =
     forever (threadDelay 60_000_000)
 
   startServers cardano@CardanoNode{network} =
@@ -34,4 +35,4 @@ run = do
       let party = HydraParty $ serialize' hydraParty
       withHydraServer network party hydraHost $ \server -> do
         putStrLn $ "Starting client for " <> show party <> " and host " <> show hydraHost
-        runClient @Chess @_ @_ server mkImpureIO
+        runClient @Chess @_ @_ server (mkImpureIO inputParser)

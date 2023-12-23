@@ -1,11 +1,13 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -41,7 +43,8 @@ import Data.Aeson (
   (.:),
   (.=),
  )
-import Data.Aeson.Types (FromJSON (..))
+import Data.Aeson.Key (fromText)
+import Data.Aeson.Types (FromJSON (..), Pair)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Base16 as Hex
 import qualified Data.ByteString.Lazy as LBS
@@ -55,7 +58,7 @@ import Data.Text (Text, pack, unpack)
 import qualified Data.Text as Text
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import GHC.Generics (Generic)
-import Game.Client.Console (parseQueryUTxO)
+import Game.Client.Console (Coins, SimpleUTxO (..), parseQueryUTxO)
 import Game.Server (
   FromChain (..),
   Game (initialGame),
@@ -68,7 +71,7 @@ import Game.Server (
  )
 import Game.Server.Mock (MockCoin (..))
 import Games.Run.Cardano (Network, findCardanoCliExecutable, findSocketPath, networkMagicArgs)
-import Games.Run.Hydra (KeyRole (Game), findKeys, getUTxOFor, queryUTxOFor)
+import Games.Run.Hydra (KeyRole (Game), findEloScriptFile, findKeys, getScriptAddress, getUTxOFor)
 import Network.HTTP.Client (responseBody)
 import Network.HTTP.Simple (httpLBS, parseRequest, setRequestBodyJSON)
 import Network.WebSockets (Connection, runClient)
@@ -79,7 +82,6 @@ import System.IO (hClose)
 import System.Posix (mkstemp)
 import System.Process (callProcess)
 import Prelude hiding (seq)
-import Game.Client.Console (mkFullTxOut)
 
 -- | The type of backend provide by Hydra
 data Hydra
@@ -189,14 +191,16 @@ withHydraServer network me host k = do
       socketPath <- findSocketPath network
 
       -- find game token UTxO
-      (address, gameUTxO) <- queryUTxOFor network vkFile
+      eloScriptFile <- snd <$> findEloScriptFile vkFile network
+      scriptAddress <- getScriptAddress eloScriptFile network
+      gameUTxO <- getUTxOFor network scriptAddress
       let gameToken = rights . fmap (parseQueryUTxO . pack) $ gameUTxO
       when (null gameToken) $ error $ "Failed to retrieve game token to commit from:\n" <> unlines gameUTxO
 
       -- commit is now external, so we need to handle query to the server, signature and then
       -- submission via the cardano-cli
       request <- parseRequest ("POST http://" <> unpack host <> ":" <> show port <> "/commit")
-      response <- httpLBS $ setRequestBodyJSON (mkFullTxOut (Text.pack address) (head gameToken)) request
+      response <- httpLBS $ setRequestBodyJSON (mkFullUTxO (Text.pack scriptAddress) Nothing (head gameToken)) request
 
       txFileRaw <-
         mkstemp "tx.raw" >>= \(fp, hdl) -> do
@@ -274,6 +278,82 @@ withHydraServer network me host k = do
             , events = toList $ Seq.take count $ Seq.drop start history
             }
     pure indexed
+
+--         {
+--             "09d34606abdcd0b10ebc89307cbfa0b469f9144194137b45b7a04b273961add8#687": {
+--                 "address": "addr1w9htvds89a78ex2uls5y969ttry9s3k9etww0staxzndwlgmzuul5",
+--                 "value": {
+--                     "lovelace": 7620669
+--                 },
+--                 "witness": {
+--                   "datum": "02",
+--                   "plutusV2Script": {
+--                       "cborHex": "420606",
+--                       "description": "",
+--                       "type": "PlutusScriptV2"
+--                   },
+--                   "redeemer": "21"
+--                 }
+--             }
+--         }
+data FullUTxO = FullUTxO
+  { txIn :: Text
+  , address :: Text
+  , value :: Coins
+  , scriptInfo :: Maybe ScriptInfo
+  }
+  deriving stock (Eq, Show)
+
+data ScriptInfo = ScriptInfo
+  { datumHash :: Text
+  , -- Hex-encoded CBOR of Datum
+    datumWitness :: Text
+  , -- Text enveloppe of script
+    scriptWitness :: Value
+  , -- Hex-encoded CBOR of redeemer
+    redeemerWitness :: Text
+  }
+  deriving stock (Eq, Show)
+
+instance ToJSON FullUTxO where
+  toJSON FullUTxO{txIn, address, value, scriptInfo} =
+    object
+      [ fromText txIn
+          .= object
+            ( [ "address" .= address
+              , "value" .= value
+              ]
+                <> maybe [] asJson scriptInfo
+            )
+      ]
+
+asJson :: ScriptInfo -> [Pair]
+asJson ScriptInfo{datumHash, datumWitness, scriptWitness, redeemerWitness} =
+  [ "datumHash" .= datumHash
+  , "witness"
+      .= object
+        [ "datum" .= datumWitness
+        , "redeemer" .= redeemerWitness
+        , "plutusV2Script" .= scriptWitness
+        ]
+  ]
+
+mkFullUTxO :: Text -> Maybe ScriptInfo -> SimpleUTxO -> FullUTxO
+mkFullUTxO address scriptInfo = \case
+  SimpleUTxO{txIn, coins} ->
+    FullUTxO{txIn, address, value = coins, scriptInfo}
+  UTxOWithDatum{txIn, coins, datumHash} ->
+    FullUTxO
+      { txIn
+      , address
+      , value = coins
+      , scriptInfo =
+          fmap
+            ( \ScriptInfo{datumWitness, redeemerWitness, scriptWitness} ->
+                ScriptInfo{datumHash, ..}
+            )
+            scriptInfo
+      }
 
 waitFor :: TVar IO (Seq (FromChain g Hydra)) -> (FromChain g Hydra -> Maybe a) -> IO a
 waitFor events predicate =

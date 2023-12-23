@@ -4,17 +4,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
-{-# OPTIONS_GHC -Wno-unused-matches #-}
 {-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
+{-# OPTIONS_GHC -Wno-unused-matches #-}
 
-module Games.Run.Hydra (
-  withHydraNode,
-  findKeys,
-  getUTxOFor,
-  queryUTxOFor,
-  HydraNode (..),
-  KeyRole (..),
-) where
+module Games.Run.Hydra where
 
 import Cardano.Binary (FromCBOR, fromCBOR, serialize')
 import Cardano.Crypto.DSIGN (
@@ -23,10 +16,13 @@ import Cardano.Crypto.DSIGN (
   VerKeyDSIGN,
   deriveVerKeyDSIGN,
   genKeyDSIGN,
-  seedSizeDSIGN, hashVerKeyDSIGN,
+  hashVerKeyDSIGN,
+  seedSizeDSIGN,
  )
+import Cardano.Crypto.Hash (Blake2b_224)
 import Cardano.Crypto.Seed (readSeedFromSystemEntropy)
-import Chess.Plutus (pubKeyHash, MintAction (Mint))
+import qualified Chess.ELO as ELO
+import Chess.Plutus (MintAction (Mint), pubKeyHash)
 import qualified Chess.Token as Token
 import qualified Codec.Archive.Zip as Zip
 import Codec.CBOR.Read (deserialiseFromBytes)
@@ -39,7 +35,7 @@ import Data.Aeson.Types (Value (Object))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as Hex
 import qualified Data.ByteString.Lazy as LBS
-import Data.Char (isDigit, isHexDigit, isSpace, toUpper)
+import Data.Char (isDigit, isHexDigit, isSpace)
 import Data.Data (Proxy (..))
 import Data.Either (rights)
 import Data.Text (Text, unpack)
@@ -47,7 +43,7 @@ import qualified Data.Text as Text
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Encoding as Lazy
-import Game.Client.Console (Coins (..), SimpleTxOut (..), parseQueryUTxO)
+import Game.Client.Console (Coins (..), SimpleUTxO (..), parseQueryUTxO)
 import Game.Server (Host (..))
 import Games.Run.Cardano (
   CardanoNode (..),
@@ -81,8 +77,6 @@ import System.Process (
   readProcess,
   withCreateProcess,
  )
-import Cardano.Crypto.Hash (Blake2b_256, Blake2b_224)
-import qualified Chess.ELO as ELO
 
 data HydraNode = HydraNode
   { hydraParty :: VerKeyDSIGN Ed25519DSIGN
@@ -219,19 +213,24 @@ registerGameToken :: Network -> FilePath -> FilePath -> IO ()
 registerGameToken network gameSkFile gameVkFile = do
   (fundSk, fundVk) <- findKeys Fuel network
   (gameSk, gameVk) <- findKeys Game network
-  utxo <- queryUTxOFor network fundVk
+  fundAddress <- getVerificationKeyAddress fundVk network
+  utxo <- getUTxOFor network fundAddress
   when (null utxo) $ error "No UTxO with funds"
-  let txin = mkTxIn $ head $ snd utxo
+  let txin = mkTxIn $ head utxo
   cardanoCliExe <- findCardanoCliExecutable
 
   socketPath <- findSocketPath network
-  fundAddress <- getVerificationKeyAddress fundVk network
 
   mintScriptFile <- findMintScriptFile network
   mintRedeemerFile <- findMintRedeermeFile network
 
   (pkh, eloScriptFile) <- findEloScriptFile gameVk network
-  let eloDatumValue = "1000"
+  let eloDatumValue :: Integer = 1000
+      eloDatumHash =
+        Text.unpack $
+          decodeUtf8 $
+            Hex.encode $
+              ELO.datumHashBytes eloDatumValue
   eloScriptAddress <- getScriptAddress eloScriptFile network
 
   txFileRaw <- mkstemp "tx.raw" >>= \(fp, hdl) -> hClose hdl >> pure fp
@@ -248,8 +247,8 @@ registerGameToken network gameSkFile gameVkFile = do
         , "--tx-out"
         , eloScriptAddress <> " + 1200000 lovelace + " <> token
         , -- 1.2 ADA is the minUTxO here :shrug:
-          "--tx-out-inline-datum-value"
-        , eloDatumValue
+          "--tx-out-datum-hash"
+        , eloDatumHash
         , "--mint"
         , token
         , "--mint-script-file"
@@ -329,30 +328,10 @@ mkTxIn cliOutput = txId <> "#" <> txIx
   txId = takeWhile (not . isSpace) cliOutput
   txIx = takeWhile isDigit $ dropWhile isSpace $ dropWhile isHexDigit $ cliOutput
 
-queryUTxOFor :: Network -> String -> IO (String, [String])
-queryUTxOFor network verificationKeyFile = do
-  cardanoCliExe <- findCardanoCliExecutable
-  socketPath <- findSocketPath network
-  ownAddress <- readProcess cardanoCliExe (["address", "build", "--verification-key-file", verificationKeyFile] <> networkMagicArgs network) ""
-  output <-
-    drop 2 . lines
-      <$> readProcess
-        cardanoCliExe
-        ( [ "query"
-          , "utxo"
-          , "--address"
-          , ownAddress
-          , "--socket-path"
-          , socketPath
-          ]
-            <> networkMagicArgs network
-        )
-        ""
-  pure (ownAddress, output)
-
 checkFundsAreAvailable :: Network -> FilePath -> FilePath -> IO ()
 checkFundsAreAvailable network signingKeyFile verificationKeyFile = do
-  (ownAddress, output) <- queryUTxOFor network verificationKeyFile
+  ownAddress <- getVerificationKeyAddress verificationKeyFile network
+  output <- getUTxOFor network ownAddress
   let maxLovelaceAvailable = maximum $ fmap totalLovelace $ rights $ fmap (parseQueryUTxO . Text.pack) output
   when (maxLovelaceAvailable < 10_000_000) $ do
     putStrLn $
@@ -360,8 +339,8 @@ checkFundsAreAvailable network signingKeyFile verificationKeyFile = do
     threadDelay 60_000_000
     checkFundsAreAvailable network signingKeyFile verificationKeyFile
  where
-  totalLovelace :: SimpleTxOut -> Integer
-  totalLovelace SimpleTxOut{coins = Coins{lovelace}} = lovelace
+  totalLovelace :: SimpleUTxO -> Integer
+  totalLovelace SimpleUTxO{coins = Coins{lovelace}} = lovelace
 
 ed25519seedsize :: Word
 ed25519seedsize = seedSizeDSIGN (Proxy @Ed25519DSIGN)

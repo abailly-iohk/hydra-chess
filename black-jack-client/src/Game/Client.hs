@@ -25,11 +25,11 @@ data Result c
   | TableFunded {amount :: Coin c, tableId :: Text}
   | TableFundingFailed {failureReason :: Text}
 
-deriving instance IsChain c => Eq (Result c)
-deriving instance IsChain c => Show (Result c)
+deriving instance (IsChain c) => Eq (Result c)
+deriving instance (IsChain c) => Show (Result c)
 
-runClient :: (Game g, IsChain c, MonadAsync m, MonadDelay m) => Server g c m -> HasIO m -> m ()
-runClient server io = race_ loop (notify 0)
+runClient :: (Game g, IsChain c, MonadAsync m, MonadDelay m) => Server g c m -> HasIO Command Output m -> m ()
+runClient server io = race_ (loop (handleCommand server) io) (notify 0)
  where
   notify fromIndex = do
     Indexed{lastIndex, events} <- poll server fromIndex (fromIndex + 10)
@@ -38,13 +38,14 @@ runClient server io = race_ loop (notify 0)
     unless (lastIndex > newIndex) $ threadDelay 2000000
     notify newIndex
 
-  loop = do
-    prompt io
-    input io >>= \case
-      Left EOF -> pure ()
-      Left (Err err) -> output io (Ko err) >> loop
-      Right Quit -> void (output io Bye)
-      Right cmd -> handleCommand server cmd >>= output io >> loop
+loop :: Monad m => (Command -> m Output) -> HasIO Command Output m -> m ()
+loop handle io = do
+  prompt io
+  input io >>= \case
+    Left EOF -> pure ()
+    Left (Err err) -> output io (Ko err) >> loop handle io
+    Right Quit -> void (output io Bye)
+    Right cmd -> handle cmd >>= output io >> loop handle io
 
 handleCommand :: (Game g, IsChain c, Monad m) => Server g c m -> Command -> m Output
 handleCommand Server{initHead, commit, play, closeHead, newGame} = \case

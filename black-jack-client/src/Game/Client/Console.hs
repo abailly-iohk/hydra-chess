@@ -10,7 +10,7 @@
 module Game.Client.Console where
 
 import Control.Applicative ((<|>))
-import Control.Exception (IOException, handle)
+import Control.Exception (IOException, handle, throwIO)
 import Data.Aeson (ToJSON (..), Value, eitherDecode, object, (.=))
 import Data.Aeson.Key (fromText)
 import Data.Bifunctor (first)
@@ -29,28 +29,31 @@ import System.IO.Error (isEOFError)
 import Text.Megaparsec (Parsec, empty, many, parse, sepBy, takeRest, try)
 import Text.Megaparsec.Char (alphaNumChar, char, hexDigitChar, space, space1, string)
 import qualified Text.Megaparsec.Char.Lexer as L
+import System.Exit (ExitCode(ExitSuccess))
 
 type Parser = Parsec Void Text
 
-mkImpureIO :: HasIO IO
-mkImpureIO =
+mkImpureIO :: Show output => Parser command -> HasIO command output IO
+mkImpureIO parser =
   HasIO
     { input = handle eofException $ do
-        inp <- readInput <$> Text.getLine
+        inp <- readInput parser <$> Text.getLine
         case inp of
           Left err -> pure $ Left $ Err err
           Right cmd -> pure $ Right cmd
     , output = print
+    , problem = print
+    , exit = throwIO ExitSuccess
     , prompt = putStr "> "
     }
 
-eofException :: IOException -> IO (Either Err Command)
+eofException :: IOException -> IO (Either Err command)
 eofException e
   | isEOFError e = pure (Left EOF)
   | otherwise = pure (Left $ Err $ pack $ show e)
 
-readInput :: Text -> Either Text Command
-readInput = first (pack . show) . parse inputParser ""
+readInput :: Parser command -> Text -> Either Text command
+readInput parser = first (pack . show) . parse parser ""
 
 inputParser :: Parser Command
 inputParser =
@@ -110,23 +113,10 @@ spaceConsumer :: Parser ()
 spaceConsumer =
   L.space space1 (L.skipLineComment "#") empty
 
-data FullTxOut = FullTxOut {txIn :: Text, address :: Text, value :: Coins}
-  deriving stock (Eq, Show)
 
-instance ToJSON FullTxOut where
-  toJSON FullTxOut{txIn, address, value} =
-    object
-      [ fromText txIn
-          .= object
-            [ "address" .= address
-            , "value" .= value
-            ]
-      ]
-
-mkFullTxOut :: Text -> SimpleTxOut -> FullTxOut
-mkFullTxOut address SimpleTxOut{txIn, coins} = FullTxOut{txIn, address, value = coins}
-
-data SimpleTxOut = SimpleTxOut {txIn :: Text, coins :: Coins}
+data SimpleUTxO =
+  SimpleUTxO {txIn :: Text, coins :: Coins}
+  | UTxOWithDatum { txIn :: Text, coins :: Coins, datumHash :: Text }
   deriving stock (Eq, Show)
 
 data Coins = Coins
@@ -139,8 +129,6 @@ newtype Coin = Coin (Map Text Integer)
   deriving stock (Eq, Show)
   deriving newtype (ToJSON)
 
-instance ToJSON SimpleTxOut where
-  toJSON (SimpleTxOut txIn coins) = object [fromText txIn .= coins]
 
 instance ToJSON Coins where
   toJSON Coins{lovelace, natives} =
@@ -154,14 +142,14 @@ instance ToJSON Coins where
 
 -- | Parse a single line of a UTxO for TxIn and value parts.
 -- TODO: Move this elsewhere, this has nothing to do here
-parseQueryUTxO :: Text -> Either Text SimpleTxOut
+parseQueryUTxO :: Text -> Either Text SimpleUTxO
 parseQueryUTxO = first (pack . show) . parse utxoParser ""
 
-utxoParser :: Parser SimpleTxOut
+utxoParser :: Parser SimpleUTxO
 utxoParser = do
   txIn <- txInParser <* spaceConsumer
   value <- valueParser
-  pure $ SimpleTxOut txIn value
+  pure $ SimpleUTxO txIn value
 
 valueParser :: Parser Coins
 valueParser = do

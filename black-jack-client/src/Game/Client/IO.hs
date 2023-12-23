@@ -31,20 +31,23 @@ data Output
 data Err = EOF | Err Text
   deriving (Eq, Show)
 
-data HasIO m = HasIO
-  { output :: Output -> m ()
-  , input :: m (Either Err Command)
+data HasIO command output m = HasIO
+  { output :: output -> m ()
+  , input :: m (Either Err command)
+  , problem :: output -> m ()
   , prompt :: m ()
+  , exit :: m ()
   }
 
 -- * Pure IO
 
-data PureIO = PureIO
-  { inputText :: [Command]
-  , outputText :: [Output]
+data PureIO command output = PureIO
+  { inputText :: [command]
+  , outputText :: [output]
+  , errorText :: [output]
   }
 
-mkPureIO :: (MonadState PureIO m) => HasIO m
+mkPureIO :: (MonadState (PureIO command output) m) => HasIO command output m
 mkPureIO =
   HasIO
     { input = do
@@ -53,13 +56,15 @@ mkPureIO =
           [] -> pure $ Left EOF
           (t : ts) -> modify (\e -> e{inputText = ts}) >> pure (Right t)
     , output = \t -> modify $ \e -> e{outputText = t : outputText e}
+    , problem = \o -> modify $ \e -> e{errorText = o : errorText e}
     , prompt = pure ()
+    , exit = pure ()
     }
 
 withInput ::
   Monad m =>
-  [Command] ->
-  StateT PureIO m a ->
-  m (a, [Output])
+  [command] ->
+  StateT (PureIO command output) m a ->
+  m (a, [output])
 withInput stream act =
-  second outputText <$> runStateT act (PureIO stream [])
+  second outputText <$> runStateT act (PureIO stream [] [])

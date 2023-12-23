@@ -19,11 +19,13 @@ module Chess.ELO where
 
 import PlutusTx.Prelude
 
+import Cardano.Api (hashScriptDataBytes, serialiseToRawBytes, unsafeHashableScriptData)
+import Cardano.Api.Shelley (fromPlutusData)
 import Chess.Plutus (ValidatorType, scriptValidatorHash, validatorToBytes)
 import Data.ByteString (ByteString)
-import PlutusLedgerApi.V2 (PubKeyHash, ScriptHash, SerialisedScript, serialiseCompiledCode)
-import PlutusTx (CompiledCode, compile, liftCode, unsafeApplyCode)
 import PlutusCore.Version (plcVersion100)
+import PlutusLedgerApi.V2 (PubKeyHash, ScriptHash, SerialisedScript, serialiseCompiledCode)
+import PlutusTx (CompiledCode, compile, liftCode, toData, unsafeApplyCode)
 
 validator :: PubKeyHash -> BuiltinData -> BuiltinData -> BuiltinData -> Bool
 validator _pkh _ _ _ = True
@@ -44,3 +46,11 @@ validatorHash = scriptValidatorHash . validatorScript
 
 validatorBytes :: PubKeyHash -> ByteString
 validatorBytes = validatorToBytes . validatorScript
+
+datumHashBytes :: Integer -> ByteString
+datumHashBytes =
+  serialiseToRawBytes
+    . hashScriptDataBytes
+    . unsafeHashableScriptData
+    . fromPlutusData
+    . toData
