@@ -106,8 +106,18 @@ apply move@(Move from _) game@(Game curSide _) =
   case pieceAt from game of
     Just (PieceOnBoard Pawn White _) | curSide == White -> moveWhitePawn move game
     Just (PieceOnBoard Pawn Black _) | curSide == Black -> moveBlackPawn move game
+    Just (PieceOnBoard Rook side _) | curSide == side -> moveRook move game
     _ -> Left $ IllegalMove move
 {-# INLINEABLE apply #-}
+
+moveRook :: Move -> Game -> Either IllegalMove Game
+moveRook move@(Move from@(Pos row _) to@(Pos row' _)) game =
+  if
+      | row' == row ->
+          Right $ movePiece game from to
+      | otherwise ->
+          Left $ IllegalMove move
+{-# INLINEABLE moveRook #-}
 
 moveWhitePawn :: Move -> Game -> Either IllegalMove Game
 moveWhitePawn move@(Move from@(Pos row col) to@(Pos row' col')) game =
