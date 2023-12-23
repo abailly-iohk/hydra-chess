@@ -47,15 +47,19 @@ prop_pawn_cannot_move_backwards side =
           White -> -1
           Black -> 1
         move = Move pos (Pos (r + offset) c)
-     in case apply move game of
-          Right game' ->
-            property False
-              & counterexample ("game': " <> show game')
-              & counterexample ("move: " <> show move)
-          Left err ->
-            err
-              === IllegalMove move
-              & counterexample ("game: " <> show err)
+     in isIllegal game move
+
+isIllegal :: Game -> Move -> Property
+isIllegal game move =
+  case apply move game of
+    Right game' ->
+      property False
+        & counterexample ("game': " <> show game')
+        & counterexample ("move: " <> show move)
+    Left err ->
+      err
+        === IllegalMove move
+        & counterexample ("game: " <> show err)
 
 prop_generate_2_starting_moves_for_pawns :: Side -> Property
 prop_generate_2_starting_moves_for_pawns curSide =
@@ -77,15 +81,7 @@ prop_can_move_black_pawn_in_its_column_only side =
               White -> 1
               Black -> -1
             move = Move from (Pos (row + offset) col')
-         in case apply move initialGame of
-              Right game' ->
-                property False
-                  & counterexample ("game': " <> show game')
-                  & counterexample ("move: " <> show move)
-              Left err ->
-                err
-                  === IllegalMove move
-                  & counterexample ("move: " <> show move)
+         in isIllegal initialGame move
 
 prop_cannot_play_same_side_twice_in_a_row :: Side -> Property
 prop_cannot_play_same_side_twice_in_a_row side =
@@ -99,17 +95,7 @@ prop_cannot_play_same_side_twice_in_a_row side =
                 White -> 1
                 Black -> -1
               move' = Move to (Pos c (r + bit))
-           in case apply move' game' of
-                Right game'' ->
-                  property False
-                    & counterexample ("game: " <> show game'')
-                    & counterexample ("move': " <> show move')
-                    & counterexample ("game': " <> show game')
-                    & counterexample ("move: " <> show move)
-                Left err ->
-                  err
-                    === IllegalMove move'
-                    & counterexample ("game: " <> show err)
+           in isIllegal game' move'
 
 generateMove :: Position -> Game -> Gen Move
 generateMove pos game =
@@ -171,15 +157,7 @@ prop_pawn_cannot_move_diagonally =
                     , PieceOnBoard Pawn Black otherPos
                     ]
                 move = Move pos targetPos
-             in case apply move game of
-                  Right game' ->
-                    property False
-                      & counterexample ("game: " <> show game')
-                      & counterexample ("move: " <> show move)
-                  Left err ->
-                    err
-                      === IllegalMove move
-                      & counterexample ("game: " <> show err)
+             in isIllegal game move
 
 anyValidPawn :: Side -> Gen Position
 anyValidPawn _ =
@@ -191,16 +169,7 @@ prop_cannot_move_a_pawn_where_there_is_a_piece =
     forAll (choose (1, 2)) $ \offset ->
       let game = Game White [PieceOnBoard Pawn White $ Pos (row + 1) col]
           move = Move (Pos row col) (Pos (row + offset) col)
-          result = apply move game
-       in case result of
-            Right game' ->
-              property False
-                & counterexample ("game: " <> show game')
-                & counterexample ("move: " <> show move)
-            Left err ->
-              err
-                === IllegalMove move
-                & counterexample ("game: " <> show err)
+       in isIllegal game move
 
 prop_can_move_pawn_one_or_2_squares_at_start :: Property
 prop_can_move_pawn_one_or_2_squares_at_start =
@@ -240,30 +209,14 @@ prop_cannot_move_a_pawn_more_than_2_squares side =
             White -> 1
             Black -> -1
           move = Move (Pos row col) (Pos (row + offset * bit) col)
-          result = apply move initialGame
-       in case result of
-            Right game' ->
-              property False
-                & counterexample ("expected error, got game: " <> show game')
-            Left err ->
-              err
-                === IllegalMove move
-                & counterexample ("game: " <> show err)
+       in isIllegal initialGame move
 
 prop_cannot_move_a_pawn_more_than_1_square_after_it_moved :: Side -> Property
 prop_cannot_move_a_pawn_more_than_1_square_after_it_moved side =
   forAll (anyPos `suchThat` pawnHasMoved side) $ \pos@(Pos row col) ->
     let game = Game side [PieceOnBoard Pawn side pos]
         move = Move (Pos row col) (Pos (row + 2) col)
-     in case apply move game of
-          Right game' ->
-            property False
-              & counterexample ("game: " <> show game')
-              & counterexample ("move: " <> show move)
-          Left err ->
-            err
-              === IllegalMove move
-              & counterexample ("game: " <> show err)
+     in isIllegal game move
 
 pawnHasMoved :: Side -> Position -> Bool
 pawnHasMoved side (Pos r _) = case side of
