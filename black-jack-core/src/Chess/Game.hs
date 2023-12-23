@@ -117,10 +117,10 @@ apply move@(Move from to) game@(Game curSide _)
 moveRook :: Move -> Game -> Either IllegalMove Game
 moveRook move@(Move from@(Pos row col) to@(Pos row' col')) game =
   if
-      | row' == row ->
-          Right $ movePiece game from to
-      | col' == col ->
-          Right $ movePiece game from to
+      | row' == row || col' == col ->
+          if isJust (to `pieceAt` game)
+            then takePiece game from to
+            else Right $ movePiece game from to
       | otherwise ->
           Left $ IllegalMove move
 {-# INLINEABLE moveRook #-}

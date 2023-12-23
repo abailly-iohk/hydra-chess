@@ -43,10 +43,41 @@ spec = parallel $ do
   describe "Rook" $ do
     prop "can move horizontally or vertically any number of squares" prop_can_move_rook_horizontally
     prop "can move vertically any number of squares" prop_can_move_rook_vertically
+    prop "can take enemy piece at moved location" prop_can_take_enemy_piece
+    prop "cannot take enemy piece if move is illegal" prop_cannot_take_enemy_piece_moving_illegally
   describe "Side" $ do
     prop "cannot play same side twice in a row" prop_cannot_play_same_side_twice_in_a_row
   describe "General" $ do
     prop "cannot pass (move to the same position)" prop_cannot_pass
+
+prop_cannot_take_enemy_piece_moving_illegally :: Property
+prop_cannot_take_enemy_piece_moving_illegally =
+  forAll anyPos $ \pos ->
+    forAll arbitrary $ \side ->
+      forAll (illegalMoves pos) $ \move@(Move _ to) ->
+        let game =
+              Game
+                side
+                [ PieceOnBoard Rook side pos
+                , PieceOnBoard Pawn (flipSide side) to
+                ]
+         in isIllegal game move
+ where
+  illegalMoves from@(Pos r c) = Move from <$> anyPos `suchThat` \(Pos r' c') -> r' /= r && c' /= c
+
+prop_can_take_enemy_piece :: Property
+prop_can_take_enemy_piece =
+  forAll anyPos $ \pos ->
+    forAll arbitrary $ \side ->
+      let startGame = Game side [PieceOnBoard Rook side pos]
+       in forAll (elements $ possibleMoves pos startGame) $ \move@(Move _ to) ->
+            let game =
+                  Game
+                    side
+                    [ PieceOnBoard Rook side pos
+                    , PieceOnBoard Pawn (flipSide side) to
+                    ]
+             in isLegalMove move game (\game' -> length (findPieces Pawn (flipSide side) game') == 0)
 
 prop_cannot_pass :: Property
 prop_cannot_pass =
