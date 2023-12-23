@@ -12,13 +12,14 @@ import Test.QuickCheck (
   Arbitrary (..),
   Gen,
   Property,
+  Testable,
   choose,
   counterexample,
   elements,
   forAll,
   property,
   suchThat,
-  (===), Testable,
+  (===),
  )
 
 spec :: Spec
@@ -37,7 +38,8 @@ spec = parallel $ do
     prop "can move a black pawn one or 2 squares at start of game" prop_can_move_black_pawn_one_or_2_squares_at_start
     prop "can move a pawn in its column only" prop_can_move_black_pawn_in_its_column_only
   describe "Rook" $ do
-    prop "can move horizontally any number of squares" prop_can_move_rook_horizontally
+    prop "can move horizontally or vertically any number of squares" prop_can_move_rook_horizontally
+    prop "can move vertically any number of squares" prop_can_move_rook_vertically
   describe "Side" $ do
     prop "cannot play same side twice in a row" prop_cannot_play_same_side_twice_in_a_row
 
@@ -47,6 +49,19 @@ prop_can_move_rook_horizontally =
     forAll arbitrary $ \side ->
       forAll (anyColumn `suchThat` (/= c)) $ \col ->
         let newPos = (Pos r col)
+            game = Game side [PieceOnBoard Rook side pos]
+            move = Move pos newPos
+         in isLegalMove
+              move
+              game
+              (== Game (flipSide side) [PieceOnBoard Rook side newPos])
+
+prop_can_move_rook_vertically :: Property
+prop_can_move_rook_vertically =
+  forAll anyPos $ \pos@(Pos r c) ->
+    forAll arbitrary $ \side ->
+      forAll (anyRow `suchThat` (/= r)) $ \row ->
+        let newPos = (Pos row c)
             game = Game side [PieceOnBoard Rook side pos]
             move = Move pos newPos
          in isLegalMove
@@ -257,10 +272,14 @@ anyPawn side game =
 
 anyPos :: Gen Position
 anyPos =
-  elements [Pos r c | r <- [0 .. 7], c <- [0 .. 7]]
+  Pos <$> anyRow <*> anyColumn
 
 anyColumn :: Gen Integer
 anyColumn =
+  elements [0 .. 7]
+
+anyRow :: Gen Integer
+anyRow =
   elements [0 .. 7]
 
 instance Arbitrary Side where
