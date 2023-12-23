@@ -5,7 +5,9 @@ module Chess.GameSpec where
 
 import Chess.Game
 
+import Chess.Generators (anyColumn, anyPawn, anyPos, anyRow, anyValidPawn, generateMove)
 import Data.Function ((&))
+import Data.Functor ((<&>))
 import Test.Hspec (Spec, describe, parallel)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (
@@ -13,14 +15,15 @@ import Test.QuickCheck (
   Property,
   Testable,
   choose,
+  conjoin,
   counterexample,
   elements,
   forAll,
   property,
   suchThat,
+  tabulate,
   (===),
  )
-import Chess.Generators (anyPos, anyColumn, anyRow, anyPawn, generateMove, anyValidPawn)
 
 spec :: Spec
 spec = parallel $ do
@@ -42,8 +45,15 @@ spec = parallel $ do
     prop "can move vertically any number of squares" prop_can_move_rook_vertically
   describe "Side" $ do
     prop "cannot play same side twice in a row" prop_cannot_play_same_side_twice_in_a_row
-  -- describe "General" $ do
-  --   prop "cannot pass (move to the same position)" prop_cannot_pass
+  describe "General" $ do
+    prop "cannot pass (move to the same position)" prop_cannot_pass
+
+prop_cannot_pass :: Property
+prop_cannot_pass =
+  forAll arbitrary $ \game@Game{curSide, pieces} ->
+    let moveInPlace = filter ((/= curSide) . side) pieces <&> \(PieceOnBoard _ _ pos) -> Move pos pos
+     in conjoin (isIllegal game <$> moveInPlace)
+          & tabulate "Piece" (show . piece <$> pieces)
 
 prop_can_move_rook_horizontally :: Property
 prop_can_move_rook_horizontally =

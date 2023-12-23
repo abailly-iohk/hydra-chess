@@ -86,6 +86,8 @@ initialGame =
   Game White $
     [PieceOnBoard Pawn White (Pos 1 c) | c <- [0 .. 7]]
       <> [PieceOnBoard Pawn Black (Pos 6 c) | c <- [0 .. 7]]
+      <> [PieceOnBoard Rook Black (Pos 7 0), PieceOnBoard Rook Black (Pos 7 7)]
+      <> [PieceOnBoard Rook White (Pos 0 0), PieceOnBoard Rook White (Pos 0 7)]
 
 findPieces :: Piece -> Side -> Game -> [PieceOnBoard]
 findPieces piece' side' Game{pieces} =
@@ -102,12 +104,14 @@ data IllegalMove = IllegalMove Move
 PlutusTx.unstableMakeIsData ''IllegalMove
 
 apply :: Move -> Game -> Either IllegalMove Game
-apply move@(Move from _) game@(Game curSide _) =
-  case pieceAt from game of
-    Just (PieceOnBoard Pawn White _) | curSide == White -> moveWhitePawn move game
-    Just (PieceOnBoard Pawn Black _) | curSide == Black -> moveBlackPawn move game
-    Just (PieceOnBoard Rook side _) | curSide == side -> moveRook move game
-    _ -> Left $ IllegalMove move
+apply move@(Move from to) game@(Game curSide _)
+  | from == to = Left $ IllegalMove move
+  | otherwise =
+      case pieceAt from game of
+        Just (PieceOnBoard Pawn White _) | curSide == White -> moveWhitePawn move game
+        Just (PieceOnBoard Pawn Black _) | curSide == Black -> moveBlackPawn move game
+        Just (PieceOnBoard Rook side _) | curSide == side -> moveRook move game
+        _ -> Left $ IllegalMove move
 {-# INLINEABLE apply #-}
 
 moveRook :: Move -> Game -> Either IllegalMove Game
