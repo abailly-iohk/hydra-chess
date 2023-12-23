@@ -51,6 +51,7 @@ spec = parallel $ do
   describe "Bishop" $ do
     prop "can move diagonally any number of squares" prop_bishop_can_move_diagonally
     prop "cannot move orthogonally" prop_bishop_cannot_move_orthogonally
+    prop "can take enemy piece at moved location" prop_bishop_can_take_enemy_piece
   describe "Side" $ do
     prop "cannot play same side twice in a row" prop_cannot_play_same_side_twice_in_a_row
   describe "General" $ do
@@ -78,6 +79,20 @@ prop_bishop_cannot_move_orthogonally side =
  where
   orthogonalMoves (Pos r c) =
     elements $ [Pos r' c | r' <- [0 .. 7], r' /= r] <> [Pos r c' | c' <- [0 .. 7], c' /= c]
+
+prop_bishop_can_take_enemy_piece :: Property
+prop_bishop_can_take_enemy_piece =
+  forAll anyPos $ \pos ->
+    forAll arbitrary $ \side ->
+      let startGame = Game side [PieceOnBoard Bishop side pos]
+       in forAll (elements $ possibleMoves pos startGame) $ \move@(Move _ to) ->
+            let game =
+                  Game
+                    side
+                    [ PieceOnBoard Bishop side pos
+                    , PieceOnBoard Pawn (flipSide side) to
+                    ]
+             in isLegalMove move game (\game' -> length (findPieces Pawn (flipSide side) game') == 0)
 
 prop_generate_paths_from_both_ends :: Property
 prop_generate_paths_from_both_ends =

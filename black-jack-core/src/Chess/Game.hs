@@ -134,7 +134,9 @@ moveRook move@(Move from@(Pos row col) to@(Pos row' col')) game =
 moveBishop :: Move -> Game -> Either IllegalMove Game
 moveBishop move@(Move from@(Pos row col) to@(Pos row' col')) game =
   if abs (row' - row) == abs (col' - col)
-    then Right $ movePiece game from to
+    then case pieceAt to game of
+          Just{} -> takePiece game from to
+          Nothing -> Right $ movePiece game from to
     else Left $ IllegalMove move
 {-# INLINEABLE moveBishop #-}
 
