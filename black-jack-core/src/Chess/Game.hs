@@ -132,8 +132,10 @@ moveRook move@(Move from@(Pos row col) to@(Pos row' col')) game =
 {-# INLINEABLE moveRook #-}
 
 moveBishop :: Move -> Game -> Either IllegalMove Game
-moveBishop _move@(Move from@(Pos _row _col) to@(Pos _row' _col')) game =
-  Right $ movePiece game from to
+moveBishop move@(Move from@(Pos row col) to@(Pos row' col')) game =
+  if abs (row' - row) == abs (col' - col)
+    then Right $ movePiece game from to
+    else Left $ IllegalMove move
 {-# INLINEABLE moveBishop #-}
 
 moveWhitePawn :: Move -> Game -> Either IllegalMove Game
@@ -237,7 +239,7 @@ accessibleDiagonals (Pos r c) =
   [ Pos r' c'
   | dr <- [-1, 1]
   , dc <- [-1, 1]
-  , (r', c') <- (\ offset -> (r + offset * dr, c + offset * dc)) <$> [1 .. 6]
+  , (r', c') <- (\offset -> (r + offset * dr, c + offset * dc)) <$> [1 .. 6]
   , r' >= 0 && r' <= 7 && r' /= r
   , c' >= 0 && c' <= 7 && c' /= c
   ]

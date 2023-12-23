@@ -50,6 +50,7 @@ spec = parallel $ do
     prop "cannot move if blocked by other piece" prop_cannot_move_if_blocked
   describe "Bishop" $ do
     prop "can move diagonally any number of squares" prop_bishop_can_move_diagonally
+    prop "cannot move orthogonally" prop_bishop_cannot_move_orthogonally
   describe "Side" $ do
     prop "cannot play same side twice in a row" prop_cannot_play_same_side_twice_in_a_row
   describe "General" $ do
@@ -64,6 +65,19 @@ prop_bishop_can_move_diagonally side =
               side
               [PieceOnBoard Bishop side from]
        in isLegalMove (Move from to) game (== Game (flipSide side) [PieceOnBoard Bishop side to])
+
+prop_bishop_cannot_move_orthogonally :: Side -> Property
+prop_bishop_cannot_move_orthogonally side =
+  forAll anyPos $ \from ->
+    forAll (orthogonalMoves from) $ \to ->
+      let game =
+            Game
+              side
+              [PieceOnBoard Bishop side from]
+       in isIllegal game (Move from to)
+ where
+  orthogonalMoves (Pos r c) =
+    elements $ [Pos r' c | r' <- [0 .. 7], r' /= r] <> [Pos r c' | c' <- [0 .. 7], c' /= c]
 
 prop_generate_paths_from_both_ends :: Property
 prop_generate_paths_from_both_ends =
