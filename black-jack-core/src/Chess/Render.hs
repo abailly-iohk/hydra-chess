@@ -41,4 +41,6 @@ character :: Maybe PieceOnBoard -> Char
 character = \case
   Just (PieceOnBoard Pawn White _) -> '♙'
   Just (PieceOnBoard Pawn Black _) -> '♟'
+  Just (PieceOnBoard Rook White _) -> '♖'
+  Just (PieceOnBoard Rook Black _) -> '♜'
   Nothing -> ' '

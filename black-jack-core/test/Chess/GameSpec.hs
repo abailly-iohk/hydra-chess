@@ -18,7 +18,7 @@ import Test.QuickCheck (
   forAll,
   property,
   suchThat,
-  (===),
+  (===), Testable,
  )
 
 spec :: Spec
@@ -36,8 +36,23 @@ spec = parallel $ do
     prop "white pawn cannot move backwards" prop_pawn_cannot_move_backwards
     prop "can move a black pawn one or 2 squares at start of game" prop_can_move_black_pawn_one_or_2_squares_at_start
     prop "can move a pawn in its column only" prop_can_move_black_pawn_in_its_column_only
+  describe "Rook" $ do
+    prop "can move horizontally any number of squares" prop_can_move_rook_horizontally
   describe "Side" $ do
     prop "cannot play same side twice in a row" prop_cannot_play_same_side_twice_in_a_row
+
+prop_can_move_rook_horizontally :: Property
+prop_can_move_rook_horizontally =
+  forAll anyPos $ \pos@(Pos r c) ->
+    forAll arbitrary $ \side ->
+      forAll (anyColumn `suchThat` (/= c)) $ \col ->
+        let newPos = (Pos r col)
+            game = Game side [PieceOnBoard Rook side pos]
+            move = Move pos newPos
+         in isLegalMove
+              move
+              game
+              (== Game (flipSide side) [PieceOnBoard Rook side newPos])
 
 prop_pawn_cannot_move_backwards :: Side -> Property
 prop_pawn_cannot_move_backwards side =
@@ -48,18 +63,6 @@ prop_pawn_cannot_move_backwards side =
           Black -> 1
         move = Move pos (Pos (r + offset) c)
      in isIllegal game move
-
-isIllegal :: Game -> Move -> Property
-isIllegal game move =
-  case apply move game of
-    Right game' ->
-      property False
-        & counterexample ("game': " <> show game')
-        & counterexample ("move: " <> show move)
-    Left err ->
-      err
-        === IllegalMove move
-        & counterexample ("game: " <> show err)
 
 prop_generate_2_starting_moves_for_pawns :: Side -> Property
 prop_generate_2_starting_moves_for_pawns curSide =
@@ -97,12 +100,6 @@ prop_cannot_play_same_side_twice_in_a_row side =
               move' = Move to (Pos c (r + bit))
            in isIllegal game' move'
 
-generateMove :: Position -> Game -> Gen Move
-generateMove pos game =
-  case possibleMoves pos game of
-    [] -> error $ "no possible moves from " <> show pos <> "in game " <> show game
-    other -> elements other
-
 prop_can_move_pawn_one_square_after_start :: Side -> Property
 prop_can_move_pawn_one_square_after_start side =
   forAll (anyPos `suchThat` pawnHasMoved side) $ \pos@(Pos row col) ->
@@ -111,13 +108,22 @@ prop_can_move_pawn_one_square_after_start side =
           Black -> -1
         game = Game side [PieceOnBoard Pawn side pos]
         move = Move (Pos row col) (Pos (row + offset) col)
-     in case apply move game of
-          Right game' ->
-            game' /= initialGame
-              & counterexample ("game: " <> show game')
-          Left err ->
-            property False
-              & counterexample ("error: " <> show err)
+     in isLegalMove move game (/= initialGame)
+
+isLegalMove ::
+  (Testable a) =>
+  Move ->
+  Game ->
+  (Game -> a) ->
+  Property
+isLegalMove move game predicate =
+  case apply move game of
+    Right game' ->
+      predicate game'
+        & counterexample ("game: " <> show game')
+    Left err ->
+      property False
+        & counterexample ("error: " <> show err)
 
 prop_pawn_takes_piece_diagonally :: Property
 prop_pawn_takes_piece_diagonally =
@@ -158,10 +164,6 @@ prop_pawn_cannot_move_diagonally =
                     ]
                 move = Move pos targetPos
              in isIllegal game move
-
-anyValidPawn :: Side -> Gen Position
-anyValidPawn _ =
-  elements [Pos r c | r <- [1 .. 6], c <- [0 .. 7]]
 
 prop_cannot_move_a_pawn_where_there_is_a_piece :: Property
 prop_cannot_move_a_pawn_where_there_is_a_piece =
@@ -218,10 +220,36 @@ prop_cannot_move_a_pawn_more_than_1_square_after_it_moved side =
         move = Move (Pos row col) (Pos (row + 2) col)
      in isIllegal game move
 
+-- * Generic Properties
+
+isIllegal :: Game -> Move -> Property
+isIllegal game move =
+  case apply move game of
+    Right game' ->
+      property False
+        & counterexample ("game': " <> show game')
+        & counterexample ("move: " <> show move)
+    Left err ->
+      err
+        === IllegalMove move
+        & counterexample ("game: " <> show err)
+
 pawnHasMoved :: Side -> Position -> Bool
 pawnHasMoved side (Pos r _) = case side of
   White -> r > 1
   Black -> r < 6
+
+-- * Generators
+
+generateMove :: Position -> Game -> Gen Move
+generateMove pos game =
+  case possibleMoves pos game of
+    [] -> error $ "no possible moves from " <> show pos <> "in game " <> show game
+    other -> elements other
+
+anyValidPawn :: Side -> Gen Position
+anyValidPawn _ =
+  elements [Pos r c | r <- [1 .. 6], c <- [0 .. 7]]
 
 anyPawn :: Side -> Game -> Gen Position
 anyPawn side game =
@@ -230,6 +258,10 @@ anyPawn side game =
 anyPos :: Gen Position
 anyPos =
   elements [Pos r c | r <- [0 .. 7], c <- [0 .. 7]]
+
+anyColumn :: Gen Integer
+anyColumn =
+  elements [0 .. 7]
 
 instance Arbitrary Side where
   arbitrary = elements [White, Black]

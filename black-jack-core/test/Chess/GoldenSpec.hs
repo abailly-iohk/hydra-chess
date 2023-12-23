@@ -25,6 +25,9 @@ genMoves =
    genMove 0 = pure ()
    genMove n = do
      game@Game{pieces} <- get
-     move <- lift $ elements $ concatMap ((`possibleMoves` game) . pos) pieces
-     either (const $ pure ()) put (apply move game)
-     genMove (n-1)
+     case concatMap ((`possibleMoves` game) . pos) pieces of
+       [] -> pure ()
+       moves ->  do
+         move <- lift $ elements moves
+         either (const $ pure ()) put (apply move game)
+         genMove (n-1)

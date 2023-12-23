@@ -34,7 +34,7 @@ newtype Path = Path {positions :: [Position]}
 instance Eq Path where
   Path p == Path p' = p == p'
 
-data Piece = Pawn
+data Piece = Pawn | Rook
   deriving (Haskell.Eq, Haskell.Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
@@ -42,6 +42,8 @@ PlutusTx.unstableMakeIsData ''Piece
 
 instance Eq Piece where
   Pawn == Pawn = True
+  Rook == Rook = True
+  _ == _ = False
 
 data Side = White | Black
   deriving (Haskell.Eq, Haskell.Show, Generic)
