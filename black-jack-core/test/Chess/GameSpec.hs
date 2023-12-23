@@ -10,7 +10,6 @@ import Test.Hspec (Spec, describe, parallel)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (
   Arbitrary (..),
-  Gen,
   Property,
   Testable,
   choose,
@@ -21,6 +20,7 @@ import Test.QuickCheck (
   suchThat,
   (===),
  )
+import Chess.Generators (anyPos, anyColumn, anyRow, anyPawn, generateMove, anyValidPawn)
 
 spec :: Spec
 spec = parallel $ do
@@ -42,6 +42,8 @@ spec = parallel $ do
     prop "can move vertically any number of squares" prop_can_move_rook_vertically
   describe "Side" $ do
     prop "cannot play same side twice in a row" prop_cannot_play_same_side_twice_in_a_row
+  -- describe "General" $ do
+  --   prop "cannot pass (move to the same position)" prop_cannot_pass
 
 prop_can_move_rook_horizontally :: Property
 prop_can_move_rook_horizontally =
@@ -253,34 +255,3 @@ pawnHasMoved :: Side -> Position -> Bool
 pawnHasMoved side (Pos r _) = case side of
   White -> r > 1
   Black -> r < 6
-
--- * Generators
-
-generateMove :: Position -> Game -> Gen Move
-generateMove pos game =
-  case possibleMoves pos game of
-    [] -> error $ "no possible moves from " <> show pos <> "in game " <> show game
-    other -> elements other
-
-anyValidPawn :: Side -> Gen Position
-anyValidPawn _ =
-  elements [Pos r c | r <- [1 .. 6], c <- [0 .. 7]]
-
-anyPawn :: Side -> Game -> Gen Position
-anyPawn side game =
-  elements ((\PieceOnBoard{pos} -> pos) <$> findPieces Pawn side game)
-
-anyPos :: Gen Position
-anyPos =
-  Pos <$> anyRow <*> anyColumn
-
-anyColumn :: Gen Integer
-anyColumn =
-  elements [0 .. 7]
-
-anyRow :: Gen Integer
-anyRow =
-  elements [0 .. 7]
-
-instance Arbitrary Side where
-  arbitrary = elements [White, Black]
