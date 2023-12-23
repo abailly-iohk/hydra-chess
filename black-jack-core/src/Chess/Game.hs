@@ -118,9 +118,11 @@ moveRook :: Move -> Game -> Either IllegalMove Game
 moveRook move@(Move from@(Pos row col) to@(Pos row' col')) game =
   if
       | row' == row || col' == col ->
-          if isJust (to `pieceAt` game)
-            then takePiece game from to
-            else Right $ movePiece game from to
+          case game `firstPieceOn` path from to of
+            Just (PieceOnBoard{pos})
+              | pos == to -> takePiece game from to
+              | otherwise -> Left $ IllegalMove move
+            Nothing -> Right $ movePiece game from to
       | otherwise ->
           Left $ IllegalMove move
 {-# INLINEABLE moveRook #-}
@@ -130,7 +132,7 @@ moveWhitePawn move@(Move from@(Pos row col) to@(Pos row' col')) game =
   if
       | (row' - row) == 1 && abs (col' - col) == 1 ->
           takePiece game from to
-      | game `hasPieceOn` path from to ->
+      | isJust (game `firstPieceOn` path from to) ->
           Left $ IllegalMove move
       | row >= 2 && row' - row == 1 && col == col' ->
           Right $ movePiece game from to
@@ -145,7 +147,7 @@ moveBlackPawn move@(Move from@(Pos row col) to@(Pos row' col')) game =
   if
       | (row' - row) == -1 && abs (col' - col) == 1 ->
           takePiece game from to
-      | game `hasPieceOn` path from to ->
+      | isJust (game `firstPieceOn` path from to) ->
           Left $ IllegalMove move
       | row <= 5 && row' - row == -1 && col == col' ->
           Right $ movePiece game from to
@@ -203,10 +205,12 @@ path (Pos r c) (Pos r' c') =
                 []
 {-# INLINEABLE path #-}
 
-hasPieceOn :: Game -> Path -> Bool
-hasPieceOn Game{pieces} =
-  any (\p -> isJust $ find (\PieceOnBoard{pos} -> p == pos) pieces) . positions
-{-# INLINEABLE hasPieceOn #-}
+firstPieceOn :: Game -> Path -> Maybe PieceOnBoard
+firstPieceOn Game{pieces} aPath =
+  case mapMaybe (\p -> find (\PieceOnBoard{pos} -> p == pos) pieces) $ positions aPath of
+    [] -> Nothing
+    (a : _) -> Just a
+{-# INLINEABLE firstPieceOn #-}
 
 possibleMoves :: Position -> Game -> [Move]
 possibleMoves pos@(Pos r c) game =

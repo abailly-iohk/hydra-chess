@@ -29,6 +29,8 @@ spec :: Spec
 spec = parallel $ do
   describe "Generators" $ do
     prop "generates 2 moves at start for pawns" prop_generate_2_starting_moves_for_pawns
+  describe "Path" $ do
+    prop "generate path of same length from both ends" prop_generate_paths_from_both_ends
   describe "Pawn" $ do
     prop "can move a white pawn one or 2 squares at start of game" prop_can_move_pawn_one_or_2_squares_at_start
     prop "can move a white pawn one square after start of game" prop_can_move_pawn_one_square_after_start
@@ -45,10 +47,44 @@ spec = parallel $ do
     prop "can move vertically any number of squares" prop_can_move_rook_vertically
     prop "can take enemy piece at moved location" prop_can_take_enemy_piece
     prop "cannot take enemy piece if move is illegal" prop_cannot_take_enemy_piece_moving_illegally
+    prop "cannot move if blocked by other piece" prop_cannot_move_if_blocked
   describe "Side" $ do
     prop "cannot play same side twice in a row" prop_cannot_play_same_side_twice_in_a_row
   describe "General" $ do
     prop "cannot pass (move to the same position)" prop_cannot_pass
+
+prop_generate_paths_from_both_ends :: Property
+prop_generate_paths_from_both_ends =
+  forAll pairOfPositionsOnPath $ \(pos1, pos2) ->
+    length (positions $ path pos1 pos2 ) == length (positions $ path pos2 pos1)
+ where
+  pairOfPositionsOnPath = do
+    base@(Pos r c) <- anyPos
+    elements $
+      [(base, Pos r' c) | r' <- [0 .. 7], r' /= r]
+        <> [(base, Pos r c') | c' <- [0 .. 7], c' /= c]
+
+prop_cannot_move_if_blocked :: Property
+prop_cannot_move_if_blocked =
+  forAll arbitrary $ \side ->
+    forAll threePiecesAligned $ \(pos, pos1, pos2) ->
+      let game =
+            Game
+              side
+              [ PieceOnBoard Rook side pos
+              , PieceOnBoard Pawn side pos1
+              , PieceOnBoard Pawn (flipSide side) pos2
+              ]
+       in isIllegal game (Move pos pos2)
+ where
+  threePiecesAligned =
+    elements
+      [ (Pos r c, Pos r' c, Pos r'' c)
+      | c <- [0 .. 7]
+      , r <- [0 .. 5]
+      , r' <- [r + 1 .. 7]
+      , r'' <- [r' + 1 .. 7]
+      ]
 
 prop_cannot_take_enemy_piece_moving_illegally :: Property
 prop_cannot_take_enemy_piece_moving_illegally =
@@ -168,21 +204,6 @@ prop_can_move_pawn_one_square_after_start side =
         move = Move (Pos row col) (Pos (row + offset) col)
      in isLegalMove move game (/= initialGame)
 
-isLegalMove ::
-  (Testable a) =>
-  Move ->
-  Game ->
-  (Game -> a) ->
-  Property
-isLegalMove move game predicate =
-  case apply move game of
-    Right game' ->
-      predicate game'
-        & counterexample ("game: " <> show game')
-    Left err ->
-      property False
-        & counterexample ("error: " <> show err)
-
 prop_pawn_takes_piece_diagonally :: Property
 prop_pawn_takes_piece_diagonally =
   forAll (anyValidPawn White) $ \pos@(Pos r c) ->
@@ -285,12 +306,34 @@ isIllegal game move =
   case apply move game of
     Right game' ->
       property False
-        & counterexample ("game': " <> show game')
+        & counterexample ("after: " <> show game')
+        & counterexample ("before: " <> show game)
         & counterexample ("move: " <> show move)
+        & counterexample ("path: " <> show (game `firstPieceOn` path from to))
     Left err ->
-      err
-        === IllegalMove move
+      err == IllegalMove move
         & counterexample ("game: " <> show err)
+ where
+  Move from to = move
+
+isLegalMove ::
+  (Testable a) =>
+  Move ->
+  Game ->
+  (Game -> a) ->
+  Property
+isLegalMove move game predicate =
+  case apply move game of
+    Right game' ->
+      predicate game'
+        & counterexample ("game: " <> show game')
+    Left err ->
+      property False
+        & counterexample ("error: " <> show err)
+        & counterexample ("game: " <> show game)
+        & counterexample ("path: " <> show (path from to))
+ where
+  Move from to = move
 
 pawnHasMoved :: Side -> Position -> Bool
 pawnHasMoved side (Pos r _) = case side of
