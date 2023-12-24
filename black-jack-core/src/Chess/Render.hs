@@ -49,4 +49,6 @@ character = \case
   Just (PieceOnBoard Bishop Black _) -> '♝'
   Just (PieceOnBoard Queen White _) -> '♕'
   Just (PieceOnBoard Queen Black _) -> '♛'
+  Just (PieceOnBoard King White _) -> '♔'
+  Just (PieceOnBoard King Black _) -> '♚'
   Nothing -> ' '

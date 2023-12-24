@@ -37,7 +37,7 @@ emptyPath = Path []
 instance Eq Path where
   Path p == Path p' = p == p'
 
-data Piece = Pawn | Rook | Bishop | Knight | Queen
+data Piece = Pawn | Rook | Bishop | Knight | Queen | King
   deriving (Haskell.Eq, Haskell.Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
@@ -47,6 +47,9 @@ instance Eq Piece where
   Pawn == Pawn = True
   Rook == Rook = True
   Bishop == Bishop = True
+  Knight == Knight = True
+  Queen == Queen = True
+  King == King = True
   _ == _ = False
 
 data Side = White | Black
@@ -98,6 +101,8 @@ initialGame =
       <> [PieceOnBoard Bishop White (Pos 0 2), PieceOnBoard Bishop White (Pos 0 5)]
       <> [PieceOnBoard Queen Black (Pos 7 3)]
       <> [PieceOnBoard Queen White (Pos 0 3)]
+      <> [PieceOnBoard King Black (Pos 7 4)]
+      <> [PieceOnBoard King White (Pos 0 4)]
 
 findPieces :: Piece -> Side -> Game -> [PieceOnBoard]
 findPieces piece' side' Game{pieces} =
@@ -123,11 +128,21 @@ apply move@(Move from to) game@(Game curSide _)
         Just (PieceOnBoard Rook side _) | curSide == side -> moveRook move game
         Just (PieceOnBoard Knight side _) | curSide == side -> moveKnight move game
         Just (PieceOnBoard Bishop side _) | curSide == side -> moveBishop move game
+        Just (PieceOnBoard King side _) | curSide == side -> moveKing move game
         Just (PieceOnBoard Queen side _)
           | curSide == side ->
               either (const $ moveBishop move game) Right $ moveRook move game
         _ -> Left $ IllegalMove move
 {-# INLINEABLE apply #-}
+
+moveKing :: Move -> Game -> Either IllegalMove Game
+moveKing move@(Move (Pos row col) (Pos row' col')) game =
+  if
+      | abs (row' - row) <= 1 && abs (col' - col) <= 1 ->
+          moveOrTakePiece move game
+      | otherwise ->
+          Left $ IllegalMove move
+{-# INLINEABLE moveKing #-}
 
 moveRook :: Move -> Game -> Either IllegalMove Game
 moveRook move@(Move (Pos row col) (Pos row' col')) game =
