@@ -30,7 +30,8 @@ spec = parallel $ do
   describe "Generators" $ do
     prop "generates 2 moves at start for pawns" prop_generate_2_starting_moves_for_pawns
   describe "Path" $ do
-    prop "generate path of same length from both ends" prop_generate_paths_from_both_ends
+    prop "compute path of same length from both ends" prop_generate_paths_from_both_ends
+    prop "compute diagonal or orthogonal paths" prop_compute_diagonal_paths
   describe "Pawn" $ do
     prop "can move a white pawn one or 2 squares at start of game" prop_can_move_pawn_one_or_2_squares_at_start
     prop "can move a white pawn one square after start of game" prop_can_move_pawn_one_square_after_start

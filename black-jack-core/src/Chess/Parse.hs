@@ -24,11 +24,11 @@ parseMove = evalStateT parser
 
 parser :: (MonadError Err m, MonadState String m) => m Move
 parser = do
-  c <- col
-  r <- row
+  c <- parseColumn
+  r <- parseRow
   dash
-  c' <- col
-  r' <- row
+  c' <- parseColumn
+  r' <- parseRow
   pure $ Move (Pos r c) (Pos r' c')
  where
   parseError = throwError . Err . pack
@@ -39,7 +39,7 @@ parser = do
       ('-' : rest) -> void (put rest)
       _ -> parseError $ "expected '-', found: " <> s
 
-  col =
+  parseColumn =
     fromIntegral <$> do
       s <- get
       case s of
@@ -51,7 +51,7 @@ parser = do
         [] ->
           throwError $ Err "no more characters, expected a column identifier (a-h)"
 
-  row =
+  parseRow =
     fromIntegral <$> do
       s <- get
       case s of

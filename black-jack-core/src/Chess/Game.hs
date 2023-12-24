@@ -20,7 +20,7 @@ import qualified Prelude as Haskell
 type Row = Integer
 type Col = Integer
 
-data Position = Pos Row Col
+data Position = Pos {row :: Row, col :: Col}
   deriving (Haskell.Eq, Haskell.Show, Generic, ToJSON, FromJSON)
 
 PlutusTx.unstableMakeIsData ''Position
@@ -30,6 +30,9 @@ instance Eq Position where
 
 newtype Path = Path {positions :: [Position]}
   deriving (Haskell.Eq, Haskell.Show)
+
+emptyPath :: Path
+emptyPath = Path []
 
 instance Eq Path where
   Path p == Path p' = p == p'
@@ -133,11 +136,13 @@ moveRook move@(Move from@(Pos row col) to@(Pos row' col')) game =
 
 moveBishop :: Move -> Game -> Either IllegalMove Game
 moveBishop move@(Move from@(Pos row col) to@(Pos row' col')) game =
-  if abs (row' - row) == abs (col' - col)
-    then case pieceAt to game of
-          Just{} -> takePiece game from to
-          Nothing -> Right $ movePiece game from to
-    else Left $ IllegalMove move
+  if
+      | abs (row' - row) == abs (col' - col) ->
+          case pieceAt to game of
+            Just{} -> takePiece game from to
+            Nothing -> Right $ movePiece game from to
+      | otherwise ->
+          Left $ IllegalMove move
 {-# INLINEABLE moveBishop #-}
 
 moveWhitePawn :: Move -> Game -> Either IllegalMove Game
@@ -202,20 +207,39 @@ takePiece game@Game{curSide, pieces} from to =
 
 path :: Position -> Position -> Path
 path (Pos r c) (Pos r' c') =
-  let vert = r' - r
-      horiz = c' - c
-   in Path $
-        if
-            | vert == 0 && horiz > 0 ->
-                [Pos r x | x <- enumFromTo (c + 1) c']
-            | vert == 0 && horiz < 0 ->
-                [Pos r x | x <- enumFromTo c' (c - 1)]
-            | horiz == 0 && vert < 0 ->
-                [Pos x c | x <- enumFromTo r' (r - 1)]
-            | horiz == 0 && vert > 0 ->
-                [Pos x c | x <- enumFromTo (r + 1) r']
-            | otherwise ->
-                []
+  if
+      | abs vert == abs horiz -> diagonalPath
+      | r == r' || c == c' -> orthogonalPath
+      | otherwise -> emptyPath
+ where
+  vert = r' - r
+  horiz = c' - c
+  diagonalPath =
+    Path $
+      if
+          | vert > 0 && horiz > 0 ->
+              [Pos (r + x) (c + x) | x <- enumFromTo 1 (abs horiz)]
+          | vert > 0 && horiz < 0 ->
+              [Pos (r + x) (c - x) | x <- enumFromTo 1 (abs horiz)]
+          | vert < 0 && horiz < 0 ->
+              [Pos (r - x) (c - x) | x <- enumFromTo 1 (abs horiz)]
+          | vert < 0 && horiz > 0 ->
+              [Pos (r - x) (c + x) | x <- enumFromTo 1 (abs horiz)]
+          | otherwise ->
+              []
+  orthogonalPath =
+    Path $
+      if
+          | vert == 0 && horiz > 0 ->
+              [Pos r x | x <- enumFromTo (c + 1) c']
+          | vert == 0 && horiz < 0 ->
+              [Pos r x | x <- enumFromTo c' (c - 1)]
+          | horiz == 0 && vert < 0 ->
+              [Pos x c | x <- enumFromTo r' (r - 1)]
+          | horiz == 0 && vert > 0 ->
+              [Pos x c | x <- enumFromTo (r + 1) r']
+          | otherwise ->
+              []
 {-# INLINEABLE path #-}
 
 firstPieceOn :: Game -> Path -> Maybe PieceOnBoard
