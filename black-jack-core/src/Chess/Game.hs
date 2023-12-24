@@ -37,7 +37,7 @@ emptyPath = Path []
 instance Eq Path where
   Path p == Path p' = p == p'
 
-data Piece = Pawn | Rook | Bishop | Knight
+data Piece = Pawn | Rook | Bishop | Knight | Queen
   deriving (Haskell.Eq, Haskell.Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
@@ -96,6 +96,8 @@ initialGame =
       <> [PieceOnBoard Knight White (Pos 0 1), PieceOnBoard Knight White (Pos 0 6)]
       <> [PieceOnBoard Bishop Black (Pos 7 2), PieceOnBoard Bishop Black (Pos 7 5)]
       <> [PieceOnBoard Bishop White (Pos 0 2), PieceOnBoard Bishop White (Pos 0 5)]
+      <> [PieceOnBoard Queen Black (Pos 7 3)]
+      <> [PieceOnBoard Queen White (Pos 0 3)]
 
 findPieces :: Piece -> Side -> Game -> [PieceOnBoard]
 findPieces piece' side' Game{pieces} =
@@ -121,6 +123,7 @@ apply move@(Move from to) game@(Game curSide _)
         Just (PieceOnBoard Rook side _) | curSide == side -> moveRook move game
         Just (PieceOnBoard Knight side _) | curSide == side -> moveKnight move game
         Just (PieceOnBoard Bishop side _) | curSide == side -> moveBishop move game
+        Just (PieceOnBoard Queen side _) | curSide == side -> moveRook move game
         _ -> Left $ IllegalMove move
 {-# INLINEABLE apply #-}
 

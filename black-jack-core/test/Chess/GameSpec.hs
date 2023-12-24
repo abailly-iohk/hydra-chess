@@ -5,7 +5,14 @@ module Chess.GameSpec where
 
 import Chess.Game
 
-import Chess.Generators (anyColumn, anyPawn, anyPos, anyRow, anyValidPawn, generateMove)
+import Chess.Generators (
+  anyColumn,
+  anyPawn,
+  anyPos,
+  anyRow,
+  anyValidPawn,
+  generateMove, RookLike (..),
+ )
 import Data.Function ((&))
 import Data.Functor ((<&>))
 import Test.Hspec (Spec, describe, parallel)
@@ -43,7 +50,7 @@ spec = parallel $ do
     prop "white pawn cannot move backwards" prop_pawn_cannot_move_backwards
     prop "can move a black pawn one or 2 squares at start of game" prop_can_move_black_pawn_one_or_2_squares_at_start
     prop "can move a pawn in its column only" prop_can_move_black_pawn_in_its_column_only
-  describe "Rook" $ do
+  describe "Rook & Queen" $ do
     prop "can move horizontally or vertically any number of squares" prop_can_move_rook_horizontally
     prop "can move vertically any number of squares" prop_can_move_rook_vertically
     prop "can take enemy piece at moved location" prop_can_take_enemy_piece
@@ -164,14 +171,14 @@ prop_generate_paths_from_both_ends =
       [(base, Pos r' c) | r' <- [0 .. 7], r' /= r]
         <> [(base, Pos r c') | c' <- [0 .. 7], c' /= c]
 
-prop_cannot_move_if_blocked :: Property
-prop_cannot_move_if_blocked =
+prop_cannot_move_if_blocked :: RookLike -> Property
+prop_cannot_move_if_blocked (RookLike piece) =
   forAll arbitrary $ \side ->
     forAll threePiecesAligned $ \(pos, pos1, pos2) ->
       let game =
             Game
               side
-              [ PieceOnBoard Rook side pos
+              [ PieceOnBoard piece side pos
               , PieceOnBoard Pawn side pos1
               , PieceOnBoard Pawn (flipSide side) pos2
               ]
@@ -186,31 +193,31 @@ prop_cannot_move_if_blocked =
       , r'' <- [r' + 1 .. 7]
       ]
 
-prop_cannot_take_enemy_piece_moving_illegally :: Property
-prop_cannot_take_enemy_piece_moving_illegally =
+prop_cannot_take_enemy_piece_moving_illegally :: RookLike -> Property
+prop_cannot_take_enemy_piece_moving_illegally (RookLike piece) =
   forAll anyPos $ \pos ->
     forAll arbitrary $ \side ->
       forAll (illegalMoves pos) $ \move@(Move _ to) ->
         let game =
               Game
                 side
-                [ PieceOnBoard Rook side pos
+                [ PieceOnBoard piece side pos
                 , PieceOnBoard Pawn (flipSide side) to
                 ]
          in isIllegal game move
  where
   illegalMoves from@(Pos r c) = Move from <$> anyPos `suchThat` \(Pos r' c') -> r' /= r && c' /= c
 
-prop_can_take_enemy_piece :: Property
-prop_can_take_enemy_piece =
+prop_can_take_enemy_piece :: RookLike -> Property
+prop_can_take_enemy_piece (RookLike piece) =
   forAll anyPos $ \pos ->
     forAll arbitrary $ \side ->
-      let startGame = Game side [PieceOnBoard Rook side pos]
+      let startGame = Game side [PieceOnBoard piece side pos]
        in forAll (elements $ possibleMoves pos startGame) $ \move@(Move _ to) ->
             let game =
                   Game
                     side
-                    [ PieceOnBoard Rook side pos
+                    [ PieceOnBoard piece side pos
                     , PieceOnBoard Pawn (flipSide side) to
                     ]
              in isLegalMove move game (\game' -> length (findPieces Pawn (flipSide side) game') == 0)
@@ -222,31 +229,31 @@ prop_cannot_pass =
      in conjoin (isIllegal game <$> moveInPlace)
           & tabulate "Piece" (show . piece <$> pieces)
 
-prop_can_move_rook_horizontally :: Property
-prop_can_move_rook_horizontally =
+prop_can_move_rook_horizontally :: RookLike -> Property
+prop_can_move_rook_horizontally (RookLike piece) =
   forAll anyPos $ \pos@(Pos r c) ->
     forAll arbitrary $ \side ->
       forAll (anyColumn `suchThat` (/= c)) $ \col ->
         let newPos = (Pos r col)
-            game = Game side [PieceOnBoard Rook side pos]
+            game = Game side [PieceOnBoard piece side pos]
             move = Move pos newPos
          in isLegalMove
               move
               game
-              (== Game (flipSide side) [PieceOnBoard Rook side newPos])
+              (== Game (flipSide side) [PieceOnBoard piece side newPos])
 
-prop_can_move_rook_vertically :: Property
-prop_can_move_rook_vertically =
+prop_can_move_rook_vertically :: RookLike -> Property
+prop_can_move_rook_vertically (RookLike piece) =
   forAll anyPos $ \pos@(Pos r c) ->
     forAll arbitrary $ \side ->
       forAll (anyRow `suchThat` (/= r)) $ \row ->
         let newPos = (Pos row c)
-            game = Game side [PieceOnBoard Rook side pos]
+            game = Game side [PieceOnBoard piece side pos]
             move = Move pos newPos
          in isLegalMove
               move
               game
-              (== Game (flipSide side) [PieceOnBoard Rook side newPos])
+              (== Game (flipSide side) [PieceOnBoard piece side newPos])
 
 prop_pawn_cannot_move_backwards :: Side -> Property
 prop_pawn_cannot_move_backwards side =

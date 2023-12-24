@@ -44,6 +44,12 @@ instance Arbitrary Side where
 instance Arbitrary Game where
   arbitrary = execStateT genMoves initialGame
 
+newtype RookLike = RookLike Piece
+  deriving (Eq, Show)
+
+instance Arbitrary RookLike where
+  arbitrary = RookLike <$> elements [Rook, Queen]
+
 genMoves :: StateT Game Gen ()
 genMoves =
   lift (choose (0, 30)) >>= genMove
