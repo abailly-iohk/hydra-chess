@@ -138,7 +138,9 @@ moveKnight move@(Move from@(Pos row col) to@(Pos row' col')) game =
   if
       | (abs (row' - row) == 1 && abs (col' - col) == 2)
           || (abs (row' - row) == 2 && abs (col' - col) == 1) ->
-          Right $ movePiece game from to
+          if isJust (pieceAt to game)
+            then takePiece game from to
+            else Right $ movePiece game from to
       | otherwise ->
           Left $ IllegalMove move
 {-# INLINEABLE moveKnight #-}

@@ -56,6 +56,7 @@ spec = parallel $ do
     prop "cannot move if blocked by other piece" prop_bishop_cannot_move_if_blocked
   describe "Knight" $ do
     prop "can move 2 squares in 1 one direction, 1 square in the other" prop_knight_can_move
+    prop "can take piece at destination" prop_knight_can_take_piece
   describe "Side" $ do
     prop "cannot play same side twice in a row" prop_cannot_play_same_side_twice_in_a_row
   describe "General" $ do
@@ -64,12 +65,23 @@ spec = parallel $ do
 prop_knight_can_move :: Side -> Property
 prop_knight_can_move side =
   forAll anyPos $ \from ->
-   forAll (elements $ accessibleByKnight from) $ \ to ->
+    forAll (elements $ accessibleByKnight from) $ \to ->
       let game =
             Game
               side
               [PieceOnBoard Knight side from]
        in isLegalMove (Move from to) game (== Game (flipSide side) [PieceOnBoard Knight side to])
+
+prop_knight_can_take_piece :: Side -> Property
+prop_knight_can_take_piece side =
+  forAll anyPos $ \from ->
+    forAll (elements $ accessibleByKnight from) $ \to ->
+      forAll arbitrary $ \piece ->
+        let game =
+              Game
+                side
+                [PieceOnBoard Knight side from, PieceOnBoard piece (flipSide side) to]
+         in isLegalMove (Move from to) game (== Game (flipSide side) [PieceOnBoard Knight side to])
 
 prop_compute_diagonal_paths :: Property
 prop_compute_diagonal_paths =

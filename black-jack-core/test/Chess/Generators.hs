@@ -1,10 +1,11 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
+
 module Chess.Generators where
 
 import Chess.Game
-import Control.Monad.State (StateT, execStateT, MonadState (..), lift)
-import Test.QuickCheck (Arbitrary (..), Gen, elements, choose)
+import Control.Monad.State (MonadState (..), StateT, execStateT, lift)
+import Test.QuickCheck (Arbitrary (..), Gen, choose, elements)
 
 -- * Generators
 
@@ -34,6 +35,9 @@ anyRow :: Gen Integer
 anyRow =
   elements [0 .. 7]
 
+instance Arbitrary Piece where
+  arbitrary = elements [Pawn, Rook, Bishop, Knight]
+
 instance Arbitrary Side where
   arbitrary = elements [White, Black]
 
@@ -44,13 +48,13 @@ genMoves :: StateT Game Gen ()
 genMoves =
   lift (choose (0, 30)) >>= genMove
  where
-   genMove :: Int -> StateT Game Gen ()
-   genMove 0 = pure ()
-   genMove n = do
-     game@Game{pieces} <- get
-     case concatMap ((`possibleMoves` game) . pos) pieces of
-       [] -> pure ()
-       moves ->  do
-         move <- lift $ elements moves
-         either (const $ pure ()) put (apply move game)
-         genMove (n-1)
+  genMove :: Int -> StateT Game Gen ()
+  genMove 0 = pure ()
+  genMove n = do
+    game@Game{pieces} <- get
+    case concatMap ((`possibleMoves` game) . pos) pieces of
+      [] -> pure ()
+      moves -> do
+        move <- lift $ elements moves
+        either (const $ pure ()) put (apply move game)
+        genMove (n - 1)
