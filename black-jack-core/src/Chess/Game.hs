@@ -284,8 +284,8 @@ accessibleDiagonals (Pos r c) =
   | dr <- [-1, 1]
   , dc <- [-1, 1]
   , (r', c') <- (\offset -> (r + offset * dr, c + offset * dc)) <$> [1 .. 6]
-  , r' >= 0 && r' <= 7 && r' /= r
-  , c' >= 0 && c' <= 7 && c' /= c
+  , inBounds r' c'
+  , r' /= r && c' /= c
   ]
 {-# INLINEABLE accessibleDiagonals #-}
 
@@ -295,6 +295,11 @@ accessibleByKnight (Pos r c) =
   | x <- [-2, 2]
   , y <- [-1, 1]
   , (r', c') <- [(r + x, c + y), (r + y, c + x)]
-  , r' >= 0 && r' <= 7 && r' /= r && c' >= 0 && c' <= 7 && c' /= c
+  , inBounds r' c'
+  , r' /= r && c' /= c
   ]
 {-# INLINEABLE accessibleByKnight #-}
+
+inBounds :: Row -> Col -> Bool
+inBounds r c =
+  r >= 0 && r <= 7 && c >= 0 && c <= 7
