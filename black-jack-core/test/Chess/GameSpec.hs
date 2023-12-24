@@ -31,7 +31,7 @@ spec = parallel $ do
     prop "generates 2 moves at start for pawns" prop_generate_2_starting_moves_for_pawns
   describe "Path" $ do
     prop "compute path of same length from both ends" prop_generate_paths_from_both_ends
-    prop "compute diagonal or orthogonal paths" prop_compute_diagonal_paths
+    prop "compute diagonal paths" prop_compute_diagonal_paths
   describe "Pawn" $ do
     prop "can move a white pawn one or 2 squares at start of game" prop_can_move_pawn_one_or_2_squares_at_start
     prop "can move a white pawn one square after start of game" prop_can_move_pawn_one_square_after_start
@@ -53,10 +53,40 @@ spec = parallel $ do
     prop "can move diagonally any number of squares" prop_bishop_can_move_diagonally
     prop "cannot move orthogonally" prop_bishop_cannot_move_orthogonally
     prop "can take enemy piece at moved location" prop_bishop_can_take_enemy_piece
+    prop "cannot move if blocked by other piece" prop_bishop_cannot_move_if_blocked
   describe "Side" $ do
     prop "cannot play same side twice in a row" prop_cannot_play_same_side_twice_in_a_row
   describe "General" $ do
     prop "cannot pass (move to the same position)" prop_cannot_pass
+
+prop_compute_diagonal_paths :: Property
+prop_compute_diagonal_paths =
+  forAll anyPos $ \pos ->
+    forAll (elements $ accessibleDiagonals pos) $ \diagonal ->
+      let thePath = path pos diagonal
+       in length (positions thePath) == fromInteger (abs (row diagonal - row pos))
+            & counterexample ("path: " <> show thePath)
+
+prop_bishop_cannot_move_if_blocked :: Property
+prop_bishop_cannot_move_if_blocked =
+  forAll arbitrary $ \side ->
+    forAll threePiecesDiagonallyAligned $ \(pos, pos1, pos2) ->
+      let game =
+            Game
+              side
+              [ PieceOnBoard Bishop side pos
+              , PieceOnBoard Pawn side pos1
+              , PieceOnBoard Pawn (flipSide side) pos2
+              ]
+       in isIllegal game (Move pos pos2)
+ where
+  threePiecesDiagonallyAligned =
+    elements
+      [ (Pos i i, Pos (i + dx) (i + dy), Pos (i + 2 * dx) (i + 2 * dy))
+      | i <- [2 .. 5]
+      , dx <- [-1, 1]
+      , dy <- [-1, 1]
+      ]
 
 prop_bishop_can_move_diagonally :: Side -> Property
 prop_bishop_can_move_diagonally side =

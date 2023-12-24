@@ -122,28 +122,31 @@ apply move@(Move from to) game@(Game curSide _)
 {-# INLINEABLE apply #-}
 
 moveRook :: Move -> Game -> Either IllegalMove Game
-moveRook move@(Move from@(Pos row col) to@(Pos row' col')) game =
+moveRook move@(Move (Pos row col) (Pos row' col')) game =
   if
       | row' == row || col' == col ->
-          case game `firstPieceOn` path from to of
-            Just (PieceOnBoard{pos})
-              | pos == to -> takePiece game from to
-              | otherwise -> Left $ IllegalMove move
-            Nothing -> Right $ movePiece game from to
+          moveOrTakePiece move game
       | otherwise ->
           Left $ IllegalMove move
 {-# INLINEABLE moveRook #-}
 
 moveBishop :: Move -> Game -> Either IllegalMove Game
-moveBishop move@(Move from@(Pos row col) to@(Pos row' col')) game =
+moveBishop move@(Move (Pos row col) (Pos row' col')) game =
   if
       | abs (row' - row) == abs (col' - col) ->
-          case pieceAt to game of
-            Just{} -> takePiece game from to
-            Nothing -> Right $ movePiece game from to
+          moveOrTakePiece move game
       | otherwise ->
           Left $ IllegalMove move
 {-# INLINEABLE moveBishop #-}
+
+moveOrTakePiece :: Move -> Game -> Either IllegalMove Game
+moveOrTakePiece move@(Move from to) game =
+  case game `firstPieceOn` path from to of
+    Just (PieceOnBoard{pos})
+      | pos == to -> takePiece game from to
+      | otherwise -> Left $ IllegalMove move
+    Nothing -> Right $ movePiece game from to
+{-# INLINEABLE moveOrTakePiece #-}
 
 moveWhitePawn :: Move -> Game -> Either IllegalMove Game
 moveWhitePawn move@(Move from@(Pos row col) to@(Pos row' col')) game =
