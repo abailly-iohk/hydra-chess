@@ -71,36 +71,47 @@ spec = parallel $ do
   describe "King" $ do
     prop "can move 1 square in all directions" prop_king_moves_one_square
     prop "can take adjacent piece" prop_king_takes_adjacent_piece
+  describe "Check" $ do
+    prop "is set if next move can take King" prop_is_check_if_next_move_can_take_king
   describe "Side" $ do
     prop "cannot play same side twice in a row" prop_cannot_play_same_side_twice_in_a_row
   describe "General" $ do
     prop "cannot pass (move to the same position)" prop_cannot_pass
 
+prop_is_check_if_next_move_can_take_king :: Side -> Property
+prop_is_check_if_next_move_can_take_king side =
+  forAll anyPos $ \king ->
+    forAll (elements $ accessibleOrthogonally king) $ \ check ->
+      forAll (elements (accessibleOrthogonally check) `suchThat` (/= king)) $ \ from ->
+        forAll arbitrary $ \ (RookLike piece) ->
+         let game = mkGame side [PieceOnBoard King side from, PieceOnBoard piece (flipSide side) from]
+         in isLegalMove (Move from check) game (isCheck side)
+
 prop_king_moves_one_square :: Side -> Property
 prop_king_moves_one_square side =
   forAll anyPos $ \from ->
     forAll (elements $ adjacentTo from) $ \to ->
-      let game = Game side [PieceOnBoard King side from]
-       in isLegalMove (Move from to) game (== Game (flipSide side) [PieceOnBoard King side to])
- where
+      let game = mkGame side [PieceOnBoard King side from]
+       in isLegalMove (Move from to) game (== mkGame (flipSide side) [PieceOnBoard King side to])
+
 
 prop_king_takes_adjacent_piece :: Side -> Property
 prop_king_takes_adjacent_piece side =
   forAll anyPos $ \from ->
     forAll (elements $ adjacentTo from) $ \to ->
-     forAll arbitrary $ \ piece ->
-      let game = Game side [PieceOnBoard King side from, PieceOnBoard piece (flipSide side) to]
-       in isLegalMove (Move from to) game (== Game (flipSide side) [PieceOnBoard King side to])
+      forAll arbitrary $ \piece ->
+        let game = mkGame side [PieceOnBoard King side from, PieceOnBoard piece (flipSide side) to]
+         in isLegalMove (Move from to) game (== mkGame (flipSide side) [PieceOnBoard King side to])
 
 prop_knight_can_move :: Side -> Property
 prop_knight_can_move side =
   forAll anyPos $ \from ->
     forAll (elements $ accessibleByKnight from) $ \to ->
       let game =
-            Game
+            mkGame
               side
               [PieceOnBoard Knight side from]
-       in isLegalMove (Move from to) game (== Game (flipSide side) [PieceOnBoard Knight side to])
+       in isLegalMove (Move from to) game (== mkGame (flipSide side) [PieceOnBoard Knight side to])
 
 prop_knight_can_take_piece :: Side -> Property
 prop_knight_can_take_piece side =
@@ -108,10 +119,10 @@ prop_knight_can_take_piece side =
     forAll (elements $ accessibleByKnight from) $ \to ->
       forAll arbitrary $ \piece ->
         let game =
-              Game
+              mkGame
                 side
                 [PieceOnBoard Knight side from, PieceOnBoard piece (flipSide side) to]
-         in isLegalMove (Move from to) game (== Game (flipSide side) [PieceOnBoard Knight side to])
+         in isLegalMove (Move from to) game (== mkGame (flipSide side) [PieceOnBoard Knight side to])
 
 prop_compute_diagonal_paths :: Property
 prop_compute_diagonal_paths =
@@ -126,7 +137,7 @@ prop_bishop_cannot_move_if_blocked (BishopLike piece) =
   forAll arbitrary $ \side ->
     forAll threePiecesDiagonallyAligned $ \(pos, pos1, pos2) ->
       let game =
-            Game
+            mkGame
               side
               [ PieceOnBoard piece side pos
               , PieceOnBoard Pawn side pos1
@@ -147,32 +158,29 @@ prop_bishop_can_move_diagonally (BishopLike piece) side =
   forAll anyPos $ \from ->
     forAll (elements $ accessibleDiagonals from) $ \to ->
       let game =
-            Game
+            mkGame
               side
               [PieceOnBoard piece side from]
-       in isLegalMove (Move from to) game (== Game (flipSide side) [PieceOnBoard piece side to])
+       in isLegalMove (Move from to) game (== mkGame (flipSide side) [PieceOnBoard piece side to])
 
 prop_bishop_cannot_move_orthogonally :: Side -> Property
 prop_bishop_cannot_move_orthogonally side =
   forAll anyPos $ \from ->
-    forAll (orthogonalMoves from) $ \to ->
+    forAll (elements $ accessibleOrthogonally from) $ \to ->
       let game =
-            Game
+            mkGame
               side
               [PieceOnBoard Bishop side from]
        in isIllegal game (Move from to)
- where
-  orthogonalMoves (Pos r c) =
-    elements $ [Pos r' c | r' <- [0 .. 7], r' /= r] <> [Pos r c' | c' <- [0 .. 7], c' /= c]
 
 prop_bishop_can_take_enemy_piece :: BishopLike -> Property
 prop_bishop_can_take_enemy_piece (BishopLike piece) =
   forAll anyPos $ \pos ->
     forAll arbitrary $ \side ->
-      let startGame = Game side [PieceOnBoard piece side pos]
+      let startGame = mkGame side [PieceOnBoard piece side pos]
        in forAll (elements $ possibleMoves pos startGame) $ \move@(Move _ to) ->
             let game =
-                  Game
+                  mkGame
                     side
                     [ PieceOnBoard piece side pos
                     , PieceOnBoard Pawn (flipSide side) to
@@ -199,7 +207,7 @@ prop_cannot_move_if_blocked (RookLike piece) =
   forAll arbitrary $ \side ->
     forAll threePiecesAligned $ \(pos, pos1, pos2) ->
       let game =
-            Game
+            mkGame
               side
               [ PieceOnBoard piece side pos
               , PieceOnBoard Pawn side pos1
@@ -222,7 +230,7 @@ prop_cannot_take_enemy_piece_moving_illegally =
     forAll arbitrary $ \side ->
       forAll (illegalMoves pos) $ \move@(Move _ to) ->
         let game =
-              Game
+              mkGame
                 side
                 [ PieceOnBoard Rook side pos
                 , PieceOnBoard Pawn (flipSide side) to
@@ -235,10 +243,10 @@ prop_can_take_enemy_piece :: RookLike -> Property
 prop_can_take_enemy_piece (RookLike piece) =
   forAll anyPos $ \pos ->
     forAll arbitrary $ \side ->
-      let startGame = Game side [PieceOnBoard piece side pos]
+      let startGame = mkGame side [PieceOnBoard piece side pos]
        in forAll (elements $ possibleMoves pos startGame) $ \move@(Move _ to) ->
             let game =
-                  Game
+                  mkGame
                     side
                     [ PieceOnBoard piece side pos
                     , PieceOnBoard Pawn (flipSide side) to
@@ -258,12 +266,12 @@ prop_can_move_rook_horizontally (RookLike piece) =
     forAll arbitrary $ \side ->
       forAll (anyColumn `suchThat` (/= c)) $ \col ->
         let newPos = (Pos r col)
-            game = Game side [PieceOnBoard piece side pos]
+            game = mkGame side [PieceOnBoard piece side pos]
             move = Move pos newPos
          in isLegalMove
               move
               game
-              (== Game (flipSide side) [PieceOnBoard piece side newPos])
+              (== mkGame (flipSide side) [PieceOnBoard piece side newPos])
 
 prop_can_move_rook_vertically :: RookLike -> Property
 prop_can_move_rook_vertically (RookLike piece) =
@@ -271,17 +279,17 @@ prop_can_move_rook_vertically (RookLike piece) =
     forAll arbitrary $ \side ->
       forAll (anyRow `suchThat` (/= r)) $ \row ->
         let newPos = (Pos row c)
-            game = Game side [PieceOnBoard piece side pos]
+            game = mkGame side [PieceOnBoard piece side pos]
             move = Move pos newPos
          in isLegalMove
               move
               game
-              (== Game (flipSide side) [PieceOnBoard piece side newPos])
+              (== mkGame (flipSide side) [PieceOnBoard piece side newPos])
 
 prop_pawn_cannot_move_backwards :: Side -> Property
 prop_pawn_cannot_move_backwards side =
   forAll anyPos $ \pos@(Pos r c) ->
-    let game = Game side [PieceOnBoard Pawn side pos]
+    let game = mkGame side [PieceOnBoard Pawn side pos]
         offset = case side of
           White -> -1
           Black -> 1
@@ -330,7 +338,7 @@ prop_can_move_pawn_one_square_after_start side =
     let offset = case side of
           White -> 1
           Black -> -1
-        game = Game side [PieceOnBoard Pawn side pos]
+        game = mkGame side [PieceOnBoard Pawn side pos]
         move = Move (Pos row col) (Pos (row + offset) col)
      in isLegalMove move game (/= initialGame)
 
@@ -341,7 +349,7 @@ prop_pawn_takes_piece_diagonally =
       let targetPos = Pos (r + 1) (c + diagonal)
        in forAll (anyPos `suchThat` \p -> p /= pos && p /= targetPos) $ \otherPos ->
             let game =
-                  Game
+                  mkGame
                     White
                     [ PieceOnBoard Pawn White pos
                     , PieceOnBoard Pawn Black targetPos
@@ -366,7 +374,7 @@ prop_pawn_cannot_move_diagonally =
       let targetPos = Pos (r + 1) (c + diagonal)
        in forAll (anyPos `suchThat` \p -> p /= pos && p /= targetPos) $ \otherPos ->
             let game =
-                  Game
+                  mkGame
                     White
                     [ PieceOnBoard Pawn White pos
                     , PieceOnBoard Pawn Black otherPos
@@ -378,7 +386,7 @@ prop_cannot_move_a_pawn_where_there_is_a_piece :: Property
 prop_cannot_move_a_pawn_where_there_is_a_piece =
   forAll (anyPawn White initialGame) $ \(Pos row col) ->
     forAll (choose (1, 2)) $ \offset ->
-      let game = Game White [PieceOnBoard Pawn White $ Pos (row + 1) col]
+      let game = mkGame White [PieceOnBoard Pawn White $ Pos (row + 1) col]
           move = Move (Pos row col) (Pos (row + offset) col)
        in isIllegal game move
 
@@ -425,7 +433,7 @@ prop_cannot_move_a_pawn_more_than_2_squares side =
 prop_cannot_move_a_pawn_more_than_1_square_after_it_moved :: Side -> Property
 prop_cannot_move_a_pawn_more_than_1_square_after_it_moved side =
   forAll (anyPos `suchThat` pawnHasMoved side) $ \pos@(Pos row col) ->
-    let game = Game side [PieceOnBoard Pawn side pos]
+    let game = mkGame side [PieceOnBoard Pawn side pos]
         move = Move (Pos row col) (Pos (row + 2) col)
      in isIllegal game move
 

@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -76,8 +77,20 @@ PlutusTx.unstableMakeIsData ''PieceOnBoard
 instance Eq PieceOnBoard where
   PieceOnBoard p s pos == PieceOnBoard p' s' pos' = p == p' && s == s' && pos == pos'
 
+data Check = NoCheck | Check Side
+  deriving (Haskell.Eq, Haskell.Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)
+
+PlutusTx.unstableMakeIsData ''Check
+
+instance Eq Check where
+  NoCheck == NoCheck = True
+  Check side == Check side' = side == side'
+  _ == _ = False
+
 data Game = Game
   { curSide :: Side
+  , checkState :: Check
   , pieces :: [PieceOnBoard]
   }
   deriving (Haskell.Eq, Haskell.Show, Generic)
@@ -86,27 +99,40 @@ data Game = Game
 PlutusTx.unstableMakeIsData ''Game
 
 instance Eq Game where
-  Game s p == Game s' p' = s == s' && p == p'
+  Game s c p == Game s' c' p' = s == s' && p == p' && c == c'
+
+mkGame :: Side -> [PieceOnBoard] -> Game
+mkGame curSide pieces =
+  Game{curSide, pieces, checkState = NoCheck}
 
 initialGame :: Game
 initialGame =
-  Game White $
-    [PieceOnBoard Pawn White (Pos 1 c) | c <- [0 .. 7]]
-      <> [PieceOnBoard Pawn Black (Pos 6 c) | c <- [0 .. 7]]
-      <> [PieceOnBoard Rook Black (Pos 7 0), PieceOnBoard Rook Black (Pos 7 7)]
-      <> [PieceOnBoard Rook White (Pos 0 0), PieceOnBoard Rook White (Pos 0 7)]
-      <> [PieceOnBoard Knight Black (Pos 7 1), PieceOnBoard Knight Black (Pos 7 6)]
-      <> [PieceOnBoard Knight White (Pos 0 1), PieceOnBoard Knight White (Pos 0 6)]
-      <> [PieceOnBoard Bishop Black (Pos 7 2), PieceOnBoard Bishop Black (Pos 7 5)]
-      <> [PieceOnBoard Bishop White (Pos 0 2), PieceOnBoard Bishop White (Pos 0 5)]
-      <> [PieceOnBoard Queen Black (Pos 7 3)]
-      <> [PieceOnBoard Queen White (Pos 0 3)]
-      <> [PieceOnBoard King Black (Pos 7 4)]
-      <> [PieceOnBoard King White (Pos 0 4)]
+  Game
+    { curSide = White
+    , checkState = NoCheck
+    , pieces =
+        [PieceOnBoard Pawn White (Pos 1 c) | c <- [0 .. 7]]
+          <> [PieceOnBoard Pawn Black (Pos 6 c) | c <- [0 .. 7]]
+          <> [PieceOnBoard Rook Black (Pos 7 0), PieceOnBoard Rook Black (Pos 7 7)]
+          <> [PieceOnBoard Rook White (Pos 0 0), PieceOnBoard Rook White (Pos 0 7)]
+          <> [PieceOnBoard Knight Black (Pos 7 1), PieceOnBoard Knight Black (Pos 7 6)]
+          <> [PieceOnBoard Knight White (Pos 0 1), PieceOnBoard Knight White (Pos 0 6)]
+          <> [PieceOnBoard Bishop Black (Pos 7 2), PieceOnBoard Bishop Black (Pos 7 5)]
+          <> [PieceOnBoard Bishop White (Pos 0 2), PieceOnBoard Bishop White (Pos 0 5)]
+          <> [PieceOnBoard Queen Black (Pos 7 3)]
+          <> [PieceOnBoard Queen White (Pos 0 3)]
+          <> [PieceOnBoard King Black (Pos 7 4)]
+          <> [PieceOnBoard King White (Pos 0 4)]
+    }
 
 findPieces :: Piece -> Side -> Game -> [PieceOnBoard]
 findPieces piece' side' Game{pieces} =
   filter (\PieceOnBoard{piece, side} -> piece == piece' && side == side') pieces
+
+isCheck :: Side -> Game -> Bool
+isCheck side = \case
+  Game{checkState = Check side'} -> side == side'
+  _ -> False
 
 data Move = Move Position Position
   deriving (Haskell.Eq, Haskell.Show, Generic, ToJSON, FromJSON)
@@ -119,7 +145,7 @@ data IllegalMove = IllegalMove Move
 PlutusTx.unstableMakeIsData ''IllegalMove
 
 apply :: Move -> Game -> Either IllegalMove Game
-apply move@(Move from to) game@(Game curSide _)
+apply move@(Move from to) game@Game{curSide}
   | from == to = Left $ IllegalMove move
   | otherwise =
       case pieceAt from game of
@@ -224,7 +250,10 @@ movePiece game@Game{curSide, pieces} from to =
     att = pieceAt from game
     newPos = maybe [] (\PieceOnBoard{piece, side} -> [PieceOnBoard{piece, side, pos = to}]) att
    in
-    Game (flipSide curSide) $ filter (\PieceOnBoard{pos} -> pos /= from) pieces <> newPos
+    game
+      { curSide = (flipSide curSide)
+      , pieces = filter (\PieceOnBoard{pos} -> pos /= from) pieces <> newPos
+      }
 {-# INLINEABLE movePiece #-}
 
 takePiece :: Game -> Position -> Position -> Either IllegalMove Game
@@ -239,7 +268,12 @@ takePiece game@Game{curSide, pieces} from to =
       pure $ PieceOnBoard piece side to
    in
     case newPos of
-      Just p -> Right $ Game (flipSide curSide) $ filter (\PieceOnBoard{pos} -> pos /= from && pos /= to) pieces <> [p]
+      Just p ->
+        Right $
+          game
+            { curSide = flipSide curSide
+            , pieces = filter (\PieceOnBoard{pos} -> pos /= from && pos /= to) pieces <> [p]
+            }
       Nothing -> Left $ IllegalMove (Move from to)
 {-# INLINEABLE takePiece #-}
 
@@ -308,6 +342,18 @@ accessibleDiagonals (Pos r c) =
   , r' /= r && c' /= c
   ]
 {-# INLINEABLE accessibleDiagonals #-}
+
+accessibleOrthogonally :: Position -> [Position]
+accessibleOrthogonally (Pos r c) =
+  [ Pos r' c
+  | r' <- [0 .. 7]
+  , r' /= r
+  ]
+    <> [ Pos r c'
+       | c' <- [0 .. 7]
+       , c' /= c
+       ]
+{-# INLINEABLE accessibleOrthogonally #-}
 
 accessibleByKnight :: Position -> [Position]
 accessibleByKnight (Pos r c) =
