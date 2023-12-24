@@ -70,6 +70,7 @@ spec = parallel $ do
     prop "can take piece at destination" prop_knight_can_take_piece
   describe "King" $ do
     prop "can move 1 square in all directions" prop_king_moves_one_square
+    prop "can take adjacent piece" prop_king_takes_adjacent_piece
   describe "Side" $ do
     prop "cannot play same side twice in a row" prop_cannot_play_same_side_twice_in_a_row
   describe "General" $ do
@@ -78,19 +79,18 @@ spec = parallel $ do
 prop_king_moves_one_square :: Side -> Property
 prop_king_moves_one_square side =
   forAll anyPos $ \from ->
-    forAll (elements $ positionAround from) $ \to ->
+    forAll (elements $ adjacentTo from) $ \to ->
       let game = Game side [PieceOnBoard King side from]
        in isLegalMove (Move from to) game (== Game (flipSide side) [PieceOnBoard King side to])
  where
-  positionAround (Pos r c) =
-    [ Pos r' c'
-    | dr <- [-1, 0, 1]
-    , dc <- [-1, 0, 1]
-    , let r' = r + dr
-    , let c' = c + dc
-    , inBounds r' c'
-    , (r', c') /= (r, c)
-    ]
+
+prop_king_takes_adjacent_piece :: Side -> Property
+prop_king_takes_adjacent_piece side =
+  forAll anyPos $ \from ->
+    forAll (elements $ adjacentTo from) $ \to ->
+     forAll arbitrary $ \ piece ->
+      let game = Game side [PieceOnBoard King side from, PieceOnBoard piece (flipSide side) to]
+       in isLegalMove (Move from to) game (== Game (flipSide side) [PieceOnBoard King side to])
 
 prop_knight_can_move :: Side -> Property
 prop_knight_can_move side =

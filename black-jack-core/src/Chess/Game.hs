@@ -323,3 +323,16 @@ accessibleByKnight (Pos r c) =
 inBounds :: Row -> Col -> Bool
 inBounds r c =
   r >= 0 && r <= 7 && c >= 0 && c <= 7
+{-# INLINEABLE inBounds #-}
+
+adjacentTo :: Position -> [Position]
+adjacentTo (Pos r c) =
+  [ Pos r' c'
+  | dr <- [-1, 0, 1]
+  , dc <- [-1, 0, 1]
+  , let r' = r + dr
+  , let c' = c + dc
+  , inBounds r' c'
+  , (r', c') /= (r, c)
+  ]
+{-# INLINEABLE adjacentTo #-}
