@@ -43,6 +43,8 @@ character = \case
   Just (PieceOnBoard Pawn Black _) -> '♟'
   Just (PieceOnBoard Rook White _) -> '♖'
   Just (PieceOnBoard Rook Black _) -> '♜'
+  Just (PieceOnBoard Knight White _) -> '♘'
+  Just (PieceOnBoard Knight Black _) -> '♞'
   Just (PieceOnBoard Bishop White _) -> '♗'
   Just (PieceOnBoard Bishop Black _) -> '♝'
   Nothing -> ' '

@@ -37,7 +37,7 @@ emptyPath = Path []
 instance Eq Path where
   Path p == Path p' = p == p'
 
-data Piece = Pawn | Rook | Bishop
+data Piece = Pawn | Rook | Bishop | Knight
   deriving (Haskell.Eq, Haskell.Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
@@ -92,6 +92,8 @@ initialGame =
       <> [PieceOnBoard Pawn Black (Pos 6 c) | c <- [0 .. 7]]
       <> [PieceOnBoard Rook Black (Pos 7 0), PieceOnBoard Rook Black (Pos 7 7)]
       <> [PieceOnBoard Rook White (Pos 0 0), PieceOnBoard Rook White (Pos 0 7)]
+      <> [PieceOnBoard Knight Black (Pos 7 1), PieceOnBoard Knight Black (Pos 7 6)]
+      <> [PieceOnBoard Knight White (Pos 0 1), PieceOnBoard Knight White (Pos 0 6)]
       <> [PieceOnBoard Bishop Black (Pos 7 2), PieceOnBoard Bishop Black (Pos 7 5)]
       <> [PieceOnBoard Bishop White (Pos 0 2), PieceOnBoard Bishop White (Pos 0 5)]
 
@@ -117,6 +119,7 @@ apply move@(Move from to) game@(Game curSide _)
         Just (PieceOnBoard Pawn White _) | curSide == White -> moveWhitePawn move game
         Just (PieceOnBoard Pawn Black _) | curSide == Black -> moveBlackPawn move game
         Just (PieceOnBoard Rook side _) | curSide == side -> moveRook move game
+        Just (PieceOnBoard Knight side _) | curSide == side -> moveKnight move game
         Just (PieceOnBoard Bishop side _) | curSide == side -> moveBishop move game
         _ -> Left $ IllegalMove move
 {-# INLINEABLE apply #-}
@@ -129,6 +132,16 @@ moveRook move@(Move (Pos row col) (Pos row' col')) game =
       | otherwise ->
           Left $ IllegalMove move
 {-# INLINEABLE moveRook #-}
+
+moveKnight :: Move -> Game -> Either IllegalMove Game
+moveKnight move@(Move from@(Pos row col) to@(Pos row' col')) game =
+  if
+      | (abs (row' - row) == 1 && abs (col' - col) == 2)
+          || (abs (row' - row) == 2 && abs (col' - col) == 1) ->
+          Right $ movePiece game from to
+      | otherwise ->
+          Left $ IllegalMove move
+{-# INLINEABLE moveKnight #-}
 
 moveBishop :: Move -> Game -> Either IllegalMove Game
 moveBishop move@(Move (Pos row col) (Pos row' col')) game =
@@ -273,3 +286,13 @@ accessibleDiagonals (Pos r c) =
   , c' >= 0 && c' <= 7 && c' /= c
   ]
 {-# INLINEABLE accessibleDiagonals #-}
+
+accessibleByKnight :: Position -> [Position]
+accessibleByKnight (Pos r c) =
+  [ Pos r' c'
+  | x <- [-2, 2]
+  , y <- [-1, 1]
+  , (r', c') <- [(r + x, c + y), (r + y, c + x)]
+  , r' >= 0 && r' <= 7 && r' /= r && c' >= 0 && c' <= 7 && c' /= c
+  ]
+{-# INLINEABLE accessibleByKnight #-}
