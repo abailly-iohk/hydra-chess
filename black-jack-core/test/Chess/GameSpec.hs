@@ -6,12 +6,14 @@ module Chess.GameSpec where
 import Chess.Game
 
 import Chess.Generators (
+  BishopLike (..),
+  RookLike (..),
   anyColumn,
   anyPawn,
   anyPos,
   anyRow,
   anyValidPawn,
-  generateMove, RookLike (..),
+  generateMove,
  )
 import Data.Function ((&))
 import Data.Functor ((<&>))
@@ -54,13 +56,15 @@ spec = parallel $ do
     prop "can move horizontally or vertically any number of squares" prop_can_move_rook_horizontally
     prop "can move vertically any number of squares" prop_can_move_rook_vertically
     prop "can take enemy piece at moved location" prop_can_take_enemy_piece
-    prop "cannot take enemy piece if move is illegal" prop_cannot_take_enemy_piece_moving_illegally
     prop "cannot move if blocked by other piece" prop_cannot_move_if_blocked
-  describe "Bishop" $ do
+  describe "Rook only" $ do
+    prop "cannot take enemy piece if move is illegal" prop_cannot_take_enemy_piece_moving_illegally
+  describe "Bishop & Queen" $ do
     prop "can move diagonally any number of squares" prop_bishop_can_move_diagonally
-    prop "cannot move orthogonally" prop_bishop_cannot_move_orthogonally
     prop "can take enemy piece at moved location" prop_bishop_can_take_enemy_piece
     prop "cannot move if blocked by other piece" prop_bishop_cannot_move_if_blocked
+  describe "Bishop only" $ do
+    prop "cannot move orthogonally" prop_bishop_cannot_move_orthogonally
   describe "Knight" $ do
     prop "can move 2 squares in 1 one direction, 1 square in the other" prop_knight_can_move
     prop "can take piece at destination" prop_knight_can_take_piece
@@ -98,14 +102,14 @@ prop_compute_diagonal_paths =
        in length (positions thePath) == fromInteger (abs (row diagonal - row pos))
             & counterexample ("path: " <> show thePath)
 
-prop_bishop_cannot_move_if_blocked :: Property
-prop_bishop_cannot_move_if_blocked =
+prop_bishop_cannot_move_if_blocked :: BishopLike -> Property
+prop_bishop_cannot_move_if_blocked (BishopLike piece) =
   forAll arbitrary $ \side ->
     forAll threePiecesDiagonallyAligned $ \(pos, pos1, pos2) ->
       let game =
             Game
               side
-              [ PieceOnBoard Bishop side pos
+              [ PieceOnBoard piece side pos
               , PieceOnBoard Pawn side pos1
               , PieceOnBoard Pawn (flipSide side) pos2
               ]
@@ -119,15 +123,15 @@ prop_bishop_cannot_move_if_blocked =
       , dy <- [-1, 1]
       ]
 
-prop_bishop_can_move_diagonally :: Side -> Property
-prop_bishop_can_move_diagonally side =
+prop_bishop_can_move_diagonally :: BishopLike -> Side -> Property
+prop_bishop_can_move_diagonally (BishopLike piece) side =
   forAll anyPos $ \from ->
     forAll (elements $ accessibleDiagonals from) $ \to ->
       let game =
             Game
               side
-              [PieceOnBoard Bishop side from]
-       in isLegalMove (Move from to) game (== Game (flipSide side) [PieceOnBoard Bishop side to])
+              [PieceOnBoard piece side from]
+       in isLegalMove (Move from to) game (== Game (flipSide side) [PieceOnBoard piece side to])
 
 prop_bishop_cannot_move_orthogonally :: Side -> Property
 prop_bishop_cannot_move_orthogonally side =
@@ -142,16 +146,16 @@ prop_bishop_cannot_move_orthogonally side =
   orthogonalMoves (Pos r c) =
     elements $ [Pos r' c | r' <- [0 .. 7], r' /= r] <> [Pos r c' | c' <- [0 .. 7], c' /= c]
 
-prop_bishop_can_take_enemy_piece :: Property
-prop_bishop_can_take_enemy_piece =
+prop_bishop_can_take_enemy_piece :: BishopLike -> Property
+prop_bishop_can_take_enemy_piece (BishopLike piece) =
   forAll anyPos $ \pos ->
     forAll arbitrary $ \side ->
-      let startGame = Game side [PieceOnBoard Bishop side pos]
+      let startGame = Game side [PieceOnBoard piece side pos]
        in forAll (elements $ possibleMoves pos startGame) $ \move@(Move _ to) ->
             let game =
                   Game
                     side
-                    [ PieceOnBoard Bishop side pos
+                    [ PieceOnBoard piece side pos
                     , PieceOnBoard Pawn (flipSide side) to
                     ]
              in isLegalMove move game (\game' -> length (findPieces Pawn (flipSide side) game') == 0)
@@ -193,15 +197,15 @@ prop_cannot_move_if_blocked (RookLike piece) =
       , r'' <- [r' + 1 .. 7]
       ]
 
-prop_cannot_take_enemy_piece_moving_illegally :: RookLike -> Property
-prop_cannot_take_enemy_piece_moving_illegally (RookLike piece) =
+prop_cannot_take_enemy_piece_moving_illegally :: Property
+prop_cannot_take_enemy_piece_moving_illegally =
   forAll anyPos $ \pos ->
     forAll arbitrary $ \side ->
       forAll (illegalMoves pos) $ \move@(Move _ to) ->
         let game =
               Game
                 side
-                [ PieceOnBoard piece side pos
+                [ PieceOnBoard Rook side pos
                 , PieceOnBoard Pawn (flipSide side) to
                 ]
          in isIllegal game move

@@ -50,6 +50,12 @@ newtype RookLike = RookLike Piece
 instance Arbitrary RookLike where
   arbitrary = RookLike <$> elements [Rook, Queen]
 
+newtype BishopLike = BishopLike Piece
+  deriving (Eq, Show)
+
+instance Arbitrary BishopLike where
+  arbitrary = BishopLike <$> elements [Bishop, Queen]
+
 genMoves :: StateT Game Gen ()
 genMoves =
   lift (choose (0, 30)) >>= genMove

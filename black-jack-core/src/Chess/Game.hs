@@ -123,7 +123,9 @@ apply move@(Move from to) game@(Game curSide _)
         Just (PieceOnBoard Rook side _) | curSide == side -> moveRook move game
         Just (PieceOnBoard Knight side _) | curSide == side -> moveKnight move game
         Just (PieceOnBoard Bishop side _) | curSide == side -> moveBishop move game
-        Just (PieceOnBoard Queen side _) | curSide == side -> moveRook move game
+        Just (PieceOnBoard Queen side _)
+          | curSide == side ->
+              either (const $ moveBishop move game) Right $ moveRook move game
         _ -> Left $ IllegalMove move
 {-# INLINEABLE apply #-}
 
