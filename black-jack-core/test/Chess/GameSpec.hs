@@ -1,4 +1,5 @@
 {-# LANGUAGE NamedFieldPuns #-}
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Chess.GameSpec where
@@ -57,7 +58,7 @@ spec = parallel $ do
     prop "can move horizontally or vertically any number of squares" prop_can_move_rook_horizontally
     prop "can move vertically any number of squares" prop_can_move_rook_vertically
     prop "can take enemy piece at moved location" prop_can_take_enemy_piece
-    prop "cannot move if blocked by other piece" prop_cannot_move_if_blocked
+    prop "cannot move if blocked by other piece" prop_rook_cannot_move_if_blocked
   describe "Rook only" $ do
     prop "cannot take enemy piece if move is illegal" prop_cannot_take_enemy_piece_moving_illegally
   describe "Bishop & Queen" $ do
@@ -83,7 +84,7 @@ prop_is_check_if_next_move_can_take_king :: Side -> Property
 prop_is_check_if_next_move_can_take_king side =
   forAll anyPos $ \king ->
     forAll (elements $ accessibleOrthogonally king) $ \check ->
-      forAll (elements (accessibleOrthogonally check) `suchThat` (/= king)) $ \from ->
+      forAll (elements (accessibleOrthogonally check) `suchThat` (notOrthogonalTo king)) $ \from ->
         forAll arbitrary $ \(RookLike piece) ->
           let game = mkGame (flipSide side) [PieceOnBoard King side king, PieceOnBoard piece (flipSide side) from]
            in isLegalMove (Move from check) game (isCheck side)
@@ -143,7 +144,7 @@ prop_bishop_cannot_move_if_blocked (BishopLike piece) =
               , PieceOnBoard Pawn side pos1
               , PieceOnBoard Pawn (flipSide side) pos2
               ]
-       in isIllegal game (Move pos pos2)
+       in isBlocked game (Move pos pos2)
  where
   threePiecesDiagonallyAligned =
     elements
@@ -202,18 +203,18 @@ prop_generate_paths_from_both_ends =
       [(base, Pos r' c) | r' <- [0 .. 7], r' /= r]
         <> [(base, Pos r c') | c' <- [0 .. 7], c' /= c]
 
-prop_cannot_move_if_blocked :: RookLike -> Property
-prop_cannot_move_if_blocked (RookLike piece) =
+prop_rook_cannot_move_if_blocked :: Property
+prop_rook_cannot_move_if_blocked =
   forAll arbitrary $ \side ->
     forAll threePiecesAligned $ \(pos, pos1, pos2) ->
       let game =
             mkGame
               side
-              [ PieceOnBoard piece side pos
+              [ PieceOnBoard Rook side pos
               , PieceOnBoard Pawn side pos1
               , PieceOnBoard Pawn (flipSide side) pos2
               ]
-       in isIllegal game (Move pos pos2)
+       in isBlocked game (Move pos pos2)
  where
   threePiecesAligned =
     elements
@@ -448,12 +449,29 @@ isIllegal game move =
         & counterexample ("after: " <> show game')
         & counterexample ("before: " <> show game)
         & counterexample ("move: " <> show move)
-        & counterexample ("path: " <> show (game `firstPieceOn` path from to))
+        & counterexample ("path: " <> show (path from to))
     Left err ->
-      err == IllegalMove move
-        & counterexample ("game: " <> show err)
+      err
+        === IllegalMove move
+        & counterexample ("game: " <> show game)
  where
   Move from to = move
+
+isBlocked :: Game -> Move -> Property
+isBlocked game move =
+  case apply move game of
+    Right game' ->
+      property False
+        & counterexample ("after: " <> show game')
+        & counterexample ("before: " <> show game)
+        & counterexample ("move: " <> show move)
+    Left err ->
+      err
+        === MoveBlocked pos move
+        & counterexample ("game: " <> show game)
+ where
+  Move from to = move
+  Just PieceOnBoard{pos} = game `firstPieceOn` path from to
 
 isLegalMove ::
   (Testable a) =>

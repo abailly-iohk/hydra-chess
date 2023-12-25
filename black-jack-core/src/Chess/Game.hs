@@ -143,6 +143,7 @@ data IllegalMove
   = NotMoving Move
   | IllegalMove Move
   | WrongSideToPlay Side Move
+  | MoveBlocked Position Move
   deriving (Haskell.Eq, Haskell.Show)
 
 PlutusTx.unstableMakeIsData ''IllegalMove
@@ -229,7 +230,7 @@ moveOrTakePiece move@(Move from to) game =
   case game `firstPieceOn` path from to of
     Just (PieceOnBoard{pos})
       | pos == to -> takePiece game from to
-      | otherwise -> Left $ IllegalMove move
+      | otherwise -> Left $ MoveBlocked pos move
     Nothing -> Right $ movePiece game from to
 {-# INLINEABLE moveOrTakePiece #-}
 
@@ -406,3 +407,7 @@ adjacentTo (Pos r c) =
   , (r', c') /= (r, c)
   ]
 {-# INLINEABLE adjacentTo #-}
+
+notOrthogonalTo :: Position -> Position -> Bool
+notOrthogonalTo (Pos c r) (Pos c' r') = c /= c' && r /= r'
+{-# INLINEABLE notOrthogonalTo #-}
