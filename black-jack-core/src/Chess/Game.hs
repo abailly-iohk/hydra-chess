@@ -144,25 +144,41 @@ data IllegalMove
   | IllegalMove Move
   | WrongSideToPlay Side Move
   | MoveBlocked Position Move
+  | StillInCheck Side
   deriving (Haskell.Eq, Haskell.Show)
 
 PlutusTx.unstableMakeIsData ''IllegalMove
 
 apply :: Move -> Game -> Either IllegalMove Game
 apply move game =
-  doMove move game >>= updateCheckState
+  doMove move game
+    >>= updateCheckState
 {-# INLINEABLE apply #-}
 
 updateCheckState :: Game -> Either IllegalMove Game
-updateCheckState game@Game{curSide, pieces} =
-  let findKing = find (\PieceOnBoard{piece, side} -> piece == King && side == curSide) pieces
-   in case findKing of
-        Nothing -> Right game -- TODO: this should not happen in a real game?
-        Just king ->
-          if any (canTake game king) pieces
-            then Right $ game{checkState = Check curSide}
-            else Right game
+updateCheckState game@Game{curSide, checkState} =
+  ensureCheckIsRemoved >>= changeCheckState
+ where
+  sidePlaying = flipSide curSide
+
+  ensureCheckIsRemoved =
+    if checkState == Check sidePlaying && isInCheck sidePlaying game
+      then Left $ StillInCheck sidePlaying
+      else Right $ game{checkState = NoCheck}
+
+  changeCheckState game' =
+    if isInCheck curSide game'
+      then Right $ game'{checkState = Check curSide}
+      else Right game'
 {-# INLINEABLE updateCheckState #-}
+
+isInCheck :: Side -> Game -> Bool
+isInCheck checkedSide game@Game{pieces} =
+  let findKing = find (\PieceOnBoard{piece, side} -> piece == King && side == checkedSide) pieces
+   in case findKing of
+        Nothing -> False -- TODO: this should not happen in a real game?
+        Just king -> any (canTake game king) pieces
+{-# INLINEABLE isInCheck #-}
 
 canTake :: Game -> PieceOnBoard -> PieceOnBoard -> Bool
 canTake game PieceOnBoard{pos = king} PieceOnBoard{side, pos = other} =

@@ -17,8 +17,10 @@ import Chess.Generators (
   anyValidPawn,
   generateMove,
  )
+import Chess.Render (render)
 import Data.Function ((&))
 import Data.Functor ((<&>))
+import Data.Text (unpack)
 import Test.Hspec (Expectation, Spec, describe, it, parallel, shouldSatisfy)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (
@@ -30,11 +32,13 @@ import Test.QuickCheck (
   counterexample,
   elements,
   forAll,
+  forAllBlind,
   property,
   suchThat,
   tabulate,
   withMaxSuccess,
   (===),
+  (==>),
  )
 
 spec :: Spec
@@ -77,10 +81,33 @@ spec = parallel $ do
   describe "Check" $ do
     prop "is set if next move can take King" prop_is_check_if_next_move_can_take_king
     it "is set if move uncover a piece that can take King" is_check_if_move_uncovers_attacking_piece
+    prop "move not removing check is illegal when is set" prop_move_must_remove_check
   describe "Side" $ do
     prop "cannot play same side twice in a row" prop_cannot_play_same_side_twice_in_a_row
   describe "General" $ do
     prop "cannot pass (move to the same position)" prop_cannot_pass
+
+prop_move_must_remove_check :: Side -> Property
+prop_move_must_remove_check side =
+  forAllBlind anyPos $ \king ->
+    forAllBlind (elements $ accessibleOrthogonally king) $ \check ->
+      forAllBlind (anyPos `suchThat` \p -> (p /= king) && (p /= check)) $ \other ->
+        forAll (arbitrary `suchThat` (/= King)) $ \otherPiece ->
+          forAll arbitrary $ \(RookLike piece) ->
+            let game =
+                  Game
+                    side
+                    (Check side)
+                    [ PieceOnBoard King side king
+                    , PieceOnBoard piece (flipSide side) check
+                    , PieceOnBoard otherPiece side other
+                    ]
+                moves = possibleMoves other game
+             in not (null moves) ==> forAll (elements moves) $ \move ->
+                  isLegalMove move game (not . isCheck side)
+                    & counterexample ("king: " <> show king)
+                    & counterexample ("other: " <> show other)
+                    & counterexample ("attacker: " <> show check)
 
 is_check_if_move_uncovers_attacking_piece :: Expectation
 is_check_if_move_uncovers_attacking_piece = do
@@ -459,8 +486,8 @@ isIllegal game move =
   case apply move game of
     Right game' ->
       property False
-        & counterexample ("after: " <> show game')
-        & counterexample ("before: " <> show game)
+        & counterexample ("after: " <> unpack (render game'))
+        & counterexample ("before: " <> unpack (render game))
         & counterexample ("move: " <> show move)
         & counterexample ("path: " <> show (path from to))
     Left err ->
@@ -475,8 +502,8 @@ isBlocked game move =
   case apply move game of
     Right game' ->
       property False
-        & counterexample ("after: " <> show game')
-        & counterexample ("before: " <> show game)
+        & counterexample ("after: " <> unpack (render game'))
+        & counterexample ("before: " <> unpack (render game))
         & counterexample ("move: " <> show move)
     Left err ->
       err
@@ -496,11 +523,11 @@ isLegalMove move game predicate =
   case apply move game of
     Right game' ->
       predicate game'
-        & counterexample ("game: " <> show game')
+        & counterexample ("game: \n" <> unpack (render game'))
     Left err ->
       property False
         & counterexample ("error: " <> show err)
-        & counterexample ("game: " <> show game)
+        & counterexample ("game: \n" <> unpack (render game))
         & counterexample ("path: " <> show (path from to))
  where
   Move from to = move
