@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -18,7 +19,7 @@ import Chess.Generators (
  )
 import Data.Function ((&))
 import Data.Functor ((<&>))
-import Test.Hspec (Spec, describe, parallel)
+import Test.Hspec (Expectation, Spec, describe, it, parallel, shouldSatisfy)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (
   Arbitrary (..),
@@ -75,10 +76,22 @@ spec = parallel $ do
     prop "can take adjacent piece" prop_king_takes_adjacent_piece
   describe "Check" $ do
     prop "is set if next move can take King" prop_is_check_if_next_move_can_take_king
+    it "is set if move uncover a piece that can take King" is_check_if_move_uncovers_attacking_piece
   describe "Side" $ do
     prop "cannot play same side twice in a row" prop_cannot_play_same_side_twice_in_a_row
   describe "General" $ do
     prop "cannot pass (move to the same position)" prop_cannot_pass
+
+is_check_if_move_uncovers_attacking_piece :: Expectation
+is_check_if_move_uncovers_attacking_piece = do
+  let king = PieceOnBoard King Black (Pos 3 7)
+      bishop = PieceOnBoard Bishop White (Pos 0 4)
+      pawn = PieceOnBoard Pawn White (Pos 1 5)
+      game = mkGame White [king, bishop, pawn]
+      move = Move (Pos 1 5) (Pos 2 5)
+  apply move game `shouldSatisfy` \case
+    Right game' -> isCheck Black game'
+    Left{} -> False
 
 prop_is_check_if_next_move_can_take_king :: Side -> Property
 prop_is_check_if_next_move_can_take_king side =
