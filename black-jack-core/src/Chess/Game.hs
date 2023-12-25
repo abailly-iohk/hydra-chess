@@ -139,14 +139,38 @@ data Move = Move Position Position
 
 PlutusTx.unstableMakeIsData ''Move
 
-data IllegalMove = IllegalMove Move
+data IllegalMove
+  = NotMoving Move
+  | IllegalMove Move
+  | WrongSideToPlay Side Move
   deriving (Haskell.Eq, Haskell.Show)
 
 PlutusTx.unstableMakeIsData ''IllegalMove
 
 apply :: Move -> Game -> Either IllegalMove Game
-apply move@(Move from to) game@Game{curSide}
-  | from == to = Left $ IllegalMove move
+apply move game =
+  doMove move game >>= updateCheckState
+{-# INLINEABLE apply #-}
+
+updateCheckState :: Game -> Either IllegalMove Game
+updateCheckState game@Game{curSide, pieces} =
+  let findKing = find (\PieceOnBoard{piece, side} -> piece == King && side == curSide) pieces
+   in case findKing of
+        Nothing -> Right game -- TODO: this should not happen in a real game?
+        Just king ->
+          if any (canTake game king) pieces
+            then Right $ game{checkState = Check curSide}
+            else Right game
+{-# INLINEABLE updateCheckState #-}
+
+canTake :: Game -> PieceOnBoard -> PieceOnBoard -> Bool
+canTake game PieceOnBoard{pos = king} PieceOnBoard{side, pos = other} =
+  isRight $ doMove (Move other king) (game{curSide = side})
+{-# INLINEABLE canTake #-}
+
+doMove :: Move -> Game -> Either IllegalMove Game
+doMove move@(Move from to) game@Game{curSide}
+  | from == to = Left $ NotMoving move
   | otherwise =
       case pieceAt from game of
         Just (PieceOnBoard Pawn White _) | curSide == White -> moveWhitePawn move game
@@ -158,8 +182,8 @@ apply move@(Move from to) game@Game{curSide}
         Just (PieceOnBoard Queen side _)
           | curSide == side ->
               either (const $ moveBishop move game) Right $ moveRook move game
-        _ -> Left $ IllegalMove move
-{-# INLINEABLE apply #-}
+        _ -> Left $ WrongSideToPlay curSide move
+{-# INLINEABLE doMove #-}
 
 moveKing :: Move -> Game -> Either IllegalMove Game
 moveKing move@(Move (Pos row col) (Pos row' col')) game =
@@ -251,7 +275,7 @@ movePiece game@Game{curSide, pieces} from to =
     newPos = maybe [] (\PieceOnBoard{piece, side} -> [PieceOnBoard{piece, side, pos = to}]) att
    in
     game
-      { curSide = (flipSide curSide)
+      { curSide = flipSide curSide
       , pieces = filter (\PieceOnBoard{pos} -> pos /= from) pieces <> newPos
       }
 {-# INLINEABLE movePiece #-}
