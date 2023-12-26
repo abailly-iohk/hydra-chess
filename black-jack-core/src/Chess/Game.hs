@@ -139,6 +139,12 @@ isCheckMate side = \case
   Game{checkState = CheckMate side'} -> side == side'
   _ -> False
 
+isEndGame :: Game -> Bool
+isEndGame Game{checkState} =
+  case checkState of
+    CheckMate{} -> True
+    _ -> False
+
 data Move = Move Position Position
   deriving (Haskell.Eq, Haskell.Show, Generic, ToJSON, FromJSON)
 
@@ -150,6 +156,7 @@ data IllegalMove
   | WrongSideToPlay Side Move
   | MoveBlocked Position Move
   | StillInCheck Side
+  | GameEnded Check
   deriving (Haskell.Eq, Haskell.Show)
 
 PlutusTx.unstableMakeIsData ''IllegalMove
@@ -213,7 +220,8 @@ canTake game PieceOnBoard{pos = king} PieceOnBoard{side, pos = other} =
 {-# INLINEABLE canTake #-}
 
 doMove :: Move -> Game -> Either IllegalMove Game
-doMove move@(Move from to) game@Game{curSide}
+doMove move@(Move from to) game@Game{checkState, curSide}
+  | isEndGame game = Left $ GameEnded checkState
   | from == to = Left $ NotMoving move
   | otherwise =
       case pieceAt from game of
@@ -397,7 +405,7 @@ legalMoves pos@(Pos r c) game =
         , c' <- enumFromTo 0 7
         , (r, c) /= (r', c')
         ]
-   in filter (\move -> isRight $ apply move game) allMoves
+   in filter (\move -> isRight $ doMove move game) allMoves
 {-# INLINEABLE legalMoves #-}
 
 possibleMoves :: Position -> Game -> [Move]

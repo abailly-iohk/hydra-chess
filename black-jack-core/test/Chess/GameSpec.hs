@@ -84,6 +84,7 @@ spec = parallel $ do
     prop "move not removing check is illegal when is set" prop_move_must_remove_check
   describe "CheckMate" $ do
     prop "is check mate given king cannot evade check" is_check_mate_given_cannot_evade_check
+    prop "no move is possible after check mate" no_move_possible_after_check_mate
   describe "Side" $ do
     prop "cannot play same side twice in a row" prop_cannot_play_same_side_twice_in_a_row
   describe "General" $ do
@@ -100,7 +101,23 @@ is_check_mate_given_cannot_evade_check = do
           , PieceOnBoard Knight Black (Pos 3 2)
           , PieceOnBoard Rook Black (Pos 4 4)
           ]
-  isLegalMove (Move (Pos 4 4 ) (Pos 0 4)) game (isCheckMate White)
+  isLegalMove (Move (Pos 4 4) (Pos 0 4)) game (isCheckMate White)
+
+no_move_possible_after_check_mate :: Property
+no_move_possible_after_check_mate =
+  let game =
+        Game
+          Black
+          NoCheck
+          [ PieceOnBoard King White (Pos 0 0)
+          , PieceOnBoard Pawn White (Pos 1 0)
+          , PieceOnBoard Knight Black (Pos 3 2)
+          , PieceOnBoard Rook Black (Pos 4 4)
+          ]
+      Right game'@Game{pieces} = apply (Move (Pos 4 4) (Pos 0 4)) game
+      movesForWhite = foldMap ((`possibleMoves` game') . pos) (filter ((== White) . side) pieces)
+   in null movesForWhite
+        & counterexample ("game':\n" <> unpack (render game'))
 
 prop_move_must_remove_check :: Side -> Property
 prop_move_must_remove_check side =
