@@ -82,10 +82,25 @@ spec = parallel $ do
     prop "is set if next move can take King" prop_is_check_if_next_move_can_take_king
     it "is set if move uncover a piece that can take King" is_check_if_move_uncovers_attacking_piece
     prop "move not removing check is illegal when is set" prop_move_must_remove_check
+  describe "CheckMate" $ do
+    prop "is check mate given king cannot evade check" is_check_mate_given_cannot_evade_check
   describe "Side" $ do
     prop "cannot play same side twice in a row" prop_cannot_play_same_side_twice_in_a_row
   describe "General" $ do
     prop "cannot pass (move to the same position)" prop_cannot_pass
+
+is_check_mate_given_cannot_evade_check :: Property
+is_check_mate_given_cannot_evade_check = do
+  let game =
+        Game
+          Black
+          NoCheck
+          [ PieceOnBoard King White (Pos 0 0)
+          , PieceOnBoard Pawn White (Pos 1 0)
+          , PieceOnBoard Knight Black (Pos 3 2)
+          , PieceOnBoard Rook Black (Pos 4 4)
+          ]
+  isLegalMove (Move (Pos 4 4 ) (Pos 0 4)) game (isCheckMate White)
 
 prop_move_must_remove_check :: Side -> Property
 prop_move_must_remove_check side =

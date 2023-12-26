@@ -6,7 +6,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# OPTIONS_GHC -fno-specialize -fdefer-type-errors #-}
+{-# OPTIONS_GHC -fno-specialize -fno-strictness -fno-spec-constr -fdefer-type-errors #-}
 
 module Chess.Game where
 
@@ -77,7 +77,7 @@ PlutusTx.unstableMakeIsData ''PieceOnBoard
 instance Eq PieceOnBoard where
   PieceOnBoard p s pos == PieceOnBoard p' s' pos' = p == p' && s == s' && pos == pos'
 
-data Check = NoCheck | Check Side
+data Check = NoCheck | Check Side | CheckMate Side
   deriving (Haskell.Eq, Haskell.Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
@@ -134,6 +134,11 @@ isCheck side = \case
   Game{checkState = Check side'} -> side == side'
   _ -> False
 
+isCheckMate :: Side -> Game -> Bool
+isCheckMate side = \case
+  Game{checkState = CheckMate side'} -> side == side'
+  _ -> False
+
 data Move = Move Position Position
   deriving (Haskell.Eq, Haskell.Show, Generic, ToJSON, FromJSON)
 
@@ -151,8 +156,7 @@ PlutusTx.unstableMakeIsData ''IllegalMove
 
 apply :: Move -> Game -> Either IllegalMove Game
 apply move game =
-  doMove move game
-    >>= updateCheckState
+  doMove move game >>= updateCheckState
 {-# INLINEABLE apply #-}
 
 updateCheckState :: Game -> Either IllegalMove Game
@@ -168,7 +172,10 @@ updateCheckState game@Game{curSide, checkState} =
 
   changeCheckState game' =
     if isInCheck curSide game'
-      then Right $ game'{checkState = Check curSide}
+      then
+        if isInCheckMate curSide game'
+          then Right $ game'{checkState = CheckMate curSide}
+          else Right $ game'{checkState = Check curSide}
       else Right game'
 {-# INLINEABLE updateCheckState #-}
 
@@ -179,6 +186,26 @@ isInCheck checkedSide game@Game{pieces} =
         Nothing -> False -- TODO: this should not happen in a real game?
         Just king -> any (canTake game king) pieces
 {-# INLINEABLE isInCheck #-}
+
+isInCheckMate :: Side -> Game -> Bool
+isInCheckMate checkedSide game@Game{pieces} =
+  let allPieces = filter (\PieceOnBoard{side} -> side == checkedSide) pieces
+      moves =
+        rights
+          . map (`doMove` game)
+          . foldMap ((`legalMoves` game) . pos)
+          $ allPieces
+   in all (isInCheck checkedSide) moves
+{-# INLINEABLE isInCheckMate #-}
+
+rights :: [Either IllegalMove Game] -> [Game]
+rights = foldr selectRight []
+ where
+  selectRight :: Either IllegalMove Game -> [Game] -> [Game]
+  selectRight move games = case move of
+    Left _ -> games
+    Right game -> game : games
+{-# INLINEABLE rights #-}
 
 canTake :: Game -> PieceOnBoard -> PieceOnBoard -> Bool
 canTake game PieceOnBoard{pos = king} PieceOnBoard{side, pos = other} =
@@ -362,6 +389,17 @@ firstPieceOn Game{pieces} aPath =
     (a : _) -> Just a
 {-# INLINEABLE firstPieceOn #-}
 
+legalMoves :: Position -> Game -> [Move]
+legalMoves pos@(Pos r c) game =
+  let allMoves =
+        [ Move pos (Pos r' c')
+        | r' <- enumFromTo 0 7
+        , c' <- enumFromTo 0 7
+        , (r, c) /= (r', c')
+        ]
+   in filter (\move -> isRight $ apply move game) allMoves
+{-# INLINEABLE legalMoves #-}
+
 possibleMoves :: Position -> Game -> [Move]
 possibleMoves pos@(Pos r c) game =
   let allMoves =
@@ -371,7 +409,6 @@ possibleMoves pos@(Pos r c) game =
         , (r, c) /= (r', c')
         ]
    in filter (\move -> isRight $ apply move game) allMoves
-{-# INLINEABLE possibleMoves #-}
 
 accessibleDiagonals :: Position -> [Position]
 accessibleDiagonals (Pos r c) =
