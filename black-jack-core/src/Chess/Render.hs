@@ -5,13 +5,14 @@ module Chess.Render where
 
 import Chess.Game (
   Game (..),
+  Move (..),
   Piece (..),
   PieceOnBoard (PieceOnBoard),
   Position (..),
   Side (..),
-  pieceAt, Move (..),
+  pieceAt,
  )
-import Data.Char (intToDigit, chr, ord)
+import Data.Char (chr, intToDigit, ord)
 import Data.Text (Text, pack)
 import qualified Data.Text as Text
 
@@ -26,12 +27,22 @@ instance Render Move where
 
 instance Render Game where
   render game =
-    let allPos = [character (pieceAt (Pos r c) game) | r <- [0 .. 7], c <- [0 .. 7]]
+    let allPos = [piece r c | r <- [0 .. 7], c <- [0 .. 7]]
+        piece r c =
+          if odd (r + c)
+            then white (character (pieceAt (Pos r c) game))
+            else black (character (pieceAt (Pos r c) game))
         raws = reverse $ splitEvery 8 allPos
-        rows = zipWith (\cs n -> intToDigit n : ' ' : cs) raws [8, 7 .. 1]
-     in Text.unlines $ (Text.pack <$> rows) <> ["  abcdefgh"]
+        rows = zipWith (\cs n -> intToDigit n : ' ' : concat cs) raws [8, 7 .. 1]
+     in Text.unlines ((Text.pack <$> rows) <> ["  abcdefgh"])
 
-splitEvery :: Int -> [Char] -> [String]
+black :: Char -> [Char]
+black s = "\ESC[38;5;0m\ESC[48;2;199;132;67m" <> [s] <> "\ESC[0m"
+
+white :: Char -> [Char]
+white s = "\ESC[38;5;0m\ESC[48;2;240;194;148m" <> [s] <> "\ESC[0m"
+
+splitEvery :: Int -> [a] -> [[a]]
 splitEvery _ [] = []
 splitEvery n xs = as : splitEvery n bs
  where
