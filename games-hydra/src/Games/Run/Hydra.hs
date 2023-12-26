@@ -162,7 +162,9 @@ checkGameTokenIsAvailable network gameSkFile gameVkFile = do
   (_, eloScriptFile) <- findEloScriptFile gameVkFile network
   eloScriptAddress <- getScriptAddress eloScriptFile network
   hasOutputAt network eloScriptAddress >>= \case
-    Just{} -> pure ()
+    Just utxo -> do
+      putStrLn $ "Found game token " <> utxo <> " at address " <> show eloScriptAddress
+      pure ()
     Nothing -> do
       putStrLn $ "No game token registered on " <> show network <> ", creating it"
       registerGameToken network gameSkFile gameVkFile
@@ -490,3 +492,14 @@ downloadHydraExecutable destDir = do
   putStr "Downloading hydra executables"
   httpLBS request >>= Zip.extractFilesFromArchive [Zip.OptDestination destDir] . Zip.toArchive . getResponseBody
   putStrLn " done"
+
+-- transction to burn a token
+-- % cardano-cli transaction build
+-- --tx-in 64604aaf0b43037708029d01031a0c5c96a82be3c6d77863ae855153d318327f#0
+-- --tx-in a07ebd4cda2a8a8f235487f144e6b076148a3868bad5faae8aaa644132e26b7b#1
+-- --mint '-1 e18ad836532a69a93160efe11bcfac05b812a092ef3420042e700c10.666f6f'
+-- --mint-script-file ~/.config/hydra-node/preview/chess-token.plutus
+-- --mint-redeemer-file ~/.config/hydra-node/preview/chess-token-redeemer.json
+-- --change-address addr_test1vqdd0j63e83dvfgtmqpetfwfyrm0v29dcjcm6pt6s8ymaxqr3z3f6
+-- --tx-in-collateral a07ebd4cda2a8a8f235487f144e6b076148a3868bad5faae8aaa644132e26b7b#1
+-- --out-file tx.raw
