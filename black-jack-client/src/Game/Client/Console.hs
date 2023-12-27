@@ -15,25 +15,25 @@ import Data.Aeson (ToJSON (..), Value, eitherDecode, object, (.=))
 import Data.Aeson.Key (fromText)
 import Data.Bifunctor (first)
 import qualified Data.ByteString.Lazy as LBS
+import Data.Either (lefts, rights)
 import Data.Functor (void, ($>))
 import qualified Data.List as List
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes)
 import Data.Text (Text, pack)
 import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.IO as Text
 import Data.Void (Void)
 import Game.Client.IO (Command (..), Err (..), HasIO (..))
+import System.Exit (ExitCode (ExitSuccess))
 import System.IO.Error (isEOFError)
-import Text.Megaparsec (Parsec, empty, many, parse, sepBy, takeRest, try)
+import Text.Megaparsec (Parsec, empty, many, parse, sepBy, takeRest, try, between)
 import Text.Megaparsec.Char (alphaNumChar, char, hexDigitChar, space, space1, string)
 import qualified Text.Megaparsec.Char.Lexer as L
-import System.Exit (ExitCode(ExitSuccess))
 
 type Parser = Parsec Void Text
 
-mkImpureIO :: Show output => Parser command -> HasIO command output IO
+mkImpureIO :: (Show output) => Parser command -> HasIO command output IO
 mkImpureIO parser =
   HasIO
     { input = handle eofException $ do
@@ -113,10 +113,9 @@ spaceConsumer :: Parser ()
 spaceConsumer =
   L.space space1 (L.skipLineComment "#") empty
 
-
-data SimpleUTxO =
-  SimpleUTxO {txIn :: Text, coins :: Coins}
-  | UTxOWithDatum { txIn :: Text, coins :: Coins, datumHash :: Text }
+data SimpleUTxO
+  = SimpleUTxO {txIn :: Text, coins :: Coins}
+  | UTxOWithDatum {txIn :: Text, coins :: Coins, datumHash :: Text}
   deriving stock (Eq, Show)
 
 data Coins = Coins
@@ -128,7 +127,6 @@ data Coins = Coins
 newtype Coin = Coin (Map Text Integer)
   deriving stock (Eq, Show)
   deriving newtype (ToJSON)
-
 
 instance ToJSON Coins where
   toJSON Coins{lovelace, natives} =
@@ -148,14 +146,18 @@ parseQueryUTxO = first (pack . show) . parse utxoParser ""
 utxoParser :: Parser SimpleUTxO
 utxoParser = do
   txIn <- txInParser <* spaceConsumer
-  value <- valueParser
-  pure $ SimpleUTxO txIn value
+  (value, datums) <- valueParser
+  case datums of
+    [Just h] -> pure $ UTxOWithDatum txIn value h
+    [Nothing] -> pure $ SimpleUTxO txIn value
+    [] -> pure $ SimpleUTxO txIn value
+    other -> fail $ "Unexpected datums "<> show other
 
-valueParser :: Parser Coins
+valueParser :: Parser (Coins, [Maybe Text])
 valueParser = do
   lovelace :: Integer <- L.decimal <* spaceConsumer <* string "lovelace" <* spaceConsumer
   pairs <- many tokenOrDatumParser
-  pure $ Coins{lovelace, natives = Map.fromList $ makeTokens (catMaybes pairs)}
+  pure $ (Coins{lovelace, natives = Map.fromList $ makeTokens (lefts pairs)}, rights pairs)
 
 makeTokens :: [(Text, Text, Integer)] -> [(Text, Coin)]
 makeTokens tokens = fmap mkObject $ List.groupBy samePid tokens
@@ -168,12 +170,19 @@ mkObject tokens = (pid, Coin $ Map.fromList tokensAndValues)
   (pid, _, _) = head tokens
   tokensAndValues = fmap (\(_, tok, val) -> (tok, val)) tokens
 
-tokenOrDatumParser :: Parser (Maybe (Text, Text, Integer))
+tokenOrDatumParser :: Parser (Either (Text, Text, Integer) (Maybe Text))
 tokenOrDatumParser =
-  (Just <$> try tokenParser) <|> (Nothing <$ datumParser)
+  (Left <$> try tokenParser) <|> (Right <$> datumParser)
 
-datumParser :: Parser ()
-datumParser = void $ string "+ TxOutDatumNone"
+datumParser :: Parser (Maybe Text)
+datumParser = do
+  void $ string "+ "
+  noDatum <|> datumHash
+  where
+    noDatum = void (string "TxOutDatumNone") *> pure Nothing
+    datumHash =
+      string ("TxOutDatumHash ScriptDataInBabbageEra ") *>
+      (Just <$> between "\"" "\"" hexString)
 
 tokenParser :: Parser (Text, Text, Integer)
 tokenParser = do

@@ -247,9 +247,8 @@ registerGameToken network gameSkFile gameVkFile = do
         , "--tx-in-collateral"
         , txin
         , "--tx-out"
-        , eloScriptAddress <> " + 1200000 lovelace + " <> token
-        , -- 1.2 ADA is the minUTxO here :shrug:
-          "--tx-out-datum-hash"
+        , eloScriptAddress <> " + 10000000 lovelace + " <> token
+        , "--tx-out-datum-hash"
         , eloDatumHash
         , "--mint"
         , token

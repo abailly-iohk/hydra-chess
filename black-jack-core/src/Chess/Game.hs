@@ -86,6 +86,7 @@ PlutusTx.unstableMakeIsData ''Check
 instance Eq Check where
   NoCheck == NoCheck = True
   Check side == Check side' = side == side'
+  CheckMate side == CheckMate side' = side == side'
   _ == _ = False
 
 data Game = Game
