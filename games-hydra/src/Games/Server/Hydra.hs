@@ -17,6 +17,7 @@
 
 module Games.Server.Hydra where
 
+import qualified Chess.ELO as ELO
 import Control.Concurrent.Class.MonadSTM (
   TVar,
   atomically,
@@ -36,6 +37,7 @@ import Data.Aeson (
   FromJSON,
   ToJSON (..),
   Value,
+  decodeFileStrict',
   eitherDecode',
   encode,
   object,
@@ -61,7 +63,7 @@ import GHC.Generics (Generic)
 import Game.Client.Console (Coins, SimpleUTxO (..), parseQueryUTxO)
 import Game.Server (
   FromChain (..),
-  Game (initialGame),
+  Game,
   HeadId,
   Host (..),
   Indexed (..),
@@ -71,7 +73,7 @@ import Game.Server (
  )
 import Game.Server.Mock (MockCoin (..))
 import Games.Run.Cardano (Network, findCardanoCliExecutable, findSocketPath, networkMagicArgs)
-import Games.Run.Hydra (KeyRole (Game), findEloScriptFile, findKeys, getScriptAddress, getUTxOFor)
+import Games.Run.Hydra (KeyRole (Game), eloScriptBytes, findEloScriptFile, findKeys, getScriptAddress, getUTxOFor)
 import Network.HTTP.Client (responseBody)
 import Network.HTTP.Simple (httpLBS, parseRequest, setRequestBodyJSON)
 import Network.WebSockets (Connection, runClient)
@@ -197,10 +199,23 @@ withHydraServer network me host k = do
       let gameToken = rights . fmap (parseQueryUTxO . pack) $ gameUTxO
       when (null gameToken) $ error $ "Failed to retrieve game token to commit from:\n" <> unlines gameUTxO
 
+      scriptWitness <-
+        decodeFileStrict' eloScriptFile >>= \case
+          Nothing -> error $ "Cannot decode script file " <> eloScriptFile
+          Just v -> pure v
+
+      -- build script info
+      let scriptInfo =
+            ScriptInfo
+              { datumWitness = ELO.datumBytes (1000 :: Integer) -- TODO: get real value from somehwere
+              , redeemerWitness = ELO.datumBytes ()
+              , scriptWitness
+              }
+
       -- commit is now external, so we need to handle query to the server, signature and then
       -- submission via the cardano-cli
       request <- parseRequest ("POST http://" <> unpack host <> ":" <> show port <> "/commit")
-      response <- httpLBS $ setRequestBodyJSON (mkFullUTxO (Text.pack scriptAddress) Nothing (head gameToken)) request
+      response <- httpLBS $ setRequestBodyJSON (mkFullUTxO (Text.pack scriptAddress) (Just scriptInfo) (head gameToken)) request
 
       txFileRaw <-
         mkstemp "tx.raw" >>= \(fp, hdl) -> do
@@ -300,40 +315,40 @@ data FullUTxO = FullUTxO
   { txIn :: Text
   , address :: Text
   , value :: Coins
+  , datumHash :: Maybe Text
   , scriptInfo :: Maybe ScriptInfo
   }
   deriving stock (Eq, Show)
 
 data ScriptInfo = ScriptInfo
-  { datumHash :: Text
-  , -- Hex-encoded CBOR of Datum
-    datumWitness :: Text
-  , -- Text enveloppe of script
-    scriptWitness :: Value
-  , -- Hex-encoded CBOR of redeemer
-    redeemerWitness :: Text
+  { datumWitness :: ByteString
+  -- ^ CBOR of datum
+  , scriptWitness :: Value
+  -- ^ Text enveloppe of script
+  , redeemerWitness :: ByteString
+  -- ^ CBOR of redeemer
   }
   deriving stock (Eq, Show)
 
 instance ToJSON FullUTxO where
-  toJSON FullUTxO{txIn, address, value, scriptInfo} =
+  toJSON FullUTxO{txIn, address, value, datumHash, scriptInfo} =
     object
       [ fromText txIn
           .= object
             ( [ "address" .= address
               , "value" .= value
+              , "datumHash" .= datumHash
               ]
                 <> maybe [] asJson scriptInfo
             )
       ]
 
 asJson :: ScriptInfo -> [Pair]
-asJson ScriptInfo{datumHash, datumWitness, scriptWitness, redeemerWitness} =
-  [ "datumHash" .= datumHash
-  , "witness"
+asJson ScriptInfo{datumWitness, scriptWitness, redeemerWitness} =
+  [ "witness"
       .= object
-        [ "datum" .= datumWitness
-        , "redeemer" .= redeemerWitness
+        [ "datum" .= (decodeUtf8 $ Hex.encode $ datumWitness)
+        , "redeemer" .= (decodeUtf8 $ Hex.encode $ redeemerWitness)
         , "plutusV2Script" .= scriptWitness
         ]
   ]
@@ -341,18 +356,14 @@ asJson ScriptInfo{datumHash, datumWitness, scriptWitness, redeemerWitness} =
 mkFullUTxO :: Text -> Maybe ScriptInfo -> SimpleUTxO -> FullUTxO
 mkFullUTxO address scriptInfo = \case
   SimpleUTxO{txIn, coins} ->
-    FullUTxO{txIn, address, value = coins, scriptInfo}
+    FullUTxO{txIn, address, value = coins, scriptInfo, datumHash = Nothing}
   UTxOWithDatum{txIn, coins, datumHash} ->
     FullUTxO
       { txIn
       , address
       , value = coins
-      , scriptInfo =
-          fmap
-            ( \ScriptInfo{datumWitness, redeemerWitness, scriptWitness} ->
-                ScriptInfo{datumHash, ..}
-            )
-            scriptInfo
+      , scriptInfo
+      , datumHash = Just datumHash
       }
 
 waitFor :: TVar IO (Seq (FromChain g Hydra)) -> (FromChain g Hydra -> Maybe a) -> IO a

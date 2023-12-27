@@ -181,7 +181,7 @@ datumParser = do
   where
     noDatum = void (string "TxOutDatumNone") *> pure Nothing
     datumHash =
-      string ("TxOutDatumHash ScriptDataInBabbageEra ") *>
+      string "TxOutDatumHash" *> spaceConsumer *> (string "AlonzoEraOnwardsBabbage" <|> string "ScriptDataInBabbageEra") *> spaceConsumer *>
       (Just <$> between "\"" "\"" hexString)
 
 tokenParser :: Parser (Text, Text, Integer)

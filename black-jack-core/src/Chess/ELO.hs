@@ -20,12 +20,16 @@ module Chess.ELO where
 import PlutusTx.Prelude
 
 import Cardano.Api (hashScriptDataBytes, serialiseToRawBytes, unsafeHashableScriptData)
-import Cardano.Api.Shelley (fromPlutusData)
+import Cardano.Api.Shelley (fromPlutusData, scriptDataToJson)
+import Cardano.Binary (serialize')
 import Chess.Plutus (ValidatorType, scriptValidatorHash, validatorToBytes)
 import Data.ByteString (ByteString)
 import PlutusCore.Version (plcVersion100)
-import PlutusLedgerApi.V2 (PubKeyHash, ScriptHash, SerialisedScript, serialiseCompiledCode)
+import PlutusLedgerApi.V2 (PubKeyHash, ScriptHash, SerialisedScript, serialiseCompiledCode, ToData)
 import PlutusTx (CompiledCode, compile, liftCode, toData, unsafeApplyCode)
+import qualified Data.Aeson as Aeson
+import qualified Data.ByteString.Lazy as Lazy
+import Cardano.Api.Shelley (ScriptDataJsonSchema(ScriptDataJsonDetailedSchema))
 
 validator :: PubKeyHash -> BuiltinData -> BuiltinData -> BuiltinData -> Bool
 validator _pkh _ _ _ = True
@@ -51,6 +55,21 @@ datumHashBytes :: Integer -> ByteString
 datumHashBytes =
   serialiseToRawBytes
     . hashScriptDataBytes
+    . unsafeHashableScriptData
+    . fromPlutusData
+    . toData
+
+datumBytes :: ToData a => a -> ByteString
+datumBytes =
+  serialize'
+    . fromPlutusData
+    . toData
+
+datumJSON :: ToData a => a -> ByteString
+datumJSON =
+  Lazy.toStrict
+    . Aeson.encode
+    . scriptDataToJson ScriptDataJsonDetailedSchema
     . unsafeHashableScriptData
     . fromPlutusData
     . toData

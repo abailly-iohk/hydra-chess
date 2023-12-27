@@ -301,12 +301,19 @@ findEloScriptFile :: FilePath -> Network -> IO (String, FilePath)
 findEloScriptFile gameVkFile network = do
   configDir <- getXdgDirectory XdgConfig ("hydra-node" </> networkDir network)
   let eloScriptFile = configDir </> "elo-script.plutus"
-  -- overwrite script every time?
+  -- FIXME: overwrite script every time?
   gameVk <- deserialiseFromEnvelope @(VerKeyDSIGN Ed25519DSIGN) gameVkFile
   let pkh = pubKeyHash $ hashVerKeyDSIGN @_ @Blake2b_224 gameVk
       bytes = ELO.validatorBytes pkh
   BS.writeFile eloScriptFile bytes
   pure (show pkh, eloScriptFile)
+
+eloScriptBytes :: FilePath -> Network -> IO BS.ByteString
+eloScriptBytes gameVkFile network = do
+  configDir <- getXdgDirectory XdgConfig ("hydra-node" </> networkDir network)
+  gameVk <- deserialiseFromEnvelope @(VerKeyDSIGN Ed25519DSIGN) gameVkFile
+  let pkh = pubKeyHash $ hashVerKeyDSIGN @_ @Blake2b_224 gameVk
+  pure $ ELO.validatorBytes pkh
 
 findMintRedeermeFile :: Network -> IO String
 findMintRedeermeFile network = do
@@ -341,7 +348,9 @@ checkFundsAreAvailable network signingKeyFile verificationKeyFile = do
     checkFundsAreAvailable network signingKeyFile verificationKeyFile
  where
   totalLovelace :: SimpleUTxO -> Integer
-  totalLovelace SimpleUTxO{coins = Coins{lovelace}} = lovelace
+  totalLovelace = \case
+    SimpleUTxO{coins = Coins{lovelace}} -> lovelace
+    UTxOWithDatum{coins = Coins{lovelace}} -> lovelace
 
 ed25519seedsize :: Word
 ed25519seedsize = seedSizeDSIGN (Proxy @Ed25519DSIGN)
