@@ -74,8 +74,9 @@ import Game.Server (
 import Game.Server.Mock (MockCoin (..))
 import Games.Run.Cardano (Network, findCardanoCliExecutable, findSocketPath, networkMagicArgs)
 import Games.Run.Hydra (KeyRole (Game), eloScriptBytes, findEloScriptFile, findKeys, getScriptAddress, getUTxOFor)
-import Network.HTTP.Client (responseBody)
+import Network.HTTP.Client (responseBody, responseStatus)
 import Network.HTTP.Simple (httpLBS, parseRequest, setRequestBodyJSON)
+import Network.HTTP.Types (statusCode)
 import Network.WebSockets (Connection, runClient)
 import qualified Network.WebSockets as WS
 import Numeric.Natural (Natural)
@@ -211,17 +212,26 @@ withHydraServer network me host k = do
               , redeemerWitness = ELO.datumBytes ()
               , scriptWitness
               }
+          utxo = mkFullUTxO (Text.pack scriptAddress) (Just scriptInfo) (head gameToken)
 
       -- commit is now external, so we need to handle query to the server, signature and then
       -- submission via the cardano-cli
       request <- parseRequest ("POST http://" <> unpack host <> ":" <> show port <> "/commit")
-      response <- httpLBS $ setRequestBodyJSON (mkFullUTxO (Text.pack scriptAddress) (Just scriptInfo) (head gameToken)) request
+      response <- httpLBS $ setRequestBodyJSON (utxo) request
 
       txFileRaw <-
-        mkstemp "tx.raw" >>= \(fp, hdl) -> do
-          LBS.hPutStr hdl $ responseBody response
-          hClose hdl
-          pure fp
+        case statusCode (responseStatus response) of
+          200 ->
+            mkstemp "tx.raw" >>= \(fp, hdl) -> do
+              LBS.hPutStr hdl $ responseBody response
+              hClose hdl
+              pure fp
+          other ->
+            error $
+              "Commit transaction failed with error "
+                <> show other
+                <> " for UTxO "
+                <> (unpack $ decodeUtf8 $ LBS.toStrict (encode utxo))
 
       putStrLn $ "Wrote raw commit tx file " <> txFileRaw
 

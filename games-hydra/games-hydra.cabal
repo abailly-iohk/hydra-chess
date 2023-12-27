@@ -47,6 +47,7 @@ library
                 , generic-random
                 , http-client
                 , http-conduit
+                , http-types
                 , cardano-crypto-class
                 , io-classes
                 , megaparsec
