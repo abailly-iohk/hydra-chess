@@ -31,6 +31,7 @@ import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy as Lazy
 import Cardano.Api.Shelley (ScriptDataJsonSchema(ScriptDataJsonDetailedSchema))
 
+-- FIXME: check script can only be spent by `PubKeyHash`
 validator :: PubKeyHash -> BuiltinData -> BuiltinData -> BuiltinData -> Bool
 validator _pkh _ _ _ = True
 {-# INLINEABLE validator #-}

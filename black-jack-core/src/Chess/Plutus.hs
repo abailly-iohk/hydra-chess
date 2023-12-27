@@ -86,7 +86,7 @@ validatorToBytes :: ShortByteString -> ByteString
 validatorToBytes =
   Lazy.toStrict
     . Aeson.encode
-    . serialiseToTextEnvelope (Just $ fromString "Chess Token Policy")
+    . serialiseToTextEnvelope (Just $ fromString "Chess Script")
     . PlutusScriptSerialised @Api.PlutusScriptV2
 
 pubKeyHash :: Hash h keyRole -> PubKeyHash

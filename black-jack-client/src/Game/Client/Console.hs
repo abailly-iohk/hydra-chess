@@ -115,7 +115,7 @@ spaceConsumer =
 
 data SimpleUTxO
   = SimpleUTxO {txIn :: Text, coins :: Coins}
-  | UTxOWithDatum {txIn :: Text, coins :: Coins, datumHash :: Text}
+  | UTxOWithDatum {txIn :: Text, coins :: Coins, datumhash :: Text}
   deriving stock (Eq, Show)
 
 data Coins = Coins
@@ -177,10 +177,10 @@ tokenOrDatumParser =
 datumParser :: Parser (Maybe Text)
 datumParser = do
   void $ string "+ "
-  noDatum <|> datumHash
+  noDatum <|> datumhash
   where
     noDatum = void (string "TxOutDatumNone") *> pure Nothing
-    datumHash =
+    datumhash =
       string "TxOutDatumHash" *> spaceConsumer *> (string "AlonzoEraOnwardsBabbage" <|> string "ScriptDataInBabbageEra") *> spaceConsumer *>
       (Just <$> between "\"" "\"" hexString)
 

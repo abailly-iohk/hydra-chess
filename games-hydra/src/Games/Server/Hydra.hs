@@ -27,10 +27,10 @@ import Control.Concurrent.Class.MonadSTM (
   readTVarIO,
   retry,
  )
-import Control.Exception (IOException)
+import Control.Exception (Exception, IOException)
 import Control.Monad (forever, when)
 import Control.Monad.Class.MonadAsync (withAsync)
-import Control.Monad.Class.MonadThrow (MonadCatch (catch), throwIO)
+import Control.Monad.Class.MonadThrow (MonadCatch (catch), throwIO, try)
 import Control.Monad.Class.MonadTime (UTCTime)
 import Control.Monad.Class.MonadTimer (threadDelay, timeout)
 import Data.Aeson (
@@ -118,6 +118,9 @@ instance IsChain Hydra where
 
   coinValue (MockCoin c) = c
 
+data CommitError = CommitError String
+  deriving (Eq, Show, Exception)
+
 withHydraServer :: forall g. (Game g) => Network -> HydraParty -> Host -> (Server g Hydra IO -> IO ()) -> IO ()
 withHydraServer network me host k = do
   events <- newTVarIO mempty
@@ -186,7 +189,10 @@ withHydraServer network me host k = do
       >>= maybe (throwIO $ ServerException "Timeout (10m) waiting for head Id") pure
 
   sendCommit :: Connection -> TVar IO (Seq (FromChain g Hydra)) -> Host -> Integer -> HeadId -> IO ()
-  sendCommit cnx events Host{host, port} amount _headId = go
+  sendCommit cnx events Host{host, port} amount _headId =
+    try go >>= \case
+      Left (CommitError msg) -> putStrLn msg
+      Right{} -> pure ()
    where
     go = do
       cardanoCliExe <- findCardanoCliExecutable
@@ -202,7 +208,7 @@ withHydraServer network me host k = do
 
       scriptWitness <-
         decodeFileStrict' eloScriptFile >>= \case
-          Nothing -> error $ "Cannot decode script file " <> eloScriptFile
+          Nothing -> throwIO $ CommitError $ "Cannot decode script file " <> eloScriptFile
           Just v -> pure v
 
       -- build script info
@@ -227,11 +233,12 @@ withHydraServer network me host k = do
               hClose hdl
               pure fp
           other ->
-            error $
-              "Commit transaction failed with error "
-                <> show other
-                <> " for UTxO "
-                <> (unpack $ decodeUtf8 $ LBS.toStrict (encode utxo))
+            throwIO $
+              CommitError $
+                "Commit transaction failed with error "
+                  <> show other
+                  <> " for UTxO "
+                  <> (unpack $ decodeUtf8 $ LBS.toStrict (encode utxo))
 
       putStrLn $ "Wrote raw commit tx file " <> txFileRaw
 
@@ -325,7 +332,7 @@ data FullUTxO = FullUTxO
   { txIn :: Text
   , address :: Text
   , value :: Coins
-  , datumHash :: Maybe Text
+  , datumhash :: Maybe Text
   , scriptInfo :: Maybe ScriptInfo
   }
   deriving stock (Eq, Show)
@@ -341,13 +348,13 @@ data ScriptInfo = ScriptInfo
   deriving stock (Eq, Show)
 
 instance ToJSON FullUTxO where
-  toJSON FullUTxO{txIn, address, value, datumHash, scriptInfo} =
+  toJSON FullUTxO{txIn, address, value, datumhash, scriptInfo} =
     object
       [ fromText txIn
           .= object
             ( [ "address" .= address
               , "value" .= value
-              , "datumHash" .= datumHash
+              , "datumhash" .= datumhash
               ]
                 <> maybe [] asJson scriptInfo
             )
@@ -366,14 +373,14 @@ asJson ScriptInfo{datumWitness, scriptWitness, redeemerWitness} =
 mkFullUTxO :: Text -> Maybe ScriptInfo -> SimpleUTxO -> FullUTxO
 mkFullUTxO address scriptInfo = \case
   SimpleUTxO{txIn, coins} ->
-    FullUTxO{txIn, address, value = coins, scriptInfo, datumHash = Nothing}
-  UTxOWithDatum{txIn, coins, datumHash} ->
+    FullUTxO{txIn, address, value = coins, scriptInfo, datumhash = Nothing}
+  UTxOWithDatum{txIn, coins, datumhash} ->
     FullUTxO
       { txIn
       , address
       , value = coins
       , scriptInfo
-      , datumHash = Just datumHash
+      , datumhash = Just datumhash
       }
 
 waitFor :: TVar IO (Seq (FromChain g Hydra)) -> (FromChain g Hydra -> Maybe a) -> IO a
