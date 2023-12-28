@@ -181,6 +181,16 @@ withHydraServer network me host k = do
       )
       >>= maybe (throwIO $ ServerException "Timeout (10m) waiting for head Id") pure
 
+  -- (pkh, eloScriptFile) <- findEloScriptFile gameVk network
+  -- let eloDatumValue :: Integer = 1000
+  --     eloDatumHash =
+  --       Text.unpack $
+  --         decodeUtf8 $
+  --           Hex.encode $
+  --             datumHashBytes eloDatumValue
+  -- eloScriptAddress <- getScriptAddress eloScriptFile network
+
+
   sendCommit :: Connection -> TVar IO (Seq (FromChain g Hydra)) -> Host -> Integer -> HeadId -> IO ()
   sendCommit cnx events Host{host, port} amount _headId =
     try go >>= \case
@@ -291,6 +301,8 @@ withHydraServer network me host k = do
 
     utxo <- collectUTxO events connection
     -- let inputs = buildInput <$> utxo
+
+    -- % cardano-cli transaction build-raw --tx-in c5a00b09e82c334bd04d62313ab25608ca70e7d1014ca9c8dfc09251d51ea6a0#0 --tx-in-script-file ~/.config/hydra-node/preview/elo-script.plutus --tx-in-datum-value 1000 --tx-in-redeemer-value '[]' --tx-in-execution-units '(0,0)' --tx-in-collateral c5a00b09e82c334bd04d62313ab25608ca70e7d1014ca9c8dfc09251d51ea6a0#0 --tx-out 'addr_test1wrr66kuw94l4zh7jff227872cyppk2ttketmdsqcflwhwhchp6lwz+10000000 + 1 e18ad836532a69a93160efe11bcfac05b812a092ef3420042e700c10.1ad7cb51c9e2d6250bd80395a5c920f6f628adc4b1bd057a81c9be98' --tx-out-inline-datum-file ~/.config/hydra-node/preview/chess-game-state.json --fee 0 --protocol-params-file ~/.config/hydra-node/preview/protocol-parameters.json --out-file game-tx.raw
 
     putStrLn $
       unlines

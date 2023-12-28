@@ -21,9 +21,9 @@ import Cardano.Crypto.DSIGN (
  )
 import Cardano.Crypto.Hash (Blake2b_224)
 import Cardano.Crypto.Seed (readSeedFromSystemEntropy)
-import qualified Chess.ELO as ELO
-import Chess.Plutus (MintAction (Mint), pubKeyHash, datumJSON, datumHashBytes, ToData, validatorToBytes)
 import qualified Chess.Contract as Contract
+import qualified Chess.ELO as ELO
+import Chess.Plutus (MintAction (Mint), ToData, datumJSON, pubKeyHash, validatorToBytes)
 import qualified Chess.Token as Token
 import qualified Codec.Archive.Zip as Zip
 import Codec.CBOR.Read (deserialiseFromBytes)
@@ -39,6 +39,7 @@ import qualified Data.ByteString.Lazy as LBS
 import Data.Char (isDigit, isHexDigit, isSpace)
 import Data.Data (Proxy (..))
 import Data.Either (rights)
+import qualified Data.List as List
 import Data.Text (Text, unpack)
 import qualified Data.Text as Text
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
@@ -160,22 +161,31 @@ hydraNodeProcess network executableFile nodeSocket = do
 
 checkGameTokenIsAvailable :: Network -> FilePath -> FilePath -> IO ()
 checkGameTokenIsAvailable network gameSkFile gameVkFile = do
-  (_, eloScriptFile) <- findEloScriptFile gameVkFile network
-  eloScriptAddress <- getScriptAddress eloScriptFile network
-  hasOutputAt network eloScriptAddress >>= \case
-    Just utxo -> do
-      putStrLn $ "Found game token " <> utxo <> " at address " <> show eloScriptAddress
-      pure ()
+  pkh <- findPubKeyHash gameVkFile
+  let token = "1 " <> Token.validatorHashHex <.> pkh
+  gameAddress <- getVerificationKeyAddress gameVkFile network
+  putStrLn $ "Checking game token for " <> pkh <> " @ " <> gameAddress
+  hasToken token gameAddress >>= \case
+    Just{} -> pure ()
     Nothing -> do
       putStrLn $ "No game token registered on " <> show network <> ", creating it"
       registerGameToken network gameSkFile gameVkFile
-      waitForToken eloScriptAddress
+      waitForToken token gameAddress
  where
-  waitForToken eloScriptAddress = do
+  waitForToken token gameAddress = do
     putStrLn $ "Wait for token creation tx"
     threadDelay 10_000_000
-    hasOutputAt network eloScriptAddress
-      >>= maybe (waitForToken eloScriptAddress) (const $ pure ())
+    hasToken token gameAddress
+      >>= maybe (waitForToken token gameAddress) (const $ pure ())
+
+  hasToken token gameAddress = do
+    getUTxOFor network gameAddress
+      >>= pure . \case
+        [] -> Nothing
+        utxos ->
+          case filter (token `List.isInfixOf`) utxos of
+            utxo : _ -> Just utxo -- FIXME: can there be multiple game tokens?
+            [] -> Nothing
 
 hasOutputAt :: Network -> String -> IO (Maybe String)
 hasOutputAt network address = do
@@ -186,6 +196,7 @@ hasOutputAt network address = do
 
 getUTxOFor :: Network -> String -> IO [String]
 getUTxOFor network address = do
+  putStrLn $ "Querying utxo for " <> address
   cardanoCliExe <- findCardanoCliExecutable
   socketPath <- findSocketPath network
   drop 2 . lines
@@ -217,24 +228,19 @@ registerGameToken network gameSkFile gameVkFile = do
   (fundSk, fundVk) <- findKeys Fuel network
   (gameSk, gameVk) <- findKeys Game network
   fundAddress <- getVerificationKeyAddress fundVk network
+  gameAddress <- getVerificationKeyAddress gameVk network
+
   utxo <- getUTxOFor network fundAddress
   when (null utxo) $ error "No UTxO with funds"
   let txin = mkTxIn $ head utxo
-  cardanoCliExe <- findCardanoCliExecutable
 
+  cardanoCliExe <- findCardanoCliExecutable
   socketPath <- findSocketPath network
 
   mintScriptFile <- findMintScriptFile network
   mintRedeemerFile <- findMintRedeermeFile network
 
-  (pkh, eloScriptFile) <- findEloScriptFile gameVk network
-  let eloDatumValue :: Integer = 1000
-      eloDatumHash =
-        Text.unpack $
-          decodeUtf8 $
-            Hex.encode $
-              datumHashBytes eloDatumValue
-  eloScriptAddress <- getScriptAddress eloScriptFile network
+  pkh <- findPubKeyHash gameVk
 
   txFileRaw <- mkstemp "tx.raw" >>= \(fp, hdl) -> hClose hdl >> pure fp
 
@@ -248,9 +254,7 @@ registerGameToken network gameSkFile gameVkFile = do
         , "--tx-in-collateral"
         , txin
         , "--tx-out"
-        , eloScriptAddress <> " + 10000000 lovelace + " <> token
-        , "--tx-out-datum-hash"
-        , eloDatumHash
+        , gameAddress <> " + 10000000 lovelace + " <> token
         , "--mint"
         , token
         , "--mint-script-file"
@@ -298,6 +302,10 @@ registerGameToken network gameSkFile gameVkFile = do
 
   putStrLn $ "Submitted token creation tx"
 
+findPubKeyHash :: FilePath -> IO String
+findPubKeyHash vkFile =
+  show . pubKeyHash . hashVerKeyDSIGN @_ @Blake2b_224 <$> deserialiseFromEnvelope @(VerKeyDSIGN Ed25519DSIGN) vkFile
+
 findEloScriptFile :: FilePath -> Network -> IO (String, FilePath)
 findEloScriptFile gameVkFile network = do
   configDir <- getXdgDirectory XdgConfig ("hydra-node" </> networkDir network)
@@ -316,7 +324,7 @@ eloScriptBytes gameVkFile network = do
   let pkh = pubKeyHash $ hashVerKeyDSIGN @_ @Blake2b_224 gameVk
   pure $ ELO.validatorBytes pkh
 
-findDatumFile :: ToData a => String -> a -> Network -> IO String
+findDatumFile :: (ToData a) => String -> a -> Network -> IO String
 findDatumFile name datum network = do
   configDir <- getXdgDirectory XdgConfig ("hydra-node" </> networkDir network)
   let datumFile = configDir </> "chess-" <> name <.> "json"
