@@ -17,7 +17,8 @@
 
 module Games.Server.Hydra where
 
-import qualified Chess.ELO as ELO
+import qualified Chess.Game as Chess
+import qualified Chess.Plutus as Plutus
 import Control.Concurrent.Class.MonadSTM (
   TVar,
   atomically,
@@ -61,19 +62,10 @@ import qualified Data.Text as Text
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import GHC.Generics (Generic)
 import Game.Client.Console (Coins, SimpleUTxO (..), parseQueryUTxO)
-import Game.Server (
-  FromChain (..),
-  Game,
-  HeadId,
-  Host (..),
-  Indexed (..),
-  IsChain (..),
-  Server (..),
-  ServerException (..),
- )
+import Game.Server (Content (..), FromChain (..), HeadId, Host (..), Indexed (..), IsChain (..), Server (..), ServerException (..))
 import Game.Server.Mock (MockCoin (..))
 import Games.Run.Cardano (Network, findCardanoCliExecutable, findSocketPath, networkMagicArgs)
-import Games.Run.Hydra (KeyRole (Game), eloScriptBytes, findEloScriptFile, findKeys, getScriptAddress, getUTxOFor)
+import Games.Run.Hydra (KeyRole (Game), findDatumFile, findEloScriptFile, findGameScriptFile, findKeys, getScriptAddress, getUTxOFor)
 import Network.HTTP.Client (responseBody, responseStatus)
 import Network.HTTP.Simple (httpLBS, parseRequest, setRequestBodyJSON)
 import Network.HTTP.Types (statusCode)
@@ -121,7 +113,7 @@ instance IsChain Hydra where
 data CommitError = CommitError String
   deriving (Eq, Show, Exception)
 
-withHydraServer :: forall g. (Game g) => Network -> HydraParty -> Host -> (Server g Hydra IO -> IO ()) -> IO ()
+withHydraServer :: Network -> HydraParty -> Host -> (Server Chess.Game Hydra IO -> IO ()) -> IO ()
 withHydraServer network me host k = do
   events <- newTVarIO mempty
   withClient host $ \cnx ->
@@ -132,7 +124,7 @@ withHydraServer network me host k = do
               , poll = pollEvents events
               , commit = sendCommit cnx events host
               , play = playGame cnx
-              , newGame = restartGame cnx
+              , newGame = newGame events cnx
               , closeHead = sendClose cnx events
               }
        in k server
@@ -174,7 +166,8 @@ withHydraServer network me host k = do
             HeadIsClosed{} -> pure ()
             ReadyToFanout headId ->
               atomically (modifyTVar' events (|> HeadClosing headId))
-            GetUTxOResponse{} -> pure ()
+            GetUTxOResponse{utxo} ->
+              atomically (modifyTVar' events (|> OtherMessage (Content $ decodeUtf8 $ LBS.toStrict $ encode utxo)))
             RolledBack{} -> pure ()
 
   sendInit :: Connection -> TVar IO (Seq (FromChain g Hydra)) -> [Text] -> IO HeadId
@@ -214,8 +207,8 @@ withHydraServer network me host k = do
       -- build script info
       let scriptInfo =
             ScriptInfo
-              { datumWitness = ELO.datumBytes (1000 :: Integer) -- TODO: get real value from somehwere
-              , redeemerWitness = ELO.datumBytes ()
+              { datumWitness = Plutus.datumBytes (1000 :: Integer) -- TODO: get real value from somehwere
+              , redeemerWitness = Plutus.datumBytes ()
               , scriptWitness
               }
           utxo = mkFullUTxO (Text.pack scriptAddress) (Just scriptInfo) (head gameToken)
@@ -278,6 +271,56 @@ withHydraServer network me host k = do
         )
         >>= maybe (putStrLn "Timeout (60s) waiting for commit to appear, please try again") pure
 
+  newGame :: TVar IO (Seq (FromChain g Hydra)) -> Connection -> HeadId -> IO ()
+  newGame events connection headId = do
+    cardanoCliExe <- findCardanoCliExecutable
+    (skFile, vkFile) <- findKeys Game network
+    socketPath <- findSocketPath network
+
+    -- find ELO script for witnessing
+    eloScriptFile <- snd <$> findEloScriptFile vkFile network
+    let datumWitness = Plutus.datumBytes (1000 :: Integer) -- TODO: get real value from somehwere
+        redeemerWitness = Plutus.datumBytes ()
+
+    -- find chess game address
+    gameScriptFile <- findGameScriptFile network
+    gameScriptAddress <- getScriptAddress gameScriptFile network
+
+    -- construct chess game inline datum
+    gameDatumFile <- findDatumFile "game-state" Chess.initialGame network
+
+    utxo <- collectUTxO events connection
+    -- let inputs = buildInput <$> utxo
+
+    putStrLn $
+      unlines
+        [ "newGame:"
+        , "datumWitness: " <> (unpack $ decodeUtf8 $ Hex.encode datumWitness)
+        , "redeemerWitness: " <> (unpack $ decodeUtf8 $ Hex.encode redeemerWitness)
+        , "gameScriptAddress: " <> gameScriptAddress
+        , "gameDatum: " <> gameDatumFile
+        , "utxo: " <> (unpack utxo)
+        ]
+  --     args =
+  --       [ "transaction"
+  --       , "build"
+  --       , "--tx-in"
+  --       , txin
+  --       , "--tx-in-collateral"
+  --       , txin
+  --       , "--tx-out"
+  --       , eloScriptAddress <> " + 10000000 lovelace + " <> token
+  --       , "--tx-out-datum-hash"
+  --       , eloDatumHash
+  --       , "--out-file"
+  --       , txFileRaw <.> "raw"
+  --       , "--socket-path"
+  --       , socketPath
+  --       ]
+  --         <> networkMagicArgs network
+
+  -- putStrLn $ "Building new game transaction " <> (txFileRaw <.> "raw") <> " with arguments: " <> unwords args
+
   playGame :: Connection -> HeadId -> Value -> IO ()
   playGame cnx _headId play =
     -- need to put the play as a redeemer for a transaction that consumes the current
@@ -298,9 +341,6 @@ withHydraServer network me host k = do
       )
       >>= maybe (throwIO $ ServerException "Timeout (10m) waiting for head Id") (const $ WS.sendTextData cnx (encode Fanout))
 
-  restartGame :: Connection -> HeadId -> IO ()
-  restartGame = error "not implemented"
-
   pollEvents :: TVar IO (Seq (FromChain g Hydra)) -> Integer -> Integer -> IO (Indexed g Hydra)
   pollEvents events (fromInteger -> start) (fromInteger -> count) = do
     history <- readTVarIO events
@@ -310,6 +350,18 @@ withHydraServer network me host k = do
             , events = toList $ Seq.take count $ Seq.drop start history
             }
     pure indexed
+
+  -- Collect only TxIn
+  collectUTxO :: TVar IO (Seq (FromChain g Hydra)) -> Connection -> IO Text
+  collectUTxO events cnx = do
+    WS.sendTextData cnx (encode GetUTxO)
+    timeout
+      600_000_000
+      ( waitFor events $ \case
+          OtherMessage (Content txt) -> Just txt
+          _ -> Nothing
+      )
+      >>= maybe (throwIO $ ServerException "Timeout (10m) waiting for GetUTxO") pure
 
 --         {
 --             "09d34606abdcd0b10ebc89307cbfa0b469f9144194137b45b7a04b273961add8#687": {
@@ -390,7 +442,7 @@ waitFor events predicate =
       (_ :|> event) -> maybe retry pure (predicate event)
       _ -> retry
 
-data Request = Init | Close | Fanout
+data Request = Init | Close | Fanout | GetUTxO
   deriving stock (Eq, Show, Generic)
 
 instance ToJSON Request where
@@ -398,6 +450,7 @@ instance ToJSON Request where
     Init -> object ["tag" .= ("Init" :: Text)]
     Close -> object ["tag" .= ("Close" :: Text)]
     Fanout -> object ["tag" .= ("Fanout" :: Text)]
+    GetUTxO -> object ["tag" .= ("GetUTxO" :: Text)]
 
 instance FromJSON Request where
   parseJSON = withObject "Request" $ \obj ->
@@ -405,6 +458,7 @@ instance FromJSON Request where
       ("Init" :: String) -> pure Init
       ("Close" :: String) -> pure Close
       ("Fanout" :: String) -> pure Close
+      ("GetUTxO" :: String) -> pure GetUTxO
       other -> fail $ "Unknown request type: " <> other
 
 data Response = Response

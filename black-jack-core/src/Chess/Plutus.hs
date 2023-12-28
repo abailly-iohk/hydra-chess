@@ -3,7 +3,8 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_GHC -fno-specialize #-}
 
-module Chess.Plutus where
+module Chess.Plutus (module Chess.Plutus, ToData)
+where
 
 import PlutusTx.Prelude
 
@@ -15,20 +16,24 @@ import Cardano.Api (
   serialiseToTextEnvelope,
  )
 import qualified Cardano.Api as Api
-import Cardano.Api.Shelley (PlutusScript (PlutusScriptSerialised))
+import Cardano.Api.Shelley (PlutusScript (PlutusScriptSerialised), fromPlutusData)
+import Cardano.Binary (serialize')
+import Cardano.Crypto.Hash (Hash, hashToBytes)
 import qualified Data.Aeson as Aeson
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as Lazy
 import Data.ByteString.Short (ShortByteString)
 import Data.String (IsString (..))
 import PlutusLedgerApi.V2 (
+  PubKeyHash (..),
   ScriptHash (..),
   SerialisedScript,
-  UnsafeFromData, PubKeyHash(..),
+  ToData,
+  UnsafeFromData,
+  toData,
  )
 import PlutusTx (UnsafeFromData (..))
 import qualified PlutusTx
-import Cardano.Crypto.Hash (Hash, hashToBytes)
 
 -- | Signature of an untyped validator script.
 type ValidatorType = BuiltinData -> BuiltinData -> BuiltinData -> ()
@@ -91,3 +96,26 @@ validatorToBytes =
 
 pubKeyHash :: Hash h keyRole -> PubKeyHash
 pubKeyHash h = PubKeyHash (toBuiltin @ByteString $ hashToBytes h)
+
+datumHashBytes :: (ToData a) => a -> ByteString
+datumHashBytes =
+  serialiseToRawBytes
+    . Api.hashScriptDataBytes
+    . Api.unsafeHashableScriptData
+    . fromPlutusData
+    . toData
+
+datumBytes :: (ToData a) => a -> ByteString
+datumBytes =
+  serialize'
+    . fromPlutusData
+    . toData
+
+datumJSON :: (ToData a) => a -> ByteString
+datumJSON =
+  Lazy.toStrict
+    . Aeson.encode
+    . Api.scriptDataToJson Api.ScriptDataJsonDetailedSchema
+    . Api.unsafeHashableScriptData
+    . fromPlutusData
+    . toData

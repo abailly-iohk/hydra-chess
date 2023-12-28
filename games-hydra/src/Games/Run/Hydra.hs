@@ -22,7 +22,8 @@ import Cardano.Crypto.DSIGN (
 import Cardano.Crypto.Hash (Blake2b_224)
 import Cardano.Crypto.Seed (readSeedFromSystemEntropy)
 import qualified Chess.ELO as ELO
-import Chess.Plutus (MintAction (Mint), pubKeyHash)
+import Chess.Plutus (MintAction (Mint), pubKeyHash, datumJSON, datumHashBytes, ToData, validatorToBytes)
+import qualified Chess.Contract as Contract
 import qualified Chess.Token as Token
 import qualified Codec.Archive.Zip as Zip
 import Codec.CBOR.Read (deserialiseFromBytes)
@@ -232,7 +233,7 @@ registerGameToken network gameSkFile gameVkFile = do
         Text.unpack $
           decodeUtf8 $
             Hex.encode $
-              ELO.datumHashBytes eloDatumValue
+              datumHashBytes eloDatumValue
   eloScriptAddress <- getScriptAddress eloScriptFile network
 
   txFileRaw <- mkstemp "tx.raw" >>= \(fp, hdl) -> hClose hdl >> pure fp
@@ -315,12 +316,15 @@ eloScriptBytes gameVkFile network = do
   let pkh = pubKeyHash $ hashVerKeyDSIGN @_ @Blake2b_224 gameVk
   pure $ ELO.validatorBytes pkh
 
-findMintRedeermeFile :: Network -> IO String
-findMintRedeermeFile network = do
+findDatumFile :: ToData a => String -> a -> Network -> IO String
+findDatumFile name datum network = do
   configDir <- getXdgDirectory XdgConfig ("hydra-node" </> networkDir network)
-  let redeemerScriptFile = configDir </> "chess-token-redeemer.json"
-  BS.writeFile redeemerScriptFile $ Token.mintActionJSON Mint
-  pure redeemerScriptFile
+  let datumFile = configDir </> "chess-" <> name <.> "json"
+  BS.writeFile datumFile $ datumJSON datum
+  pure datumFile
+
+findMintRedeermeFile :: Network -> IO String
+findMintRedeermeFile = findDatumFile "mint-redeemer" Mint
 
 findMintScriptFile :: Network -> IO String
 findMintScriptFile network = do
@@ -329,6 +333,13 @@ findMintScriptFile network = do
   -- always overwrite file with latest version?
   BS.writeFile mintScriptFile Token.validatorBytes
   pure mintScriptFile
+
+findGameScriptFile :: Network -> IO FilePath
+findGameScriptFile network = do
+  configDir <- getXdgDirectory XdgConfig ("hydra-node" </> networkDir network)
+  let eloScriptFile = configDir </> "game-script.plutus"
+  BS.writeFile eloScriptFile (validatorToBytes Contract.validatorScript)
+  pure eloScriptFile
 
 mkTxIn :: String -> String
 mkTxIn cliOutput = txId <> "#" <> txIx
