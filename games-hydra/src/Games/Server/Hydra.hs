@@ -37,7 +37,7 @@ import Control.Monad.Class.MonadTimer (threadDelay, timeout)
 import Data.Aeson (
   FromJSON,
   ToJSON (..),
-  Value,
+  Value (..),
   decodeFileStrict',
   eitherDecode',
   encode,
@@ -65,7 +65,7 @@ import Game.Client.Console (Coins, SimpleUTxO (..), parseQueryUTxO)
 import Game.Server (Content (..), FromChain (..), HeadId, Host (..), Indexed (..), IsChain (..), Server (..), ServerException (..))
 import Game.Server.Mock (MockCoin (..))
 import Games.Run.Cardano (Network, findCardanoCliExecutable, findSocketPath, networkMagicArgs)
-import Games.Run.Hydra (KeyRole (Game), findDatumFile, findEloScriptFile, findGameScriptFile, findKeys, getScriptAddress, getUTxOFor)
+import Games.Run.Hydra (KeyRole (Game), findDatumFile, findEloScriptFile, findGameScriptFile, findKeys, getScriptAddress, getUTxOFor, findPubKeyHash)
 import Network.HTTP.Client (responseBody, responseStatus)
 import Network.HTTP.Simple (httpLBS, parseRequest, setRequestBodyJSON)
 import Network.HTTP.Types (statusCode)
@@ -77,6 +77,10 @@ import System.IO (hClose)
 import System.Posix (mkstemp)
 import System.Process (callProcess)
 import Prelude hiding (seq)
+import qualified Chess.Token as Token
+import qualified Data.Aeson.KeyMap as KeyMap
+import qualified Data.Aeson.Types as Aeson
+import qualified Data.Aeson.Key as Key
 
 -- | The type of backend provide by Hydra
 data Hydra
@@ -145,7 +149,8 @@ withHydraServer network me host k = do
               atomically (modifyTVar' events (|> HeadClosed headId))
             Committed headId party _utxo ->
               atomically (modifyTVar' events (|> FundCommitted headId party 0))
-            HeadIsOpen headId utxo ->
+            HeadIsOpen headId utxo -> do
+              splitGameUTxO utxo
               atomically (modifyTVar' events (|> HeadOpened headId))
             CommandFailed{} ->
               putStrLn "Command failed"
@@ -169,6 +174,18 @@ withHydraServer network me host k = do
             GetUTxOResponse{utxo} ->
               atomically (modifyTVar' events (|> OtherMessage (Content $ decodeUtf8 $ LBS.toStrict $ encode utxo)))
             RolledBack{} -> pure ()
+
+  splitGameUTxO :: Value -> IO ()
+  splitGameUTxO utxo = do
+    myGameToken <- findGameToken utxo
+    undefined
+
+  findGameToken :: Value -> IO [String]
+  findGameToken utxo = do
+    pkh <- findKeys Game network >>= findPubKeyHash . snd
+    let pid = Token.validatorHashHex
+    pure $ extractGameToken pid pkh utxo
+
 
   sendInit :: Connection -> TVar IO (Seq (FromChain g Hydra)) -> [Text] -> IO HeadId
   sendInit cnx events _unusedParties = do
@@ -541,3 +558,28 @@ withClient Host{host, port} action = do
     res <- action connection
     WS.sendClose connection ("Bye" :: Text)
     pure res
+
+extractGameToken :: String -> String -> Value -> [String]
+extractGameToken pid pkh = \case
+    Object kv -> foldMap (findUTxOWithValue pid pkh) (KeyMap.toList kv)
+    _ -> []
+
+findUTxOWithValue :: String -> String -> (KeyMap.Key, Value) -> [String]
+findUTxOWithValue pid pkh (txin, txout) =
+  case txout of
+    Object kv -> if hasValueFor pid pkh kv
+                 then [unpack $ Key.toText txin]
+                 else []
+    _ -> []
+
+hasValueFor :: String -> String -> Aeson.Object -> Bool
+hasValueFor pid pkh kv =
+  case filter ((== fromString "value") . fst) $ KeyMap.toList kv of
+     [ (_, Object val) ] ->
+       case filter ((== fromString pid) . fst) $ KeyMap.toList val  of
+         [ (_, Object tok)] ->
+           case filter ((== fromString pkh) . fst) $ KeyMap.toList tok  of
+             [] -> False
+             _ -> True
+         _ -> False
+     _ -> False
