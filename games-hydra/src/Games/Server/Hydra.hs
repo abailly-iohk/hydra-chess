@@ -453,7 +453,7 @@ withHydraServer network me host k = do
       , "--tx-in-redeemer-value"
       , "[]"
       , "--tx-in-execution-units"
-      , "(0,0)"
+      , "(10000000,100000000)"
       ]
 
   -- --tx-in-script-file ~/.config/hydra-node/preview/elo-script.plutus --tx-in-datum-value 1000 --tx-in-redeemer-value '[]' --tx-in-execution-units '(0,0)'

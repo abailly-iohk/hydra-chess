@@ -517,7 +517,9 @@ mkZeroFeeParams = \case
           "executionUnitPrices"
           ( Object $
               insert "pricesMemory" zero $
-                insert "pricesSteps" zero obj
+                insert "pricesSteps" zero $
+                insert "priceMemory" zero $
+                insert "priceSteps" zero obj
           )
           m
       _ -> m
