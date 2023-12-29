@@ -242,7 +242,7 @@ registerGameToken network gameSkFile gameVkFile = do
 
   pkh <- findPubKeyHash gameVk
 
-  txFileRaw <- mkstemp "tx.raw" >>= \(fp, hdl) -> hClose hdl >> pure fp
+  txFileRaw <- mkTempFile
 
   let token = "1 " <> Token.validatorHashHex <.> pkh
 
@@ -399,20 +399,24 @@ findHydraSigningKey network = do
 
 deserialiseFromEnvelope :: forall a. (FromCBOR a) => FilePath -> IO a
 deserialiseFromEnvelope file = do
+  cborHex <- extractCBORHex file
+  case Hex.decode (encodeUtf8 cborHex) of
+    Right bs ->
+      either
+        (\err -> error $ "Failed to deserialised key from " <> show bs <> " : " <> show err)
+        (pure . snd)
+        $ deserialiseFromBytes @a fromCBOR (LBS.fromStrict bs)
+    Left err -> error $ "Failed to deserialise key from " <> unpack cborHex <> " : " <> err
+
+extractCBORHex :: FilePath -> IO Text
+extractCBORHex file = do
   envelope <- eitherDecode <$> LBS.readFile file
   case envelope of
     Right (Object val) -> do
       case val !? "cborHex" of
-        Just (String str) ->
-          case Hex.decode (encodeUtf8 str) of
-            Right bs ->
-              either
-                (\err -> error $ "Failed to deserialised key " <> show bs <> " : " <> show err)
-                (pure . snd)
-                $ deserialiseFromBytes @a fromCBOR (LBS.fromStrict bs)
-            Left err -> error $ "Failed to deserialised key " <> unpack str <> " : " <> err
-        other -> error $ "Failed to deserialised key " <> show other
-    other -> error $ "Failed to read Hydra key file " <> file <> ", " <> show other
+        Just (String str) -> pure str
+        other -> error $ "Failed to find cborHex key " <> show other
+    other -> error $ "Failed to read envelope file " <> file <> ", " <> show other
 
 data KeyRole = Fuel | Game
 
@@ -530,3 +534,6 @@ downloadHydraExecutable destDir = do
 -- --change-address addr_test1vqdd0j63e83dvfgtmqpetfwfyrm0v29dcjcm6pt6s8ymaxqr3z3f6
 -- --tx-in-collateral a07ebd4cda2a8a8f235487f144e6b076148a3868bad5faae8aaa644132e26b7b#1
 -- --out-file tx.raw
+
+mkTempFile :: IO FilePath
+mkTempFile = mkstemp "tx.raw." >>= \(fp, hdl) -> hClose hdl >> pure fp

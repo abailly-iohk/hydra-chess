@@ -18,7 +18,9 @@
 module Games.Server.Hydra where
 
 import qualified Chess.Game as Chess
+import Chess.Plutus (datumHashBytes)
 import qualified Chess.Plutus as Plutus
+import qualified Chess.Token as Token
 import Control.Concurrent.Class.MonadSTM (
   TVar,
   atomically,
@@ -47,7 +49,10 @@ import Data.Aeson (
   (.=),
  )
 import Data.Aeson.Key (fromText)
+import qualified Data.Aeson.Key as Key
+import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Aeson.Types (FromJSON (..), Pair)
+import qualified Data.Aeson.Types as Aeson
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Base16 as Hex
 import qualified Data.ByteString.Lazy as LBS
@@ -65,7 +70,7 @@ import Game.Client.Console (Coins, SimpleUTxO (..), parseQueryUTxO)
 import Game.Server (Content (..), FromChain (..), HeadId, Host (..), Indexed (..), IsChain (..), Server (..), ServerException (..))
 import Game.Server.Mock (MockCoin (..))
 import Games.Run.Cardano (Network, findCardanoCliExecutable, findSocketPath, networkMagicArgs)
-import Games.Run.Hydra (KeyRole (Game), findDatumFile, findEloScriptFile, findGameScriptFile, findKeys, getScriptAddress, getUTxOFor, findPubKeyHash)
+import Games.Run.Hydra (KeyRole (Game), findDatumFile, findEloScriptFile, findGameScriptFile, findKeys, findProtocolParametersFile, findPubKeyHash, getScriptAddress, getUTxOFor, getVerificationKeyAddress, mkTempFile, extractCBORHex)
 import Network.HTTP.Client (responseBody, responseStatus)
 import Network.HTTP.Simple (httpLBS, parseRequest, setRequestBodyJSON)
 import Network.HTTP.Types (statusCode)
@@ -77,10 +82,6 @@ import System.IO (hClose)
 import System.Posix (mkstemp)
 import System.Process (callProcess)
 import Prelude hiding (seq)
-import qualified Chess.Token as Token
-import qualified Data.Aeson.KeyMap as KeyMap
-import qualified Data.Aeson.Types as Aeson
-import qualified Data.Aeson.Key as Key
 
 -- | The type of backend provide by Hydra
 data Hydra
@@ -150,7 +151,7 @@ withHydraServer network me host k = do
             Committed headId party _utxo ->
               atomically (modifyTVar' events (|> FundCommitted headId party 0))
             HeadIsOpen headId utxo -> do
-              splitGameUTxO utxo
+              splitGameUTxO cnx utxo
               atomically (modifyTVar' events (|> HeadOpened headId))
             CommandFailed{} ->
               putStrLn "Command failed"
@@ -175,17 +176,83 @@ withHydraServer network me host k = do
               atomically (modifyTVar' events (|> OtherMessage (Content $ decodeUtf8 $ LBS.toStrict $ encode utxo)))
             RolledBack{} -> pure ()
 
-  splitGameUTxO :: Value -> IO ()
-  splitGameUTxO utxo = do
+  splitGameUTxO :: Connection -> Value -> IO ()
+  splitGameUTxO cnx utxo = do
     myGameToken <- findGameToken utxo
-    undefined
+    case myGameToken of
+      Nothing -> pure ()
+      Just txin -> postSplitTx cnx txin
 
-  findGameToken :: Value -> IO [String]
+  postSplitTx :: Connection -> String -> IO ()
+  postSplitTx cnx txin = do
+    (sk, vk) <- findKeys Game network
+    gameAddress <- getVerificationKeyAddress vk network
+    pkh <- findPubKeyHash vk
+    let pid = Token.validatorHashHex
+        token = "1 " <> pid <> "." <> pkh
+
+    (pkh, eloScriptFile) <- findEloScriptFile vk network
+    eloScriptAddress <- getScriptAddress eloScriptFile network
+
+    cardanoCliExe <- findCardanoCliExecutable
+    socketPath <- findSocketPath network
+    protocolParametersFile <- findProtocolParametersFile network
+    txRawFile <- mkTempFile
+
+    let args =
+          [ "--tx-in"
+          , txin
+          , "--tx-out"
+          , gameAddress <> "+8000000" -- ADA part
+          , "--tx-out"
+          , eloScriptAddress <> "+ 2000000 lovelace + " <> token
+          , "--tx-out-inline-datum-value"
+          , "1000"
+          , "--fee"
+          , "0"
+          , "--protocol-params-file"
+          , protocolParametersFile
+          , "--out-file"
+          , txRawFile
+          ]
+
+    callProcess
+      cardanoCliExe
+      $ [ "transaction"
+        , "build-raw"
+        ]
+        <> args
+
+    putStrLn $ "Created raw split tx file " <> txRawFile <> " with args: '" <> unwords args <> "'"
+
+    callProcess
+      cardanoCliExe
+      $ [ "transaction"
+        , "sign"
+        , "--tx-file"
+        , txRawFile
+        , "--signing-key-file"
+        , sk
+        , "--out-file"
+        , txRawFile <.> "signed"
+        ]
+        <> networkMagicArgs network
+
+    putStrLn $ "Signed split tx file " <> (txRawFile <.> "signed")
+
+    cborHex <- extractCBORHex $ txRawFile <.> "signed"
+
+    putStrLn $ "Submitting tx " <> unpack cborHex
+
+    WS.sendTextData cnx (encode $ NewTx cborHex)
+
+    putStrLn $ "Submitted commit tx file " <> txRawFile <.> "signed"
+
+  findGameToken :: Value -> IO (Maybe String)
   findGameToken utxo = do
     pkh <- findKeys Game network >>= findPubKeyHash . snd
     let pid = Token.validatorHashHex
     pure $ extractGameToken pid pkh utxo
-
 
   sendInit :: Connection -> TVar IO (Seq (FromChain g Hydra)) -> [Text] -> IO HeadId
   sendInit cnx events _unusedParties = do
@@ -197,16 +264,6 @@ withHydraServer network me host k = do
           _ -> Nothing
       )
       >>= maybe (throwIO $ ServerException "Timeout (10m) waiting for head Id") pure
-
-  -- (pkh, eloScriptFile) <- findEloScriptFile gameVk network
-  -- let eloDatumValue :: Integer = 1000
-  --     eloDatumHash =
-  --       Text.unpack $
-  --         decodeUtf8 $
-  --           Hex.encode $
-  --             datumHashBytes eloDatumValue
-  -- eloScriptAddress <- getScriptAddress eloScriptFile network
-
 
   sendCommit :: Connection -> TVar IO (Seq (FromChain g Hydra)) -> Host -> Integer -> HeadId -> IO ()
   sendCommit cnx events Host{host, port} amount _headId =
@@ -471,7 +528,7 @@ waitFor events predicate =
       (_ :|> event) -> maybe retry pure (predicate event)
       _ -> retry
 
-data Request = Init | Close | Fanout | GetUTxO
+data Request = Init | Close | Fanout | GetUTxO | NewTx Text
   deriving stock (Eq, Show, Generic)
 
 instance ToJSON Request where
@@ -480,6 +537,11 @@ instance ToJSON Request where
     Close -> object ["tag" .= ("Close" :: Text)]
     Fanout -> object ["tag" .= ("Fanout" :: Text)]
     GetUTxO -> object ["tag" .= ("GetUTxO" :: Text)]
+    NewTx txCBOR ->
+      object
+        [ "tag" .= ("NewTx" :: Text)
+        , "transaction" .= txCBOR
+        ]
 
 instance FromJSON Request where
   parseJSON = withObject "Request" $ \obj ->
@@ -488,6 +550,7 @@ instance FromJSON Request where
       ("Close" :: String) -> pure Close
       ("Fanout" :: String) -> pure Close
       ("GetUTxO" :: String) -> pure GetUTxO
+      ("NewTx" :: String) -> NewTx <$> obj .: "transaction"
       other -> fail $ "Unknown request type: " <> other
 
 data Response = Response
@@ -559,27 +622,28 @@ withClient Host{host, port} action = do
     WS.sendClose connection ("Bye" :: Text)
     pure res
 
-extractGameToken :: String -> String -> Value -> [String]
+extractGameToken :: String -> String -> Value -> Maybe String
 extractGameToken pid pkh = \case
-    Object kv -> foldMap (findUTxOWithValue pid pkh) (KeyMap.toList kv)
-    _ -> []
+  Object kv -> foldMap (findUTxOWithValue pid pkh) (KeyMap.toList kv)
+  _ -> Nothing
 
-findUTxOWithValue :: String -> String -> (KeyMap.Key, Value) -> [String]
+findUTxOWithValue :: String -> String -> (KeyMap.Key, Value) -> Maybe String
 findUTxOWithValue pid pkh (txin, txout) =
   case txout of
-    Object kv -> if hasValueFor pid pkh kv
-                 then [unpack $ Key.toText txin]
-                 else []
-    _ -> []
+    Object kv ->
+      if hasValueFor pid pkh kv
+        then Just $ unpack $ Key.toText txin
+        else Nothing
+    _ -> Nothing
 
 hasValueFor :: String -> String -> Aeson.Object -> Bool
 hasValueFor pid pkh kv =
   case filter ((== fromString "value") . fst) $ KeyMap.toList kv of
-     [ (_, Object val) ] ->
-       case filter ((== fromString pid) . fst) $ KeyMap.toList val  of
-         [ (_, Object tok)] ->
-           case filter ((== fromString pkh) . fst) $ KeyMap.toList tok  of
-             [] -> False
-             _ -> True
-         _ -> False
-     _ -> False
+    [(_, Object val)] ->
+      case filter ((== fromString pid) . fst) $ KeyMap.toList val of
+        [(_, Object tok)] ->
+          case filter ((== fromString pkh) . fst) $ KeyMap.toList tok of
+            [] -> False
+            _ -> True
+        _ -> False
+    _ -> False
