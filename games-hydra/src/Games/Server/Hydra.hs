@@ -59,6 +59,7 @@ import qualified Data.ByteString.Lazy as LBS
 import Data.Either (rights)
 import Data.Foldable (toList)
 import Data.IORef (atomicWriteIORef, newIORef, readIORef)
+import Data.List (intersperse)
 import Data.Sequence (Seq ((:|>)), (|>))
 import qualified Data.Sequence as Seq
 import Data.String (IsString (..))
@@ -67,10 +68,33 @@ import qualified Data.Text as Text
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import GHC.Generics (Generic)
 import Game.Client.Console (Coins, SimpleUTxO (..), parseQueryUTxO)
-import Game.Server (Content (..), FromChain (..), HeadId, Host (..), Indexed (..), IsChain (..), Server (..), ServerException (..))
+import Game.Server (
+  Content (..),
+  FromChain (..),
+  HeadId,
+  Host (..),
+  Indexed (..),
+  IsChain (..),
+  Server (..),
+  ServerException (..),
+ )
 import Game.Server.Mock (MockCoin (..))
 import Games.Run.Cardano (Network, findCardanoCliExecutable, findSocketPath, networkMagicArgs)
-import Games.Run.Hydra (KeyRole (Game), findDatumFile, findEloScriptFile, findGameScriptFile, findKeys, findProtocolParametersFile, findPubKeyHash, getScriptAddress, getUTxOFor, getVerificationKeyAddress, mkTempFile, extractCBORHex)
+import Games.Run.Hydra (
+  KeyRole (Game),
+  extractCBORHex,
+  findDatumFile,
+  findEloScriptFile,
+  findGameScriptFile,
+  findKeys,
+  findProtocolParametersFile,
+  findPubKeyHash,
+  getScriptAddress,
+  getUTxOFor,
+  getVerificationKeyAddress,
+  makeEloScriptFile,
+  mkTempFile,
+ )
 import Network.HTTP.Client (responseBody, responseStatus)
 import Network.HTTP.Simple (httpLBS, parseRequest, setRequestBodyJSON)
 import Network.HTTP.Types (statusCode)
@@ -140,7 +164,7 @@ withHydraServer network me host k = do
       WS.receiveData cnx >>= \dat ->
         case eitherDecode' dat of
           Left err ->
-            atomically $ modifyTVar' events (|> OtherMessage (fromString $ show err))
+            atomically $ modifyTVar' events (|> OtherMessage (Content $ pack err))
           Right (Response{output}) -> case output of
             HeadIsInitializing headId parties ->
               atomically (modifyTVar' events (|> HeadCreated headId parties))
@@ -161,11 +185,10 @@ withHydraServer network me host k = do
                   events
                   ( |>
                       OtherMessage
-                        ( fromString $
-                            Text.unpack $
-                              decodeUtf8 $
-                                LBS.toStrict $
-                                  encode postTxError
+                        ( Content $
+                            decodeUtf8 $
+                              LBS.toStrict $
+                                encode postTxError
                         )
                   )
             Greetings{} -> pure ()
@@ -173,7 +196,7 @@ withHydraServer network me host k = do
             ReadyToFanout headId ->
               atomically (modifyTVar' events (|> HeadClosing headId))
             GetUTxOResponse{utxo} ->
-              atomically (modifyTVar' events (|> OtherMessage (Content $ decodeUtf8 $ LBS.toStrict $ encode utxo)))
+              atomically (modifyTVar' events (|> OtherMessage (JsonContent utxo)))
             RolledBack{} -> pure ()
 
   splitGameUTxO :: Connection -> Value -> IO ()
@@ -194,11 +217,6 @@ withHydraServer network me host k = do
     (pkh, eloScriptFile) <- findEloScriptFile vk network
     eloScriptAddress <- getScriptAddress eloScriptFile network
 
-    cardanoCliExe <- findCardanoCliExecutable
-    socketPath <- findSocketPath network
-    protocolParametersFile <- findProtocolParametersFile network
-    txRawFile <- mkTempFile
-
     let args =
           [ "--tx-in"
           , txin
@@ -207,21 +225,32 @@ withHydraServer network me host k = do
           , "--tx-out"
           , eloScriptAddress <> "+ 2000000 lovelace + " <> token
           , "--tx-out-inline-datum-value"
-          , "1000"
-          , "--fee"
-          , "0"
-          , "--protocol-params-file"
-          , protocolParametersFile
-          , "--out-file"
-          , txRawFile
+          , "1000" -- FIXME: should be some ELO rating, but where does it come from?
           ]
 
-    callProcess
-      cardanoCliExe
-      $ [ "transaction"
-        , "build-raw"
-        ]
-        <> args
+    submitNewTx cnx args sk
+
+  submitNewTx cnx args sk = do
+    cardanoCliExe <- findCardanoCliExecutable
+    socketPath <- findSocketPath network
+    protocolParametersFile <- findProtocolParametersFile network
+    txRawFile <- mkTempFile
+    let fullArgs =
+          [ "transaction"
+          , "build-raw"
+          ]
+            <> args
+            <> [ "--fee"
+               , "0"
+               , "--protocol-params-file"
+               , protocolParametersFile
+               , "--out-file"
+               , txRawFile
+               ]
+
+    putStrLn $ "Creating raw tx with " <> unwords fullArgs
+
+    callProcess cardanoCliExe fullArgs
 
     putStrLn $ "Created raw split tx file " <> txRawFile <> " with args: '" <> unwords args <> "'"
 
@@ -280,9 +309,9 @@ withHydraServer network me host k = do
       gameAddress <- getVerificationKeyAddress vkFile network
       gameUTxO <- getUTxOFor network gameAddress
       let gameToken = rights . fmap (parseQueryUTxO . pack) $ gameUTxO
+      -- FIXME: Need to find the correct game token otherwise splitting won't work
       when (null gameToken) $ error $ "Failed to retrieve game token to commit from:\n" <> unlines gameUTxO
 
-      -- build script info
       let utxo = mkFullUTxO (Text.pack gameAddress) Nothing (head gameToken)
 
       -- commit is now external, so we need to handle query to the server, signature and then
@@ -303,7 +332,7 @@ withHydraServer network me host k = do
                 "Commit transaction failed with error "
                   <> show other
                   <> " for UTxO "
-                  <> (unpack $ decodeUtf8 $ LBS.toStrict (encode utxo))
+                  <> (asString utxo)
 
       putStrLn $ "Wrote raw commit tx file " <> txFileRaw
 
@@ -347,12 +376,17 @@ withHydraServer network me host k = do
   newGame events connection headId = do
     cardanoCliExe <- findCardanoCliExecutable
     (skFile, vkFile) <- findKeys Game network
+    gameAddress <- getVerificationKeyAddress vkFile network
     socketPath <- findSocketPath network
 
-    -- find ELO script for witnessing
-    eloScriptFile <- snd <$> findEloScriptFile vkFile network
-    let datumWitness = Plutus.datumBytes (1000 :: Integer) -- TODO: get real value from somehwere
-        redeemerWitness = Plutus.datumBytes ()
+    utxo <- collectUTxO events connection
+
+    let collateral = findCollateral gameAddress utxo
+        pid = Token.validatorHashHex
+        gameTokens = findGameTokens pid utxo
+        lovelace = sum $ (\(_, _, l) -> l) <$> gameTokens
+
+    gameInputs <- concat <$> mapM makeGameInput gameTokens
 
     -- find chess game address
     gameScriptFile <- findGameScriptFile network
@@ -361,20 +395,68 @@ withHydraServer network me host k = do
     -- construct chess game inline datum
     gameDatumFile <- findDatumFile "game-state" Chess.initialGame network
 
-    utxo <- collectUTxO events connection
-    -- let inputs = buildInput <$> utxo
+    protocolParametersFile <- findProtocolParametersFile network
+    txRawFile <- mkTempFile
 
-    -- % cardano-cli transaction build-raw --tx-in c5a00b09e82c334bd04d62313ab25608ca70e7d1014ca9c8dfc09251d51ea6a0#0 --tx-in-script-file ~/.config/hydra-node/preview/elo-script.plutus --tx-in-datum-value 1000 --tx-in-redeemer-value '[]' --tx-in-execution-units '(0,0)' --tx-in-collateral c5a00b09e82c334bd04d62313ab25608ca70e7d1014ca9c8dfc09251d51ea6a0#0 --tx-out 'addr_test1wrr66kuw94l4zh7jff227872cyppk2ttketmdsqcflwhwhchp6lwz+10000000 + 1 e18ad836532a69a93160efe11bcfac05b812a092ef3420042e700c10.1ad7cb51c9e2d6250bd80395a5c920f6f628adc4b1bd057a81c9be98' --tx-out-inline-datum-file ~/.config/hydra-node/preview/chess-game-state.json --fee 0 --protocol-params-file ~/.config/hydra-node/preview/protocol-parameters.json --out-file game-tx.raw
+    let args =
+          gameInputs
+            <> ["--tx-in", collateral]
+            <> ["--tx-in-collateral", collateral]
+            <> [ "--tx-out"
+               , gameScriptAddress
+                  <> "+ "
+                  <> show lovelace
+                  <> " lovelace + "
+                  <> concat (intersperse " + " (makeValue pid <$> gameTokens))
+               , "--tx-out-inline-datum-file"
+               , gameDatumFile
+               ]
+            <> [ "--tx-out"
+               , gameAddress <> "+ 8000000 lovelace" -- FIXME shoudl be value in collateral
+               ]
 
-    putStrLn $
-      unlines
-        [ "newGame:"
-        , "datumWitness: " <> (unpack $ decodeUtf8 $ Hex.encode datumWitness)
-        , "redeemerWitness: " <> (unpack $ decodeUtf8 $ Hex.encode redeemerWitness)
-        , "gameScriptAddress: " <> gameScriptAddress
-        , "gameDatum: " <> gameDatumFile
-        , "utxo: " <> (unpack utxo)
-        ]
+    submitNewTx connection args skFile
+
+  makeValue :: String -> (String, String, Integer) -> String
+  makeValue pid (_, pkh, _) = "1 " <> pid <.> pkh
+
+  findCollateral :: String -> Value -> String
+  findCollateral address utxo =
+    maybe (error "Cannot find collateral for " <> address <> " from " <> asString utxo) id $
+      case utxo of
+        Object kv -> foldMap (findUTxOWithAddress address) (KeyMap.toList kv)
+        _ -> Nothing
+
+  findGameTokens ::
+    String ->
+    Value ->
+    [ ( String -- txin
+      , String -- pkh
+      , Integer -- lovelace
+      )
+    ]
+  findGameTokens pid utxo =
+    case utxo of
+      Object kv -> foldMap (findUTxOWithPolicyId pid) (KeyMap.toList kv)
+      _ -> []
+
+  makeGameInput :: (String, String, Integer) -> IO [String]
+  makeGameInput (txin, pkh, _) = do
+    eloScriptFile <- makeEloScriptFile pkh network
+
+    pure $
+      [ "--tx-in"
+      , txin
+      , "--tx-in-script-file"
+      , eloScriptFile
+      , "--tx-in-inline-datum-present"
+      , "--tx-in-redeemer-value"
+      , "[]"
+      , "--tx-in-execution-units"
+      , "(0,0)"
+      ]
+
+  -- --tx-in-script-file ~/.config/hydra-node/preview/elo-script.plutus --tx-in-datum-value 1000 --tx-in-redeemer-value '[]' --tx-in-execution-units '(0,0)'
   --     args =
   --       [ "transaction"
   --       , "build"
@@ -426,13 +508,13 @@ withHydraServer network me host k = do
     pure indexed
 
   -- Collect only TxIn
-  collectUTxO :: TVar IO (Seq (FromChain g Hydra)) -> Connection -> IO Text
+  collectUTxO :: TVar IO (Seq (FromChain g Hydra)) -> Connection -> IO Value
   collectUTxO events cnx = do
     WS.sendTextData cnx (encode GetUTxO)
     timeout
       600_000_000
       ( waitFor events $ \case
-          OtherMessage (Content txt) -> Just txt
+          OtherMessage (JsonContent txt) -> Just txt
           _ -> Nothing
       )
       >>= maybe (throwIO $ ServerException "Timeout (10m) waiting for GetUTxO") pure
@@ -610,10 +692,34 @@ withClient Host{host, port} action = do
     WS.sendClose connection ("Bye" :: Text)
     pure res
 
+asString :: (ToJSON a) => a -> String
+asString = unpack . decodeUtf8 . LBS.toStrict . encode
+
 extractGameToken :: String -> String -> Value -> Maybe String
 extractGameToken pid pkh = \case
   Object kv -> foldMap (findUTxOWithValue pid pkh) (KeyMap.toList kv)
   _ -> Nothing
+
+findUTxOWithAddress :: String -> (KeyMap.Key, Value) -> Maybe String
+findUTxOWithAddress address (txin, txout) =
+  case txout of
+    Object kv ->
+      case filter ((== fromString "address") . fst) $ KeyMap.toList kv of
+        [(_, String addr)] | addr == pack address -> Just $ unpack $ Key.toText txin
+        _ -> Nothing
+    _ -> Nothing
+
+findUTxOWithPolicyId :: String -> (Aeson.Key, Value) -> [(String, String, Integer)]
+findUTxOWithPolicyId pid (txin, txout) =
+  case txout of
+    Object kv ->
+      case filter ((== fromString "value") . fst) $ KeyMap.toList kv of
+        [(_, Object val)] ->
+          case filter ((== fromString pid) . fst) $ KeyMap.toList val of
+            [(_, Object toks)] -> fmap (\pkh -> (unpack $ Key.toText $ txin, unpack $ Key.toText $ pkh, 2000000)) $ KeyMap.keys toks
+            _ -> []
+        _ -> []
+    _ -> []
 
 findUTxOWithValue :: String -> String -> (KeyMap.Key, Value) -> Maybe String
 findUTxOWithValue pid pkh (txin, txout) =

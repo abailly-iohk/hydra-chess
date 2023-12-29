@@ -21,10 +21,10 @@ import Data.Kind (Type)
 import Data.String (IsString)
 import Data.Text (Text, intercalate, pack)
 import Data.Text.Encoding (decodeUtf8)
-import Data.Word (Word8, Word16)
+import Data.Word (Word16, Word8)
 import GHC.Generics (Generic)
 import Generic.Random (genericArbitrary, uniform)
-import Test.QuickCheck (Arbitrary (arbitrary), Gen, vectorOf, listOf, arbitraryPrintableChar)
+import Test.QuickCheck (Arbitrary (arbitrary), Gen, arbitraryPrintableChar, listOf, vectorOf)
 
 data Message = Ping
   deriving (Eq, Show)
@@ -170,8 +170,9 @@ instance
   where
   arbitrary = genericArbitrary uniform
 
-newtype Content = Content Text
- deriving newtype (Show, Eq, IsString, FromJSON, ToJSON)
+data Content = Content Text | JsonContent Value
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (FromJSON, ToJSON)
 
 instance Arbitrary Content where
   arbitrary = Content . pack <$> listOf arbitraryPrintableChar

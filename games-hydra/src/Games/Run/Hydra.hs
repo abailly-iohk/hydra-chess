@@ -23,7 +23,14 @@ import Cardano.Crypto.Hash (Blake2b_224)
 import Cardano.Crypto.Seed (readSeedFromSystemEntropy)
 import qualified Chess.Contract as Contract
 import qualified Chess.ELO as ELO
-import Chess.Plutus (MintAction (Mint), ToData, datumJSON, pubKeyHash, validatorToBytes)
+import Chess.Plutus (
+  MintAction (Mint),
+  ToData,
+  datumJSON,
+  pubKeyHash,
+  pubKeyHashFromHex,
+  validatorToBytes,
+ )
 import qualified Chess.Token as Token
 import qualified Codec.Archive.Zip as Zip
 import Codec.CBOR.Read (deserialiseFromBytes)
@@ -168,9 +175,10 @@ checkGameTokenIsAvailable network gameSkFile gameVkFile = do
   hasToken token gameAddress >>= \case
     Just{} -> pure ()
     Nothing -> do
+      -- TODO: it could be the case the token is already consumed in an ongoing game
       putStrLn $ "No game token registered on " <> show network <> ", creating it"
-      registerGameToken network gameSkFile gameVkFile
-      waitForToken token gameAddress
+      --registerGameToken network gameSkFile gameVkFile
+      --waitForToken token gameAddress
  where
   waitForToken token gameAddress = do
     putStrLn $ "Wait for token creation tx"
@@ -316,6 +324,15 @@ findEloScriptFile gameVkFile network = do
       bytes = ELO.validatorBytes pkh
   BS.writeFile eloScriptFile bytes
   pure (show pkh, eloScriptFile)
+
+makeEloScriptFile :: String -> Network -> IO String
+makeEloScriptFile pkh network = do
+  configDir <- getXdgDirectory XdgConfig ("hydra-node" </> networkDir network)
+  let eloScriptFile = configDir </> "elo-script-" <> pkh <.> "plutus"
+      bytes = ELO.validatorBytes (pubKeyHashFromHex $ Text.pack pkh)
+
+  BS.writeFile eloScriptFile bytes
+  pure eloScriptFile
 
 eloScriptBytes :: FilePath -> Network -> IO BS.ByteString
 eloScriptBytes gameVkFile network = do
@@ -484,7 +501,8 @@ mkZeroFeeParams :: Value -> Value
 mkZeroFeeParams = \case
   Object obj ->
     Object $
-      insert "txFeeFixed" zero $
+      insert "utxoCostPerByte" zero $
+       insert "txFeeFixed" zero $
         insert "txFeePerByte" zero $
           updateExecutionPrices obj
   other -> other
