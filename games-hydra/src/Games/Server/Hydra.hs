@@ -180,7 +180,7 @@ withHydraServer network me host k = do
   splitGameUTxO cnx utxo = do
     myGameToken <- findGameToken utxo
     case myGameToken of
-      Nothing -> pure ()
+      Nothing -> putStrLn ("Cannot find game token in " <> unpack (decodeUtf8 $ LBS.toStrict $ encode utxo)) >> pure ()
       Just txin -> postSplitTx cnx txin
 
   postSplitTx :: Connection -> String -> IO ()
@@ -277,25 +277,13 @@ withHydraServer network me host k = do
       socketPath <- findSocketPath network
 
       -- find game token UTxO
-      eloScriptFile <- snd <$> findEloScriptFile vkFile network
-      scriptAddress <- getScriptAddress eloScriptFile network
-      gameUTxO <- getUTxOFor network scriptAddress
+      gameAddress <- getVerificationKeyAddress vkFile network
+      gameUTxO <- getUTxOFor network gameAddress
       let gameToken = rights . fmap (parseQueryUTxO . pack) $ gameUTxO
       when (null gameToken) $ error $ "Failed to retrieve game token to commit from:\n" <> unlines gameUTxO
 
-      scriptWitness <-
-        decodeFileStrict' eloScriptFile >>= \case
-          Nothing -> throwIO $ CommitError $ "Cannot decode script file " <> eloScriptFile
-          Just v -> pure v
-
       -- build script info
-      let scriptInfo =
-            ScriptInfo
-              { datumWitness = Plutus.datumBytes (1000 :: Integer) -- TODO: get real value from somehwere
-              , redeemerWitness = Plutus.datumBytes ()
-              , scriptWitness
-              }
-          utxo = mkFullUTxO (Text.pack scriptAddress) (Just scriptInfo) (head gameToken)
+      let utxo = mkFullUTxO (Text.pack gameAddress) Nothing (head gameToken)
 
       -- commit is now external, so we need to handle query to the server, signature and then
       -- submission via the cardano-cli
