@@ -31,6 +31,7 @@ library
     Games.Run.Hydra
 
     Games.Server.Hydra
+    Games.Server.IO
   build-depends:
                   QuickCheck
                 , aeson

@@ -1,6 +1,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Games.Run where
 
@@ -17,6 +18,7 @@ import Games.Server.Hydra (HydraParty (..), withHydraServer)
 import Options.Applicative (execParser)
 import System.IO (BufferMode (..), hSetBuffering, stdout)
 import Game.Client.Console (inputParser)
+import Games.Server.IO (notifyChessEvent)
 
 run :: IO ()
 run = do
@@ -35,4 +37,4 @@ run = do
       let party = HydraParty $ serialize' hydraParty
       withHydraServer network party hydraHost $ \server -> do
         putStrLn $ "Starting client for " <> show party <> " and host " <> show hydraHost
-        runClient @Chess @_ @_ server (mkImpureIO inputParser)
+        runClient @Chess @_ @_ server notifyChessEvent (mkImpureIO inputParser)
