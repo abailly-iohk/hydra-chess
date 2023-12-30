@@ -8,7 +8,7 @@ module Main where
 import Data.Text (Text, pack)
 import Game.BlackJack (BlackJack)
 import Game.Client (runClient)
-import Game.Client.Console (mkImpureIO)
+import Game.Client.Console (mkImpureIO, inputParser)
 import Game.Server (Host (..))
 import Game.Server.Mock (MockParty (..), withMockServer)
 import Options.Applicative (
@@ -117,4 +117,4 @@ main = do
     HydraOptions{} ->
       undefined -- withHydraServer hydraServer $ flip (runClient @BlackJack) mkImpureIO
     MockOptions{pid, host} ->
-      withMockServer (Party host pid) $ flip (runClient @BlackJack) mkImpureIO
+      withMockServer (Party host pid) $ flip (runClient @BlackJack) (mkImpureIO inputParser)

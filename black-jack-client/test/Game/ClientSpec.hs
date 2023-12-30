@@ -62,7 +62,7 @@ spec = do
   describe "Fund Table" $ do
     prop "commit to head some funds given table created" prop_commit_to_head_when_funding_table
 
-withIOSimIO :: forall m a. MonadSTM m => [Command] -> (HasIO m -> m a) -> m (a, [Output])
+withIOSimIO :: forall m a. (MonadSTM m) => [Command] -> (HasIO Command Output m -> m a) -> m (a, [Output])
 withIOSimIO cmds act = do
   inputs <- newTVarIO cmds
   outputs <- newTVarIO []
@@ -74,7 +74,9 @@ withIOSimIO cmds act = do
                   [] -> pure $ Left EOF
                   (t : ts) -> writeTVar inputs ts >> pure (Right t)
           , output = \o -> atomically $ modifyTVar' outputs (o :)
+          , problem = \o -> atomically $ modifyTVar' outputs (o :)
           , prompt = pure ()
+          , exit = pure ()
           }
   res <- act io
   outs <- reverse <$> readTVarIO outputs
@@ -117,10 +119,10 @@ instance Arbitrary Committable where
   arbitrary = Committable . getNonEmpty <$> arbitrary
   shrink (Committable coins) = Committable <$> filter (not . null) (shrink coins)
 
-mockId :: IsString a => a
+mockId :: (IsString a) => a
 mockId = "1234"
 
-connectedServer :: Monad m => Server BlackJack MockChain m
+connectedServer :: (Monad m) => Server BlackJack MockChain m
 connectedServer =
   Server
     { initHead = \_ -> pure mockId

@@ -4,7 +4,7 @@
 
 module Game.Client.ConsoleSpec where
 
-import Game.Client.Console (readInput)
+import Game.Client.Console (readInput, inputParser)
 import Game.Client.IO (Command (..))
 import Game.ClientSpec (KnownParties (KnownParties))
 import Game.Server (HeadId (HeadId), partyId)
@@ -22,22 +22,22 @@ import Data.Function ((&))
 spec :: Spec
 spec = do
   it "parses 'quit' command" $ do
-    readInput "quit" `shouldBe` Right Quit
-    readInput "q" `shouldBe` Right Quit
+    readInput inputParser "quit" `shouldBe` Right Quit
+    readInput inputParser "q" `shouldBe` Right Quit
 
   prop "parses 'newTable' command" $ \(KnownParties parties) ->
     let names = (partyId @MockChain <$> parties)
-     in readInput ("newTable " <> Text.unwords names) `shouldBe` Right (NewTable names)
+     in readInput inputParser ("newTable " <> Text.unwords names) `shouldBe` Right (NewTable names)
 
   prop "parses 'fundTable' command" $ \(HeadId headId) (Positive (Small n)) ->
-    readInput ("fundTable " <> headId <> " " <> Text.pack (show n)) `shouldBe` Right (FundTable headId n)
+    readInput inputParser ("fundTable " <> headId <> " " <> Text.pack (show n)) `shouldBe` Right (FundTable headId n)
 
   prop "parses 'play' command" $ \(HeadId headId) json ->
-    readInput ("play " <> headId <> " " <> LT.toStrict (LT.decodeUtf8 $ encode json)) === Right (Play headId json)
+    readInput inputParser ("play " <> headId <> " " <> LT.toStrict (LT.decodeUtf8 $ encode json)) === Right (Play headId json)
      & tabulate "Values" [ head $ words $ show json ]
 
   prop "parses 'newGame' command" $ \(HeadId headId) ->
-    readInput ("newGame " <> headId) `shouldBe` Right (NewGame headId)
+    readInput inputParser ("newGame " <> headId) `shouldBe` Right (NewGame headId)
 
   prop "parses 'stop' command" $ \(HeadId headId) ->
-    readInput ("stop " <> headId) `shouldBe` Right (Stop headId)
+    readInput inputParser ("stop " <> headId) `shouldBe` Right (Stop headId)
