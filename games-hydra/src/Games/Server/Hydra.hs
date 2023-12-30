@@ -4,6 +4,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -17,9 +18,9 @@
 
 module Games.Server.Hydra where
 
+import Chess.Game (Check (..), Side (..))
 import qualified Chess.Game as Chess
-import Chess.Plutus (datumHashBytes)
-import qualified Chess.Plutus as Plutus
+import Chess.Plutus (fromJSONDatum)
 import qualified Chess.Token as Token
 import Control.Concurrent.Class.MonadSTM (
   TVar,
@@ -40,7 +41,6 @@ import Data.Aeson (
   FromJSON,
   ToJSON (..),
   Value (..),
-  decodeFileStrict',
   eitherDecode',
   encode,
   object,
@@ -60,6 +60,7 @@ import Data.Either (rights)
 import Data.Foldable (toList)
 import Data.IORef (atomicWriteIORef, newIORef, readIORef)
 import Data.List (intersperse)
+import qualified Data.List as List
 import Data.Sequence (Seq ((:|>)), (|>))
 import qualified Data.Sequence as Seq
 import Data.String (IsString (..))
@@ -67,6 +68,7 @@ import Data.Text (Text, pack, unpack)
 import qualified Data.Text as Text
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import GHC.Generics (Generic)
+import Game.Chess (ChessEnd (..), Chess)
 import Game.Client.Console (Coins, SimpleUTxO (..), parseQueryUTxO)
 import Game.Server (
   Content (..),
@@ -158,7 +160,7 @@ withHydraServer network me host k = do
               }
        in k server
  where
-  pullEventsFromWs :: TVar IO (Seq (FromChain g Hydra)) -> Connection -> IO ()
+  pullEventsFromWs :: TVar IO (Seq (FromChain Chess Hydra)) -> Connection -> IO ()
   pullEventsFromWs events cnx =
     forever $
       WS.receiveData cnx >>= \dat ->
@@ -198,6 +200,40 @@ withHydraServer network me host k = do
             GetUTxOResponse{utxo} ->
               atomically (modifyTVar' events (|> OtherMessage (JsonContent utxo)))
             RolledBack{} -> pure ()
+            TxValid{} -> pure ()
+            TxInvalid{validationError} ->
+              atomically $ modifyTVar' events (|> OtherMessage (Content $ pack $ asString validationError))
+            SnapshotConfirmed{headId, snapshot = Snapshot{utxo}} ->
+              handleGameState events cnx headId utxo
+
+  handleGameState :: TVar IO (Seq (FromChain Chess Hydra)) -> Connection -> HeadId -> Value -> IO ()
+  handleGameState events cnx headId utxo = do
+    -- find output paying to game script address
+    gameScriptFile <- findGameScriptFile network
+    gameScriptAddress <- getScriptAddress gameScriptFile network
+    -- extract game state from inline datum encoded as Data with schema
+    case utxo of
+      Object kv ->
+        case List.find (findUTxOWithAddress gameScriptAddress) (KeyMap.toList kv) >>= findGameState gameScriptAddress . snd of
+          Nothing -> pure ()
+          Just game ->
+            atomically $
+              modifyTVar' events $
+                if
+                    | game == Chess.initialGame ->
+                        (|> GameStarted headId game [])
+                    | Chess.checkState game == CheckMate White ->
+                        (|> GameEnded headId BlackWins)
+                    | Chess.checkState game == CheckMate Black ->
+                        (|> GameEnded headId WhiteWins)
+                    | otherwise ->
+                        (|> GameChanged headId game [])
+      _ -> pure ()
+
+  findGameState :: String -> Value -> Maybe Chess.Game
+  findGameState gameAddress txout = do
+    datum <- extractInlineDatum txout
+    either (const Nothing) Just $ fromJSONDatum (encodeUtf8 datum)
 
   splitGameUTxO :: Connection -> Value -> IO ()
   splitGameUTxO cnx utxo = do
@@ -372,6 +408,16 @@ withHydraServer network me host k = do
         )
         >>= maybe (putStrLn "Timeout (60s) waiting for commit to appear, please try again") pure
 
+  -- \| the new game transaction
+  --
+  -- It is made of:
+  -- \* each game token as input
+  -- \* the current player's "deposit" as collateral
+  -- \* a single game script output with the initial game
+  -- \* the refunded deposit
+  --
+  -- The reason we need the deposit input is to provide an ADA-only collateral input
+  -- which is required by the ledger rules
   newGame :: TVar IO (Seq (FromChain g Hydra)) -> Connection -> HeadId -> IO ()
   newGame events connection headId = do
     cardanoCliExe <- findCardanoCliExecutable
@@ -424,7 +470,7 @@ withHydraServer network me host k = do
   findCollateral address utxo =
     maybe (error "Cannot find collateral for " <> address <> " from " <> asString utxo) id $
       case utxo of
-        Object kv -> foldMap (findUTxOWithAddress address) (KeyMap.toList kv)
+        Object kv -> fmap (unpack . Key.toText . fst) $ List.find (findUTxOWithAddress address) (KeyMap.toList kv)
         _ -> Nothing
 
   findGameTokens ::
@@ -455,27 +501,6 @@ withHydraServer network me host k = do
       , "--tx-in-execution-units"
       , "(10000000,100000000)"
       ]
-
-  -- --tx-in-script-file ~/.config/hydra-node/preview/elo-script.plutus --tx-in-datum-value 1000 --tx-in-redeemer-value '[]' --tx-in-execution-units '(0,0)'
-  --     args =
-  --       [ "transaction"
-  --       , "build"
-  --       , "--tx-in"
-  --       , txin
-  --       , "--tx-in-collateral"
-  --       , txin
-  --       , "--tx-out"
-  --       , eloScriptAddress <> " + 10000000 lovelace + " <> token
-  --       , "--tx-out-datum-hash"
-  --       , eloDatumHash
-  --       , "--out-file"
-  --       , txFileRaw <.> "raw"
-  --       , "--socket-path"
-  --       , socketPath
-  --       ]
-  --         <> networkMagicArgs network
-
-  -- putStrLn $ "Building new game transaction " <> (txFileRaw <.> "raw") <> " with arguments: " <> unwords args
 
   playGame :: Connection -> HeadId -> Value -> IO ()
   playGame cnx _headId play =
@@ -519,23 +544,6 @@ withHydraServer network me host k = do
       )
       >>= maybe (throwIO $ ServerException "Timeout (10m) waiting for GetUTxO") pure
 
---         {
---             "09d34606abdcd0b10ebc89307cbfa0b469f9144194137b45b7a04b273961add8#687": {
---                 "address": "addr1w9htvds89a78ex2uls5y969ttry9s3k9etww0staxzndwlgmzuul5",
---                 "value": {
---                     "lovelace": 7620669
---                 },
---                 "witness": {
---                   "datum": "02",
---                   "plutusV2Script": {
---                       "cborHex": "420606",
---                       "description": "",
---                       "type": "PlutusScriptV2"
---                   },
---                   "redeemer": "21"
---                 }
---             }
---         }
 data FullUTxO = FullUTxO
   { txIn :: Text
   , address :: Text
@@ -643,8 +651,22 @@ data Output
   | RolledBack
   | CommandFailed {clientInput :: Request}
   | GetUTxOResponse {headId :: HeadId, utxo :: Value}
+  | TxValid {headId :: HeadId, transaction :: Value}
+  | TxInvalid {headId :: HeadId, utxo :: Value, transaction :: Value, validationError :: Value}
+  | SnapshotConfirmed {headId :: HeadId, snapshot :: Snapshot, signatures :: Value}
   deriving stock (Eq, Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
+
+data Snapshot = Snapshot {headId :: HeadId, utxo :: Value, confirmed :: [Text]}
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (ToJSON)
+
+instance FromJSON Snapshot where
+  parseJSON = withObject "Snapshot" $ \obj ->
+    Snapshot
+      <$> (obj .: "headId")
+      <*> (obj .: "utxo")
+      <*> (obj .: "confirmedTransactions")
 
 instance FromJSON Response where
   parseJSON v = flip (withObject "Response") v $ \o -> do
@@ -660,14 +682,7 @@ instance FromJSON Response where
 --   | PeerDisconnected {peer :: NodeId}
 --   | HeadIsContested {headId :: HeadId, snapshotNumber :: SnapshotNumber}
 --   | TxSeen {headId :: HeadId, transaction :: tx}
---   | TxValid {headId :: HeadId, transaction :: tx}
---   | TxInvalid {headId :: HeadId, utxo :: UTxOType tx, transaction :: tx, validationError :: ValidationError}
 --   | TxExpired {headId :: HeadId, transaction :: tx}
---   | SnapshotConfirmed
---       { headId :: HeadId
---       , snapshot :: Snapshot tx
---       , signatures :: MultiSignature (Snapshot tx)
---       }
 --   | InvalidInput {reason :: String, input :: Text}
 --   deriving (Generic)
 
@@ -700,14 +715,14 @@ extractGameToken pid pkh = \case
   Object kv -> foldMap (findUTxOWithValue pid pkh) (KeyMap.toList kv)
   _ -> Nothing
 
-findUTxOWithAddress :: String -> (KeyMap.Key, Value) -> Maybe String
+findUTxOWithAddress :: String -> (KeyMap.Key, Value) -> Bool
 findUTxOWithAddress address (txin, txout) =
   case txout of
     Object kv ->
       case filter ((== fromString "address") . fst) $ KeyMap.toList kv of
-        [(_, String addr)] | addr == pack address -> Just $ unpack $ Key.toText txin
-        _ -> Nothing
-    _ -> Nothing
+        [(_, String addr)] | addr == pack address -> True
+        _ -> False
+    _ -> False
 
 findUTxOWithPolicyId :: String -> (Aeson.Key, Value) -> [(String, String, Integer)]
 findUTxOWithPolicyId pid (txin, txout) =
@@ -741,3 +756,11 @@ hasValueFor pid pkh kv =
             _ -> True
         _ -> False
     _ -> False
+
+extractInlineDatum :: Value -> Maybe Text
+extractInlineDatum = \case
+  Object kv ->
+    case kv KeyMap.!? fromString "inlineDatum" of
+      Just (String s) -> Just s
+      _ -> Nothing
+  _ -> Nothing

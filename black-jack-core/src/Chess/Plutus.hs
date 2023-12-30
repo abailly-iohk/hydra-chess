@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -16,10 +17,11 @@ import Cardano.Api (
   serialiseToTextEnvelope,
  )
 import qualified Cardano.Api as Api
-import Cardano.Api.Shelley (PlutusScript (PlutusScriptSerialised), fromPlutusData)
+import Cardano.Api.Shelley (PlutusScript (PlutusScriptSerialised), fromPlutusData, toPlutusData)
 import Cardano.Binary (serialize')
 import Cardano.Crypto.Hash (Hash, hashToBytes)
 import qualified Data.Aeson as Aeson
+import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Base16 as Hex
 import qualified Data.ByteString.Lazy as Lazy
@@ -34,6 +36,7 @@ import PlutusLedgerApi.V2 (
   SerialisedScript,
   ToData,
   UnsafeFromData,
+  fromData,
   toData,
  )
 import PlutusTx (UnsafeFromData (..))
@@ -109,6 +112,17 @@ pubKeyHashFromHex hex = PubKeyHash (toBuiltin bytes)
   bytes = case Hex.decode $ Text.encodeUtf8 hex of
     Left err -> Prelude.error $ "Fail to decode bytestring from hex " <> Text.unpack hex <> ": " <> err
     Right v -> v
+
+fromJSONDatum :: (ToData a, PlutusTx.FromData a) => ByteString -> Either Text a
+fromJSONDatum bytes = do
+  value <- first Text.pack $ Aeson.eitherDecode $ Lazy.fromStrict bytes
+  plutusData <-
+    toPlutusData . Api.getScriptData
+      <$> first (Text.pack . Prelude.show) (Api.scriptDataFromJson Api.ScriptDataJsonDetailedSchema value)
+  maybe
+    (Left $ Text.concat ["Cannot convert ", Text.decodeUtf8 bytes, " to plutus data"])
+    Right
+    $ fromData plutusData
 
 datumHashBytes :: (ToData a) => a -> ByteString
 datumHashBytes =

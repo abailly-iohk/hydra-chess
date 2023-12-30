@@ -23,7 +23,7 @@ data ChessEnd
   deriving anyclass (ToJSON, FromJSON)
 
 instance Game Chess where
-  type GameState Chess = Chess
+  type GameState Chess = Chess.Game
   type GamePlay Chess = Move
   type GameEnd Chess = ChessEnd
   initialGame = const Chess.initialGame

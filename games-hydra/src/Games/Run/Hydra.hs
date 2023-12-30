@@ -177,8 +177,8 @@ checkGameTokenIsAvailable network gameSkFile gameVkFile = do
     Nothing -> do
       -- TODO: it could be the case the token is already consumed in an ongoing game
       putStrLn $ "No game token registered on " <> show network <> ", creating it"
-      --registerGameToken network gameSkFile gameVkFile
-      --waitForToken token gameAddress
+      registerGameToken network gameSkFile gameVkFile
+      waitForToken token gameAddress
  where
   waitForToken token gameAddress = do
     putStrLn $ "Wait for token creation tx"
