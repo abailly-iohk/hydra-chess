@@ -10,11 +10,12 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Game.Server where
 
 import Control.Exception (Exception)
-import Data.Aeson (FromJSON, ToJSON, Value)
+import Data.Aeson (FromJSON (..), ToJSON (..), Value (..))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as Hex
 import Data.Kind (Type)
@@ -172,7 +173,16 @@ instance
 
 data Content = Content Text | JsonContent Value
   deriving stock (Show, Eq, Generic)
-  deriving anyclass (FromJSON, ToJSON)
+
+instance ToJSON Content where
+  toJSON = \case
+    Content text -> String text
+    JsonContent value -> value
+
+instance FromJSON Content where
+  parseJSON = \case
+    String s -> pure $ Content s
+    other -> pure $ JsonContent other
 
 instance Arbitrary Content where
   arbitrary = Content . pack <$> listOf arbitraryPrintableChar
