@@ -24,6 +24,7 @@ import qualified Data.Aeson as Aeson
 import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Base16 as Hex
+import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.Lazy as Lazy
 import Data.ByteString.Short (ShortByteString)
 import Data.String (IsString (..))
@@ -113,14 +114,19 @@ pubKeyHashFromHex hex = PubKeyHash (toBuiltin bytes)
     Left err -> Prelude.error $ "Fail to decode bytestring from hex " <> Text.unpack hex <> ": " <> err
     Right v -> v
 
-fromJSONDatum :: (ToData a, PlutusTx.FromData a) => ByteString -> Either Text a
-fromJSONDatum bytes = do
-  value <- first Text.pack $ Aeson.eitherDecode $ Lazy.fromStrict bytes
+fromJSONDatum :: (ToData a, PlutusTx.FromData a) => Aeson.Value -> Either Text a
+fromJSONDatum value = do
   plutusData <-
     toPlutusData . Api.getScriptData
       <$> first (Text.pack . Prelude.show) (Api.scriptDataFromJson Api.ScriptDataJsonDetailedSchema value)
   maybe
-    (Left $ Text.concat ["Cannot convert ", Text.decodeUtf8 bytes, " to plutus data"])
+    ( Left $
+        Text.concat
+          [ "Cannot convert "
+          , Text.decodeUtf8 $ LBS.toStrict $ Aeson.encode value
+          , " to plutus data"
+          ]
+    )
     Right
     $ fromData plutusData
 

@@ -68,7 +68,7 @@ import Data.Text (Text, pack, unpack)
 import qualified Data.Text as Text
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import GHC.Generics (Generic)
-import Game.Chess (ChessEnd (..), Chess)
+import Game.Chess (Chess, ChessEnd (..))
 import Game.Client.Console (Coins, SimpleUTxO (..), parseQueryUTxO)
 import Game.Server (
   Content (..),
@@ -212,28 +212,21 @@ withHydraServer network me host k = do
     gameScriptFile <- findGameScriptFile network
     gameScriptAddress <- getScriptAddress gameScriptFile network
     -- extract game state from inline datum encoded as Data with schema
-    case utxo of
-      Object kv ->
-        case List.find (findUTxOWithAddress gameScriptAddress) (KeyMap.toList kv) >>= findGameState gameScriptAddress . snd of
-          Nothing -> pure ()
-          Just game ->
-            atomically $
-              modifyTVar' events $
-                if
-                    | game == Chess.initialGame ->
-                        (|> GameStarted headId game [])
-                    | Chess.checkState game == CheckMate White ->
-                        (|> GameEnded headId BlackWins)
-                    | Chess.checkState game == CheckMate Black ->
-                        (|> GameEnded headId WhiteWins)
-                    | otherwise ->
-                        (|> GameChanged headId game [])
-      _ -> pure ()
-
-  findGameState :: String -> Value -> Maybe Chess.Game
-  findGameState gameAddress txout = do
-    datum <- extractInlineDatum txout
-    either (const Nothing) Just $ fromJSONDatum (encodeUtf8 datum)
+    atomically $
+      modifyTVar' events $
+        case extractGameState gameScriptAddress utxo of
+          Left err -> do
+            (|> OtherMessage (Content $ "Cannot extract game state from snapshot: " <> err))
+          Right game ->
+            if
+                | game == Chess.initialGame ->
+                    (|> GameStarted headId game [])
+                | Chess.checkState game == CheckMate White ->
+                    (|> GameEnded headId BlackWins)
+                | Chess.checkState game == CheckMate Black ->
+                    (|> GameEnded headId WhiteWins)
+                | otherwise ->
+                    (|> GameChanged headId game [])
 
   splitGameUTxO :: Connection -> Value -> IO ()
   splitGameUTxO cnx utxo = do
@@ -757,10 +750,23 @@ hasValueFor pid pkh kv =
         _ -> False
     _ -> False
 
-extractInlineDatum :: Value -> Maybe Text
+extractGameState :: String -> Value -> Either Text Chess.Game
+extractGameState address utxo =
+  case utxo of
+    Object kv ->
+      case List.find (findUTxOWithAddress address) (KeyMap.toList kv) of
+        Nothing -> Left $ "No output at address " <> pack address <> " for utxo"
+        Just (_, txout) -> findGameState address txout
+    _ -> Left $ "Not an object: " <> (decodeUtf8 $ LBS.toStrict $ encode utxo)
+
+findGameState :: String -> Value -> Either Text Chess.Game
+findGameState gameAddress txout =
+  extractInlineDatum txout >>= fromJSONDatum
+
+extractInlineDatum :: Value -> Either Text Value
 extractInlineDatum = \case
   Object kv ->
     case kv KeyMap.!? fromString "inlineDatum" of
-      Just (String s) -> Just s
-      _ -> Nothing
-  _ -> Nothing
+      Just v -> Right v
+      _ -> Left "No key 'inlineDatum'"
+  _ -> Left "Not an object"
