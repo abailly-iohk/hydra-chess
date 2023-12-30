@@ -27,7 +27,7 @@ import Data.Void (Void)
 import Game.Client.IO (Command (..), Err (..), HasIO (..))
 import System.Exit (ExitCode (ExitSuccess))
 import System.IO.Error (isEOFError)
-import Text.Megaparsec (Parsec, empty, many, parse, sepBy, takeRest, try, between)
+import Text.Megaparsec (Parsec, between, empty, many, parse, sepBy, takeRest, try)
 import Text.Megaparsec.Char (alphaNumChar, char, hexDigitChar, space, space1, string)
 import qualified Text.Megaparsec.Char.Lexer as L
 
@@ -36,16 +36,20 @@ type Parser = Parsec Void Text
 mkImpureIO :: (Show output) => Parser command -> HasIO command output IO
 mkImpureIO parser =
   HasIO
-    { input = handle eofException $ do
-        inp <- readInput parser <$> Text.getLine
-        case inp of
-          Left err -> pure $ Left $ Err err
-          Right cmd -> pure $ Right cmd
+    { input
     , output = print
     , problem = print
     , exit = throwIO ExitSuccess
     , prompt = putStr "> "
     }
+ where
+  input = handle eofException $ do
+    line <- Text.getLine
+    if line == ""
+      then input
+      else case readInput parser line of
+        Left err -> pure $ Left $ Err err
+        Right cmd -> pure $ Right cmd
 
 eofException :: IOException -> IO (Either Err command)
 eofException e
@@ -151,7 +155,7 @@ utxoParser = do
     [Just h] -> pure $ UTxOWithDatum txIn value h
     [Nothing] -> pure $ SimpleUTxO txIn value
     [] -> pure $ SimpleUTxO txIn value
-    other -> fail $ "Unexpected datums "<> show other
+    other -> fail $ "Unexpected datums " <> show other
 
 valueParser :: Parser (Coins, [Maybe Text])
 valueParser = do
@@ -178,11 +182,14 @@ datumParser :: Parser (Maybe Text)
 datumParser = do
   void $ string "+ "
   noDatum <|> datumhash
-  where
-    noDatum = void (string "TxOutDatumNone") *> pure Nothing
-    datumhash =
-      string "TxOutDatumHash" *> spaceConsumer *> (string "AlonzoEraOnwardsBabbage" <|> string "ScriptDataInBabbageEra") *> spaceConsumer *>
-      (Just <$> between "\"" "\"" hexString)
+ where
+  noDatum = void (string "TxOutDatumNone") *> pure Nothing
+  datumhash =
+    string "TxOutDatumHash"
+      *> spaceConsumer
+      *> (string "AlonzoEraOnwardsBabbage" <|> string "ScriptDataInBabbageEra")
+      *> spaceConsumer
+      *> (Just <$> between "\"" "\"" hexString)
 
 tokenParser :: Parser (Text, Text, Integer)
 tokenParser = do
