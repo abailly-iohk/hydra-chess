@@ -18,7 +18,7 @@
 
 module Games.Server.Hydra where
 
-import Chess.Game (Check (..), Side (..))
+import Chess.Game (Check (..), Move, Side (..))
 import qualified Chess.Game as Chess
 import Chess.Plutus (fromJSONDatum)
 import qualified Chess.Token as Token
@@ -108,6 +108,8 @@ import System.IO (hClose)
 import System.Posix (mkstemp)
 import System.Process (callProcess)
 import Prelude hiding (seq)
+import Game.Chess (GamePlay)
+import Game.Chess (GamePlay(..))
 
 -- | The type of backend provide by Hydra
 data Hydra
@@ -144,6 +146,9 @@ instance IsChain Hydra where
 data CommitError = CommitError String
   deriving (Eq, Show, Exception)
 
+data InvalidMove = InvalidMove Chess.IllegalMove
+  deriving (Eq, Show, Exception)
+
 withHydraServer :: Network -> HydraParty -> Host -> (Server Chess.Game Hydra IO -> IO ()) -> IO ()
 withHydraServer network me host k = do
   events <- newTVarIO mempty
@@ -154,7 +159,7 @@ withHydraServer network me host k = do
               { initHead = sendInit cnx events
               , poll = pollEvents events
               , commit = sendCommit cnx events host
-              , play = playGame cnx
+              , play = playGame cnx events
               , newGame = newGame events cnx
               , closeHead = sendClose cnx events
               }
@@ -495,14 +500,68 @@ withHydraServer network me host k = do
       , "(10000000,100000000)"
       ]
 
-  playGame :: Connection -> HeadId -> Value -> IO ()
-  playGame cnx _headId play =
-    -- need to put the play as a redeemer for a transaction that consumes the current
-    -- game state datum attached to game script, which implies this UTxO should exist
-    -- somewhere, which means we need to create it at the opening of the head and /then/
-    -- notify the game has started. Also, the server should maintain some state to retrieve
-    -- the UTxO attached to the game
-    putStrLn $ "playing " <> (Text.unpack $ decodeUtf8 $ LBS.toStrict $ encode play)
+  playGame :: Connection -> TVar IO (Seq (FromChain Chess Hydra)) -> HeadId -> GamePlay Chess -> IO ()
+  playGame cnx events _headId (GamePlay move) =
+    try go >>= \case
+      Left (InvalidMove illegal) -> putStrLn $ "Invalid move:  " <> show illegal
+      Right{} -> pure ()
+   where
+    go = do
+      -- retrieve needed tools and keys
+      cardanoCliExe <- findCardanoCliExecutable
+      (skFile, vkFile) <- findKeys Game network
+      gameAddress <- getVerificationKeyAddress vkFile network
+      socketPath <- findSocketPath network
+
+      -- find chess game script & address
+      gameScriptFile <- findGameScriptFile network
+      gameScriptAddress <- getScriptAddress gameScriptFile network
+
+      -- retrieve current UTxO state
+      utxo <- collectUTxO events cnx
+
+      -- find collateral to submit play tx
+      let collateral = findCollateral gameAddress utxo
+          -- find current game state
+          gameState = case extractGameState gameScriptAddress utxo of
+            Left err -> do
+              error $ "Cannot extract game state from utxo: " <> unpack (decodeUtf8 $ LBS.toStrict $ encode utxo)
+            Right game -> game
+
+      -- compute next game state
+      nextState <- either (throwIO . InvalidMove) pure $ Chess.apply move gameState
+
+      -- construct chess game inline datum
+      gameDatumFile <- findDatumFile "game-state" nextState network
+      moveRedeemerFile <- findDatumFile "chess-move" move network
+
+      protocolParametersFile <- findProtocolParametersFile network
+      txRawFile <- mkTempFile
+
+      -- define transaction arguments
+      let args =
+            [ "--tx-in"
+            , collateral
+            , "--tx-in-collateral"
+            , collateral
+            , "--tx-in"
+            , gameStateTxIn
+            , "--tx-in-script-file"
+            , gameScriptFile
+            , "--tx-in-inline-datum-present"
+            , "--tx-in-redeemer-file"
+            , moveRedeemerFile
+            , "--tx-in-execution-units"
+            , "(10000000,100000000)"
+            , "--tx-out"
+            , gameScriptAddress <> " + " <> gameScriptValue
+            , "--tx-out-datum-file"
+            , gameDatumFile
+            , "--tx-out"
+            , gameAddress <> "+ 8000000 lovelace" -- FIXME shoudl be value in collateral
+            ]
+
+      submitNewTx cnx args txRawFile
 
   sendClose :: Connection -> TVar IO (Seq (FromChain g Hydra)) -> HeadId -> IO ()
   sendClose cnx events _unusedHeadId = do

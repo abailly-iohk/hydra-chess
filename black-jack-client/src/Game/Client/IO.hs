@@ -16,7 +16,7 @@ import Data.Aeson (Value)
 data Command
   = NewTable [Text]
   | FundTable Text Integer
-  | Play Text Value
+  | Play Text Text
   | NewGame Text
   | Stop Text
   | Quit

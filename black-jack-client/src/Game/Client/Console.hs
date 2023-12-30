@@ -11,17 +11,15 @@ module Game.Client.Console where
 
 import Control.Applicative ((<|>))
 import Control.Exception (IOException, handle, throwIO)
-import Data.Aeson (ToJSON (..), Value, eitherDecode, object, (.=))
+import Data.Aeson (ToJSON (..), object, (.=))
 import Data.Aeson.Key (fromText)
 import Data.Bifunctor (first)
-import qualified Data.ByteString.Lazy as LBS
 import Data.Either (lefts, rights)
 import Data.Functor (void, ($>))
 import qualified Data.List as List
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Text (Text, pack)
-import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.IO as Text
 import Data.Void (Void)
 import Game.Client.IO (Command (..), Err (..), HasIO (..))
@@ -86,16 +84,8 @@ playParser = do
   string "play" >> spaceConsumer
   Play <$> (identifier <* spaceConsumer) <*> parsePlay
  where
-  parsePlay :: Parser Value
-  parsePlay =
-    takeRest
-      >>= ( \case
-              Left err -> fail err
-              Right v -> pure v
-          )
-        . eitherDecode
-        . LBS.fromStrict
-        . encodeUtf8
+  parsePlay :: Parser Text
+  parsePlay = takeRest
 
 newGameParser :: Parser Command
 newGameParser = do

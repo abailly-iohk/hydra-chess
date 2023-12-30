@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE DuplicateRecordFields #-}
@@ -6,17 +7,18 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Game.Server.Mock where
 
 import Control.Exception (Exception, throwIO)
 import Control.Monad (when)
-import Data.Aeson (FromJSON, ToJSON, Value)
+import Data.Aeson (FromJSON, ToJSON (toJSON))
 import Data.Semigroup (Sum (..))
 import Data.Text (Text, pack, unpack)
 import GHC.Generics (Generic)
 import Game.Server (
-  Game,
+  Game (GamePlay),
   HeadId (HeadId),
   Host (..),
   Indexed,
@@ -38,7 +40,7 @@ withMockServer :: Game g => MockParty -> (Server g MockChain IO -> IO ()) -> IO 
 withMockServer myParty k =
   newMockServer myParty >>= k
 
-newMockServer :: Game g => MockParty -> IO (Server g MockChain IO)
+newMockServer :: forall g . (Game g, ToJSON (GamePlay g)) => MockParty -> IO (Server g MockChain IO)
 newMockServer myParty = do
   cnx <- connectToServer "localhost" 56789 myParty
   pure $
@@ -50,6 +52,13 @@ newMockServer myParty = do
       , newGame = restartGame cnx
       , closeHead = sendClose cnx
       }
+ where
+  playGame :: Host -> Text -> HeadId -> GamePlay g -> IO ()
+  playGame Host{host, port} myId (HeadId hid) play = do
+  request <- parseRequest $ "POST http://" <> unpack host <> ":" <> show port <> "/play/" <> unpack hid <> "/" <> unpack myId
+  response <- httpLBS $ setRequestBodyJSON (toJSON play) request
+  when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to play " <> show play <> " for player " <> show myId)
+
 
 newtype MockServerError = MockServerError String
   deriving (Eq, Show)
@@ -86,12 +95,6 @@ sendCommit Host{host, port} myId amount (HeadId headId) = do
         <> show amount
   response <- httpLBS request
   when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to commit for peers " <> show myId)
-
-playGame :: Host -> Text -> HeadId -> Value -> IO ()
-playGame Host{host, port} myId (HeadId hid) play = do
-  request <- parseRequest $ "POST http://" <> unpack host <> ":" <> show port <> "/play/" <> unpack hid <> "/" <> unpack myId
-  response <- httpLBS $ setRequestBodyJSON play request
-  when (getResponseStatusCode response /= 200) $ throwIO $ MockServerError ("Failed to play " <> show play <> " for player " <> show myId)
 
 restartGame :: Host -> HeadId -> IO ()
 restartGame Host{host, port} (HeadId hid) = do

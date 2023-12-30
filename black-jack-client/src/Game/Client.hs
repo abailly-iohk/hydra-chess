@@ -7,6 +7,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Game.Client where
 
@@ -16,7 +17,7 @@ import Control.Monad.Class.MonadTimer (MonadDelay, threadDelay)
 import Data.Functor (void, (<&>))
 import Data.Text (Text)
 import Game.Client.IO (Command (..), Err (..), HasIO (..), Output (Bye, Ko, Ok))
-import Game.Server (FromChain, Game, HeadId (HeadId), Indexed (..), IsChain (..), Server (..))
+import Game.Server (FromChain, Game (readPlay), HeadId (HeadId), Indexed (..), IsChain (..), Server (..))
 import qualified Game.Server as Server
 
 data Result c
@@ -52,14 +53,16 @@ loop handle io = do
     Right Quit -> void (output io Bye)
     Right cmd -> handle cmd >>= output io >> loop handle io
 
-handleCommand :: (Game g, IsChain c, Monad m) => Server g c m -> Command -> m Output
+handleCommand :: forall g c m. (Game g, IsChain c, Monad m) => Server g c m -> Command -> m Output
 handleCommand Server{initHead, commit, play, closeHead, newGame} = \case
   NewTable peers ->
     initHead peers <&> (\HeadId{headId} -> Ok . ("head initialised with id " <>) $ headId)
   FundTable tableId amount ->
     commit amount (HeadId tableId) >> pure (Ok "committed")
   Play tableId p ->
-    play (HeadId tableId) p >> pure (Ok "played")
+    case readPlay @g p of
+      Nothing -> pure (Ko $ "Invalid play " <> p)
+      Just pl -> play (HeadId tableId) pl >> pure (Ok "played")
   NewGame tableId ->
     newGame (HeadId tableId) >> pure (Ok "new game")
   Stop tableId ->

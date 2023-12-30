@@ -86,13 +86,16 @@ class
   type GameState g :: Type
 
   -- | The type of game play associated with g
-  type GamePlay g :: Type
+  data GamePlay g :: Type
 
   -- | The situation at end of game
   type GameEnd g :: Type
 
   -- | Starting game state.
   initialGame :: Int -> GameState g
+
+  -- | Read play from `Text`
+  readPlay :: Text -> Maybe (GamePlay g)
 
 -- | A handle to some underlying server for a single Head.
 data Server g c m = Server
@@ -105,7 +108,7 @@ data Server g c m = Server
   -- The server is responsible for finding a suitable `Coin` that will fit the
   -- amount funded.
   -- Might throw a `ServerException` if something goes wrong.
-  , play :: HeadId -> Value -> m ()
+  , play :: HeadId -> GamePlay g -> m ()
   -- ^ When the game is opened, do one play which is game dependent
   -- Might throw a `ServerException` if the play is invalid.
   , newGame :: HeadId -> m ()
