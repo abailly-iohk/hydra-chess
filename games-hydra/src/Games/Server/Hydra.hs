@@ -147,8 +147,11 @@ instance IsChain Hydra where
 data CommitError = CommitError String
   deriving (Eq, Show, Exception)
 
+type GameTokens = [(String, String, Integer)]
+
 data InvalidMove
   = InvalidMove Chess.IllegalMove
+  | InvalidGameTokens GameTokens GameTokens
   | UTxOError Text
   deriving (Eq, Show, Exception)
 
@@ -225,7 +228,7 @@ withHydraServer network me host k = do
       Right game ->
         if
             | game == Chess.initialGame ->
-                atomically $ modifyTVar' events  (|> GameStarted headId game [])
+                atomically $ modifyTVar' events (|> GameStarted headId game [])
             | Chess.checkState game == CheckMate White -> do
                 atomically $ modifyTVar' events (|> GameEnded headId game BlackWins)
                 endGame events cnx headId utxo
@@ -234,13 +237,6 @@ withHydraServer network me host k = do
                 endGame events cnx headId utxo
             | otherwise ->
                 atomically $ modifyTVar' events (|> GameChanged headId game [])
-
-  endGame :: TVar IO (Seq (FromChain Chess Hydra)) -> Connection -> HeadId -> Value -> IO ()
-  endGame events cnx headId utxo = do
-    -- post end game transaction
-    -- need to payback game tokens to players
-    -- should handle ELO change
-    putStrLn "ending game"
 
   splitGameUTxO :: Connection -> Value -> IO ()
   splitGameUTxO cnx utxo = do
@@ -257,7 +253,7 @@ withHydraServer network me host k = do
     let pid = Token.validatorHashHex
         token = "1 " <> pid <> "." <> pkh
 
-    (pkh, eloScriptFile) <- findEloScriptFile vk network
+    (_, eloScriptFile) <- findEloScriptFile vk network
     eloScriptAddress <- getScriptAddress eloScriptFile network
 
     let args =
@@ -470,50 +466,11 @@ withHydraServer network me host k = do
 
     submitNewTx connection args skFile
 
-  makeValue :: String -> (String, String, Integer) -> String
-  makeValue pid (_, pkh, _) = "1 " <> pid <.> pkh
-
-  findCollateral :: String -> Value -> String
-  findCollateral address utxo =
-    maybe (error "Cannot find collateral for " <> address <> " from " <> asString utxo) id $
-      case utxo of
-        Object kv -> fmap (unpack . Key.toText . fst) $ List.find (findUTxOWithAddress address) (KeyMap.toList kv)
-        _ -> Nothing
-
-  findGameTokens ::
-    String ->
-    Value ->
-    [ ( String -- txin
-      , String -- pkh
-      , Integer -- lovelace
-      )
-    ]
-  findGameTokens pid utxo =
-    case utxo of
-      Object kv -> foldMap (findUTxOWithPolicyId pid) (KeyMap.toList kv)
-      _ -> []
-
-  makeGameInput :: (String, String, Integer) -> IO [String]
-  makeGameInput (txin, pkh, _) = do
-    eloScriptFile <- makeEloScriptFile pkh network
-
-    pure $
-      [ "--tx-in"
-      , txin
-      , "--tx-in-script-file"
-      , eloScriptFile
-      , "--tx-in-inline-datum-present"
-      , "--tx-in-redeemer-value"
-      , "[]"
-      , "--tx-in-execution-units"
-      , "(10000000,100000000)"
-      ]
-
   playGame :: Connection -> TVar IO (Seq (FromChain Chess Hydra)) -> HeadId -> GamePlay Chess -> IO ()
   playGame cnx events _headId (GamePlay move) =
     try go >>= \case
       Left (InvalidMove illegal) -> putStrLn $ "Invalid move:  " <> show illegal
-      Left (UTxOError txt) -> putStrLn $ unpack $ "Error looking for data:  " <> txt
+      Left other -> putStrLn $ "Error looking for data:  " <> show other
       Right{} -> pure ()
    where
     go = do
@@ -552,8 +509,6 @@ withHydraServer network me host k = do
       gameDatumFile <- findDatumFile "game-state" nextState network
       moveRedeemerFile <- findDatumFile "chess-move" move network
 
-      protocolParametersFile <- findProtocolParametersFile network
-
       -- define transaction arguments
       let args =
             [ "--tx-in"
@@ -570,7 +525,7 @@ withHydraServer network me host k = do
             , "--tx-in-execution-units"
             , "(500000000000,1000000000)"
             , "--tx-out"
-            , gameScriptAddress <> " + " <> gameScriptValue
+            , gameScriptAddress <> " + " <> stringifyValue gameScriptValue
             , "--tx-out-inline-datum-file"
             , gameDatumFile
             , "--tx-out"
@@ -578,6 +533,151 @@ withHydraServer network me host k = do
             ]
 
       submitNewTx cnx args skFile
+
+  endGame :: TVar IO (Seq (FromChain Chess Hydra)) -> Connection -> HeadId -> Value -> IO ()
+  endGame events cnx headId utxo =
+    try go >>= \case
+      Left (InvalidGameTokens own their) -> putStrLn $ "Invalid game tokens, own: " <> show own <>", their: " <> show their
+      Left other -> putStrLn $ "Error building end game tx:  " <> show other
+      Right{} -> pure ()
+   where
+    go = do
+      -- retrieve needed tools and keys
+      cardanoCliExe <- findCardanoCliExecutable
+      (skFile, vkFile) <- findKeys Game network
+      gameAddress <- getVerificationKeyAddress vkFile network
+      socketPath <- findSocketPath network
+
+      -- find chess game script & address
+      gameScriptFile <- findGameScriptFile network
+      gameScriptAddress <- getScriptAddress gameScriptFile network
+
+      -- find ELO script & address
+      (pkh, eloScriptFile) <- findEloScriptFile vkFile network
+      eloScriptAddress <- getScriptAddress eloScriptFile network
+
+      -- retrieve current UTxO state
+      utxo <- collectUTxO events cnx
+
+      -- find collateral to submit end game tx
+      let collateral = findCollateral gameAddress utxo
+
+      gameState <-
+        case extractGameState gameScriptAddress utxo of
+          Left err ->
+            throwIO $ UTxOError $ "Cannot extract game state from: " <> err
+          Right game -> pure game
+
+      (gameStateTxIn, (adas, tokens)) <- case extractGameTxIn gameScriptAddress utxo of
+        Left err -> do
+          throwIO $ UTxOError $ "Cannot extract game value: " <> err
+        Right v -> pure v
+
+      let (own, their) = List.partition (\ (_, pk, _) -> pk == pkh) tokens
+
+      when (length own /= 1) $ throwIO $ InvalidGameTokens own their
+
+      args <-
+        if null their
+        then do
+          -- construct chess game inline datum
+          endGameRedeemerFile <- findDatumFile "endgame" End network
+
+          -- define transaction arguments
+          pure $
+                [ "--tx-in"
+                , collateral
+                , "--tx-in-collateral"
+                , collateral
+                , "--tx-in"
+                , gameStateTxIn
+                , "--tx-in-script-file"
+                , gameScriptFile
+                , "--tx-in-inline-datum-present"
+                , "--tx-in-redeemer-file"
+                , endGameRedeemerFile
+                , "--tx-in-execution-units"
+                , "(100000000000,1000000000)"
+                , "--tx-out"
+                , eloScriptAddress <> " + " <> stringifyValue (adas, own)
+                , "--tx-out-inline-datum-file"
+                , "1000" -- FIXME: should be some change in ELO rating
+                , "--tx-out"
+                , gameAddress <> "+ 8000000 lovelace" -- FIXME shoudl be value in collateral
+                ]
+
+        else do
+          -- construct chess game inline datum
+          gameDatumFile <- findDatumFile "game-state" gameState network
+          endGameRedeemerFile <- findDatumFile "endgame" End network
+
+          -- define transaction arguments
+          pure $
+                [ "--tx-in"
+                , collateral
+                , "--tx-in-collateral"
+                , collateral
+                , "--tx-in"
+                , gameStateTxIn
+                , "--tx-in-script-file"
+                , gameScriptFile
+                , "--tx-in-inline-datum-present"
+                , "--tx-in-redeemer-file"
+                , endGameRedeemerFile
+                , "--tx-in-execution-units"
+                , "(100000000000,1000000000)"
+                , "--tx-out"
+                , gameScriptAddress <> " + " <> stringifyValue (adas - 2000000, their)
+                , "--tx-out-inline-datum-file"
+                , gameDatumFile
+                , "--tx-out"
+                , eloScriptAddress <> " + " <> stringifyValue (20000000, own)
+                , "--tx-out-inline-datum-file"
+                , "1000" -- FIXME: should be some change in ELO rating
+                , "--tx-out"
+                , gameAddress <> "+ 8000000 lovelace" -- FIXME shoudl be value in collateral
+                ]
+
+      submitNewTx cnx args skFile
+
+  makeValue :: String -> (String, String, Integer) -> String
+  makeValue pid (_, pkh, _) = "1 " <> pid <.> pkh
+
+  findCollateral :: String -> Value -> String
+  findCollateral address utxo =
+    maybe (error "Cannot find collateral for " <> address <> " from " <> asString utxo) id $
+      case utxo of
+        Object kv -> fmap (unpack . Key.toText . fst) $ List.find (findUTxOWithAddress address) (KeyMap.toList kv)
+        _ -> Nothing
+
+  findGameTokens ::
+    String ->
+    Value ->
+    [ ( String -- txin
+      , String -- pkh
+      , Integer -- lovelace
+      )
+    ]
+  findGameTokens pid utxo =
+    case utxo of
+      Object kv -> foldMap (findUTxOWithPolicyId pid) (KeyMap.toList kv)
+      _ -> []
+
+  makeGameInput :: (String, String, Integer) -> IO [String]
+  makeGameInput (txin, pkh, _) = do
+    eloScriptFile <- makeEloScriptFile pkh network
+
+    pure $
+      [ "--tx-in"
+      , txin
+      , "--tx-in-script-file"
+      , eloScriptFile
+      , "--tx-in-inline-datum-present"
+      , "--tx-in-redeemer-value"
+      , "[]"
+      , "--tx-in-execution-units"
+      , "(10000000,100000000)"
+      ]
 
   sendClose :: Connection -> TVar IO (Seq (FromChain g Hydra)) -> HeadId -> IO ()
   sendClose cnx events _unusedHeadId = do
@@ -792,7 +892,7 @@ findUTxOWithAddress address (txin, txout) =
         _ -> False
     _ -> False
 
-findUTxOWithPolicyId :: String -> (Aeson.Key, Value) -> [(String, String, Integer)]
+findUTxOWithPolicyId :: String -> (Aeson.Key, Value) -> GameTokens
 findUTxOWithPolicyId pid (txin, txout) =
   case txout of
     Object kv ->
@@ -834,7 +934,7 @@ extractGameState address utxo =
         Just (_, txout) -> findGameState txout
     _ -> Left $ "Not an object: " <> (decodeUtf8 $ LBS.toStrict $ encode utxo)
 
-extractGameTxIn :: String -> Value -> Either Text (String, String)
+extractGameTxIn :: String -> Value -> Either Text (String, (Integer, GameTokens))
 extractGameTxIn address utxo =
   case utxo of
     Object kv ->
@@ -843,39 +943,43 @@ extractGameTxIn address utxo =
         Just (txin, txout) -> (unpack $ Key.toText txin,) <$> extractValue txout
     _ -> Left $ "Not an object: " <> (decodeUtf8 $ LBS.toStrict $ encode utxo)
 
-extractValue :: Value -> Either Text String
+extractValue :: Value -> Either Text (Integer, GameTokens)
 extractValue = \case
   Object kv ->
     case kv KeyMap.!? fromString "value" of
-      Just (Object v) -> stringifyValue v
+      Just (Object v) -> extractTokens v
       _ -> Left "No key 'inlineDatum'"
   _ -> Left "Not an object"
 
-stringifyValue :: Aeson.Object -> Either Text String
-stringifyValue kv = do
+extractTokens :: Aeson.Object -> Either Text (Integer, GameTokens)
+extractTokens kv = do
   adas :: Integer <- first ((<> " is not an integral number") . pack . show @Double) . floatingOrInteger =<< lovelace
-  pure $ show adas <> " lovelace + " <> concat (intersperse " + " (map stringify tokens))
+  pure $ (adas, tokens)
  where
   lovelace = case kv KeyMap.!? fromString "lovelace" of
     Just (Number n) -> Right n
     _ -> Left "No key 'inlineDatum'"
 
-  stringify (pid, tok, val) = show val <> " " <> pid <.> tok
-
   tokens = foldMap getTokens $ filter ((/= "lovelace") . fst) $ KeyMap.toList kv
 
-  getTokens :: (Aeson.Key, Value) -> [(String, String, Integer)]
+  getTokens :: (Aeson.Key, Value) -> GameTokens
   getTokens (pid, v) =
     case v of
       Object toks -> foldMap (getToken pid) $ KeyMap.toList toks
       _ -> []
 
-  getToken :: Aeson.Key -> (Aeson.Key, Value) -> [(String, String, Integer)]
+  getToken :: Aeson.Key -> (Aeson.Key, Value) -> GameTokens
   getToken pid (tok, Number val) =
     case floatingOrInteger @Double val of
       Left _ -> []
       Right i -> [(unpack $ Key.toText pid, unpack $ Key.toText tok, i)]
   getToken _ _ = []
+
+stringifyValue :: (Integer, GameTokens) -> String
+stringifyValue (adas, tokens) =
+  show adas <> " lovelace + " <> concat (intersperse " + " (map stringify tokens))
+ where
+  stringify (pid, tok, val) = show val <> " " <> pid <.> tok
 
 findGameState :: Value -> Either Text Chess.Game
 findGameState txout =
