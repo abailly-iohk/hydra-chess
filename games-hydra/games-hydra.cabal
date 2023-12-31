@@ -58,6 +58,7 @@ library
                 , process
                 , random
                 , serialise
+                , scientific
                 , tar
                 , text
                 , unix

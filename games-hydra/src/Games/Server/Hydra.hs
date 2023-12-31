@@ -10,6 +10,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -53,6 +54,7 @@ import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Aeson.Types (FromJSON (..), Pair)
 import qualified Data.Aeson.Types as Aeson
+import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Base16 as Hex
 import qualified Data.ByteString.Lazy as LBS
@@ -61,6 +63,7 @@ import Data.Foldable (toList)
 import Data.IORef (atomicWriteIORef, newIORef, readIORef)
 import Data.List (intersperse)
 import qualified Data.List as List
+import Data.Scientific (floatingOrInteger, toBoundedInteger)
 import Data.Sequence (Seq ((:|>)), (|>))
 import qualified Data.Sequence as Seq
 import Data.String (IsString (..))
@@ -68,7 +71,7 @@ import Data.Text (Text, pack, unpack)
 import qualified Data.Text as Text
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import GHC.Generics (Generic)
-import Game.Chess (Chess, ChessEnd (..))
+import Game.Chess (Chess, ChessEnd (..), GamePlay (..))
 import Game.Client.Console (Coins, SimpleUTxO (..), parseQueryUTxO)
 import Game.Server (
   Content (..),
@@ -108,8 +111,6 @@ import System.IO (hClose)
 import System.Posix (mkstemp)
 import System.Process (callProcess)
 import Prelude hiding (seq)
-import Game.Chess (GamePlay)
-import Game.Chess (GamePlay(..))
 
 -- | The type of backend provide by Hydra
 data Hydra
@@ -146,7 +147,9 @@ instance IsChain Hydra where
 data CommitError = CommitError String
   deriving (Eq, Show, Exception)
 
-data InvalidMove = InvalidMove Chess.IllegalMove
+data InvalidMove
+  = InvalidMove Chess.IllegalMove
+  | UTxOError Text
   deriving (Eq, Show, Exception)
 
 withHydraServer :: Network -> HydraParty -> Host -> (Server Chess.Game Hydra IO -> IO ()) -> IO ()
@@ -504,6 +507,7 @@ withHydraServer network me host k = do
   playGame cnx events _headId (GamePlay move) =
     try go >>= \case
       Left (InvalidMove illegal) -> putStrLn $ "Invalid move:  " <> show illegal
+      Left (UTxOError txt) -> putStrLn $ unpack $ "Error looking for data:  " <> txt
       Right{} -> pure ()
    where
     go = do
@@ -522,11 +526,18 @@ withHydraServer network me host k = do
 
       -- find collateral to submit play tx
       let collateral = findCollateral gameAddress utxo
-          -- find current game state
-          gameState = case extractGameState gameScriptAddress utxo of
-            Left err -> do
-              error $ "Cannot extract game state from utxo: " <> unpack (decodeUtf8 $ LBS.toStrict $ encode utxo)
-            Right game -> game
+
+      -- find current game state
+      gameState <-
+        case extractGameState gameScriptAddress utxo of
+          Left err ->
+            throwIO $ UTxOError $ "Cannot extract game state from: " <> err
+          Right game -> pure game
+
+      (gameStateTxIn, gameScriptValue) <- case extractGameTxIn gameScriptAddress utxo of
+        Left err -> do
+          throwIO $ UTxOError $ "Cannot extract game value: " <> err
+        Right v -> pure v
 
       -- compute next game state
       nextState <- either (throwIO . InvalidMove) pure $ Chess.apply move gameState
@@ -536,7 +547,6 @@ withHydraServer network me host k = do
       moveRedeemerFile <- findDatumFile "chess-move" move network
 
       protocolParametersFile <- findProtocolParametersFile network
-      txRawFile <- mkTempFile
 
       -- define transaction arguments
       let args =
@@ -552,16 +562,16 @@ withHydraServer network me host k = do
             , "--tx-in-redeemer-file"
             , moveRedeemerFile
             , "--tx-in-execution-units"
-            , "(10000000,100000000)"
+            , "(500000000000,1000000000)"
             , "--tx-out"
             , gameScriptAddress <> " + " <> gameScriptValue
-            , "--tx-out-datum-file"
+            , "--tx-out-inline-datum-file"
             , gameDatumFile
             , "--tx-out"
             , gameAddress <> "+ 8000000 lovelace" -- FIXME shoudl be value in collateral
             ]
 
-      submitNewTx cnx args txRawFile
+      submitNewTx cnx args skFile
 
   sendClose :: Connection -> TVar IO (Seq (FromChain g Hydra)) -> HeadId -> IO ()
   sendClose cnx events _unusedHeadId = do
@@ -815,17 +825,61 @@ extractGameState address utxo =
     Object kv ->
       case List.find (findUTxOWithAddress address) (KeyMap.toList kv) of
         Nothing -> Left $ "No output at address " <> pack address <> " for utxo"
-        Just (_, txout) -> findGameState address txout
+        Just (_, txout) -> findGameState txout
     _ -> Left $ "Not an object: " <> (decodeUtf8 $ LBS.toStrict $ encode utxo)
 
-findGameState :: String -> Value -> Either Text Chess.Game
-findGameState gameAddress txout =
+extractGameTxIn :: String -> Value -> Either Text (String, String)
+extractGameTxIn address utxo =
+  case utxo of
+    Object kv ->
+      case List.find (findUTxOWithAddress address) (KeyMap.toList kv) of
+        Nothing -> Left $ "No output at address " <> pack address <> " for utxo"
+        Just (txin, txout) -> (unpack $ Key.toText txin,) <$> extractValue txout
+    _ -> Left $ "Not an object: " <> (decodeUtf8 $ LBS.toStrict $ encode utxo)
+
+extractValue :: Value -> Either Text String
+extractValue = \case
+  Object kv ->
+    case kv KeyMap.!? fromString "value" of
+      Just (Object v) -> stringifyValue v
+      _ -> Left "No key 'inlineDatum'"
+  _ -> Left "Not an object"
+
+stringifyValue :: Aeson.Object -> Either Text String
+stringifyValue kv = do
+  adas :: Integer <- first ((<> " is not an integral number") . pack . show @Double) . floatingOrInteger =<< lovelace
+  pure $ show adas <> " lovelace + " <> concat (intersperse " + " (map stringify tokens))
+ where
+  lovelace = case kv KeyMap.!? fromString "lovelace" of
+    Just (Number n) -> Right n
+    _ -> Left "No key 'inlineDatum'"
+
+  stringify (pid, tok, val) = show val <> " " <> pid <.> tok
+
+  tokens = foldMap getTokens $ filter ((/= "lovelace") . fst) $ KeyMap.toList kv
+
+  getTokens :: (Aeson.Key, Value) -> [(String, String, Integer)]
+  getTokens (pid, v) =
+    case v of
+      Object toks -> foldMap (getToken pid) $ KeyMap.toList toks
+      _ -> []
+
+  getToken :: Aeson.Key -> (Aeson.Key, Value) -> [(String, String, Integer)]
+  getToken pid (tok, Number val) =
+    case floatingOrInteger @Double val of
+      Left _ -> []
+      Right i -> [(unpack $ Key.toText pid, unpack $ Key.toText tok, i)]
+  getToken _ _ = []
+
+findGameState :: Value -> Either Text Chess.Game
+findGameState txout =
   extractInlineDatum txout >>= fromJSONDatum
 
 extractInlineDatum :: Value -> Either Text Value
-extractInlineDatum = \case
-  Object kv ->
-    case kv KeyMap.!? fromString "inlineDatum" of
-      Just v -> Right v
-      _ -> Left "No key 'inlineDatum'"
-  _ -> Left "Not an object"
+extractInlineDatum value =
+  case value of
+     Object kv ->
+       case kv KeyMap.!? fromString "inlineDatum" of
+         Just v -> Right v
+         _ -> Left $ "No key 'inlineDatum' in " <> (decodeUtf8 $ LBS.toStrict $ encode value)
+     _ -> Left $ "Not an object"  <> (decodeUtf8 $ LBS.toStrict $ encode value)

@@ -35,7 +35,9 @@ type RedeemerType = Move
 
 validator :: DatumType -> RedeemerType -> ScriptContext -> Bool
 validator game move scriptContext =
-  checkGameOutput scriptContext $ apply move game
+  case apply move game of
+    Left{} -> traceError "Illegal move"
+    Right game' -> checkGameOutput scriptContext game'
 {-# INLINEABLE validator #-}
 
 checkGameOutput :: ToData a => ScriptContext -> a -> Bool
