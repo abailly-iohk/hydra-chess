@@ -11,6 +11,7 @@ import Game.Server (FromChain (..), IsChain)
 notifyChessEvent :: (IsChain c) => FromChain Chess c -> IO ()
 notifyChessEvent = \case
   GameStarted{game} -> putStrLn (unpack $ render game)
+  GameEnded{game, gameEnd} -> putStrLn (unpack $ render game) >> putStrLn (show gameEnd)
   GameChanged{game, plays} -> do
     putStrLn (unpack $ render game)
     putStrLn (unlines $ unpack . render . unMove <$> plays)

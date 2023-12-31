@@ -230,9 +230,9 @@ withHydraServer network me host k = do
                 | game == Chess.initialGame ->
                     (|> GameStarted headId game [])
                 | Chess.checkState game == CheckMate White ->
-                    (|> GameEnded headId BlackWins)
+                    (|> GameEnded headId game BlackWins)
                 | Chess.checkState game == CheckMate Black ->
-                    (|> GameEnded headId WhiteWins)
+                    (|> GameEnded headId game WhiteWins)
                 | otherwise ->
                     (|> GameChanged headId game [])
 

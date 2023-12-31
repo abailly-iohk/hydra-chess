@@ -133,7 +133,7 @@ data FromChain g c
   | HeadOpened {headId :: HeadId}
   | GameStarted {headId :: HeadId, game :: GameState g, plays :: [GamePlay g]}
   | GameChanged {headId :: HeadId, game :: GameState g, plays :: [GamePlay g]}
-  | GameEnded {headId :: HeadId, gameEnd :: GameEnd g}
+  | GameEnded {headId :: HeadId, game :: GameState g, gameEnd :: GameEnd g}
   | HeadClosing {headId :: HeadId}
   | HeadClosed {headId :: HeadId}
   | OtherMessage {content :: Content}
