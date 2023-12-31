@@ -220,21 +220,27 @@ withHydraServer network me host k = do
     gameScriptFile <- findGameScriptFile network
     gameScriptAddress <- getScriptAddress gameScriptFile network
     -- extract game state from inline datum encoded as Data with schema
-    atomically $
-      modifyTVar' events $
-        case extractGameState gameScriptAddress utxo of
-          Left err -> do
-            (|> OtherMessage (Content $ "Cannot extract game state from snapshot: " <> err))
-          Right game ->
-            if
-                | game == Chess.initialGame ->
-                    (|> GameStarted headId game [])
-                | Chess.checkState game == CheckMate White ->
-                    (|> GameEnded headId game BlackWins)
-                | Chess.checkState game == CheckMate Black ->
-                    (|> GameEnded headId game WhiteWins)
-                | otherwise ->
-                    (|> GameChanged headId game [])
+    case extractGameState gameScriptAddress utxo of
+      Left err -> pure ()
+      Right game ->
+        if
+            | game == Chess.initialGame ->
+                atomically $ modifyTVar' events  (|> GameStarted headId game [])
+            | Chess.checkState game == CheckMate White -> do
+                atomically $ modifyTVar' events (|> GameEnded headId game BlackWins)
+                endGame events cnx headId utxo
+            | Chess.checkState game == CheckMate Black -> do
+                atomically $ modifyTVar' events (|> GameEnded headId game WhiteWins)
+                endGame events cnx headId utxo
+            | otherwise ->
+                atomically $ modifyTVar' events (|> GameChanged headId game [])
+
+  endGame :: TVar IO (Seq (FromChain Chess Hydra)) -> Connection -> HeadId -> Value -> IO ()
+  endGame events cnx headId utxo = do
+    -- post end game transaction
+    -- need to payback game tokens to players
+    -- should handle ELO change
+    putStrLn "ending game"
 
   splitGameUTxO :: Connection -> Value -> IO ()
   splitGameUTxO cnx utxo = do
@@ -878,8 +884,8 @@ findGameState txout =
 extractInlineDatum :: Value -> Either Text Value
 extractInlineDatum value =
   case value of
-     Object kv ->
-       case kv KeyMap.!? fromString "inlineDatum" of
-         Just v -> Right v
-         _ -> Left $ "No key 'inlineDatum' in " <> (decodeUtf8 $ LBS.toStrict $ encode value)
-     _ -> Left $ "Not an object"  <> (decodeUtf8 $ LBS.toStrict $ encode value)
+    Object kv ->
+      case kv KeyMap.!? fromString "inlineDatum" of
+        Just v -> Right v
+        _ -> Left $ "No key 'inlineDatum' in " <> (decodeUtf8 $ LBS.toStrict $ encode value)
+    _ -> Left $ "Not an object" <> (decodeUtf8 $ LBS.toStrict $ encode value)
