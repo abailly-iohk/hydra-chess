@@ -6,6 +6,8 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -fno-specialize -fdefer-type-errors #-}
+{-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:target-version=1.0.0 #-}
 module Chess.GameState where
 
 import Prelude(($), fmap, pure, (<$>), Bool (..))

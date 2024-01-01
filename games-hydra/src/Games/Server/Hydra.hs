@@ -349,8 +349,10 @@ withHydraServer network me host k = do
       gameAddress <- getVerificationKeyAddress vkFile network
       gameUTxO <- getUTxOFor network gameAddress
       let gameToken = rights . fmap (parseQueryUTxO . pack) $ gameUTxO
+
       -- FIXME: Need to find the correct game token otherwise splitting won't work
-      when (null gameToken) $ error $ "Failed to retrieve game token to commit from:\n" <> unlines gameUTxO
+      when (null gameToken) $
+        throwIO $ CommitError $ "Failed to retrieve game token to commit from:\n" <> unlines gameUTxO
 
       let utxo = mkFullUTxO (Text.pack gameAddress) Nothing (head gameToken)
 
@@ -517,7 +519,7 @@ withHydraServer network me host k = do
 
       -- construct chess game inline datum
       gameDatumFile <- findDatumFile "game-state" nextState network
-      moveRedeemerFile <- findDatumFile "chess-move" play network
+      moveRedeemerFile <- findDatumFile "move" play network
 
       -- define transaction arguments
       let args =
@@ -552,6 +554,7 @@ withHydraServer network me host k = do
       Right{} -> pure ()
    where
     go = do
+      putStrLn $ "Ending Game " <> show headId
       -- retrieve needed tools and keys
       cardanoCliExe <- findCardanoCliExecutable
       (skFile, vkFile) <- findKeys Game network
@@ -591,9 +594,7 @@ withHydraServer network me host k = do
         if null their
           then do
             -- construct chess game inline datum
-            endGameRedeemerFile <-
-              -- TODO: find correct side to end
-              findDatumFile "endgame" End network
+            endGameRedeemerFile <- findDatumFile "endgame" End network
 
             -- define transaction arguments
             pure $

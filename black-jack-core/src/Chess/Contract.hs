@@ -12,7 +12,7 @@ module Chess.Contract where
 
 import PlutusTx.Prelude
 
-import Chess.Game (apply, Game)
+import Chess.Game (apply)
 import Chess.Plutus (ValidatorType, scriptValidatorHash, wrapValidator)
 import PlutusLedgerApi.V2 (
   Datum (Datum),
@@ -35,11 +35,11 @@ validator chess@ChessGame{game} play scriptContext =
   case play of
     ChessMove move ->  case apply move game of
       Left{} -> traceError "Illegal move"
-      Right game' -> checkGameOutput scriptContext game'
+      Right game' -> checkGameOutput scriptContext chess { game = game' }
     End -> checkGameEnd chess scriptContext
 {-# INLINEABLE validator #-}
 
-checkGameOutput :: ScriptContext -> Game -> Bool
+checkGameOutput :: ScriptContext -> ChessGame -> Bool
 checkGameOutput ctx d =
   case ownDatum of
     NoOutputDatum ->
@@ -64,8 +64,11 @@ checkGameOutput ctx d =
   ScriptContext{scriptContextTxInfo = txInfo} = ctx
 {-# INLINEABLE checkGameOutput #-}
 
+-- | Verifies game is ending correctly and players get rewarded accordingly.
+-- TODO
 checkGameEnd :: ChessGame -> ScriptContext -> Bool
 checkGameEnd _ _ = True
+{-# INLINEABLE checkGameEnd #-}
 
 compiledValidator :: CompiledCode ValidatorType
 compiledValidator =

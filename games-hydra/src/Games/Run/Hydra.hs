@@ -181,8 +181,8 @@ checkGameTokenIsAvailable network gameSkFile gameVkFile = do
       -- controller knows there's an ongoing game it does not try to recreate a game
       -- token
       putStrLn $ "No game token registered on " <> show network <> ", creating it"
-      -- registerGameToken network gameSkFile gameVkFile
-      -- waitForToken token gameAddress
+      registerGameToken network gameSkFile gameVkFile
+      waitForToken token gameAddress
  where
   waitForToken token gameAddress = do
     putStrLn $ "Wait for token creation tx"
