@@ -3,6 +3,8 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -55,3 +57,5 @@ instance ToJSON (GamePlay BlackJack) where
 
 instance FromJSON (GamePlay BlackJack) where
   parseJSON = fmap GamePlay . parseJSON
+
+deriving newtype instance Arbitrary (GamePlay BlackJack)

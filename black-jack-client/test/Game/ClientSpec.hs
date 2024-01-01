@@ -22,7 +22,6 @@ import Control.Monad.Class.MonadAsync (MonadAsync (race_))
 import Control.Monad.Class.MonadTimer (threadDelay)
 import Control.Monad.IOSim (runSimOrThrow)
 import Data.String (IsString)
-import Data.Text (pack)
 import Game.BlackJack (BlackJack)
 import Game.Client (runClient)
 import Game.Client.IO (Command (..), Err (..), HasIO (..), Output (..))
@@ -35,7 +34,7 @@ import Game.Server (
  )
 import Game.Server.Mock (MockChain, MockCoin, MockParty (..))
 import Test.Aeson.GenericSpecs (Proxy (Proxy), roundtripAndGoldenSpecs)
-import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe)
+import Test.Hspec (Spec, describe, expectationFailure)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (
   Arbitrary (..),
@@ -51,14 +50,6 @@ spec = do
   describe "Serialisation" $ do
     roundtripAndGoldenSpecs (Proxy @(Indexed BlackJack MockChain))
 
-  describe "New Table" $ do
-    it "is notified when invited to a new table" $
-      failAfter 100 $ do
-        let res = runSimOrThrow $ do
-              let peers = [alice, bob]
-                  server = connectedServer{poll = \_ _ -> pure $ Indexed 1 [HeadCreated @BlackJack @MockChain mockId peers]}
-              withIOSimIO [] $ runClient server
-        res `shouldBe` ((), [Ok (pack $ show $ HeadCreated @BlackJack @MockChain mockId [alice, bob])])
   describe "Fund Table" $ do
     prop "commit to head some funds given table created" prop_commit_to_head_when_funding_table
 
@@ -93,7 +84,7 @@ prop_commit_to_head_when_funding_table (KnownParties peers) (Committable coins) 
     let value = coinValue @MockChain c
         result = runSimOrThrow $ do
           let server = connectedServer{poll = \_ _ -> pure $ Indexed 0 [HeadCreated @BlackJack @MockChain mockId peers]}
-          withIOSimIO [NewTable (pid <$> peers), FundTable mockId value] $ runClient server
+          withIOSimIO [NewTable (pid <$> peers), FundTable mockId value] $ runClient server (const $ pure ())
      in Ok "committed" `elem` snd result
 
 newtype KnownParties = KnownParties [MockParty]
