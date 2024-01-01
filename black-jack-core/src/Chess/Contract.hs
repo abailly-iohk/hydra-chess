@@ -12,14 +12,14 @@ module Chess.Contract where
 
 import PlutusTx.Prelude
 
-import Chess.Game (Game, Move, apply)
+import Chess.Game (apply, Game)
+import Chess.Plutus (ValidatorType, scriptValidatorHash, wrapValidator)
 import PlutusLedgerApi.V2 (
   Datum (Datum),
   OutputDatum (..),
   ScriptContext (..),
   ScriptHash (..),
   SerialisedScript,
-  ToData,
   getDatum,
   serialiseCompiledCode,
   toBuiltinData,
@@ -28,19 +28,18 @@ import PlutusLedgerApi.V2 (
 import PlutusLedgerApi.V2.Contexts (findDatumHash, getContinuingOutputs)
 import PlutusTx (CompiledCode)
 import qualified PlutusTx
-import Chess.Plutus (ValidatorType, wrapValidator, scriptValidatorHash)
+import Chess.GameState (ChessGame (..), ChessPlay (..))
 
-type DatumType = Game
-type RedeemerType = Move
-
-validator :: DatumType -> RedeemerType -> ScriptContext -> Bool
-validator game move scriptContext =
-  case apply move game of
-    Left{} -> traceError "Illegal move"
-    Right game' -> checkGameOutput scriptContext game'
+validator :: ChessGame -> ChessPlay -> ScriptContext -> Bool
+validator chess@ChessGame{game} play scriptContext =
+  case play of
+    ChessMove move ->  case apply move game of
+      Left{} -> traceError "Illegal move"
+      Right game' -> checkGameOutput scriptContext game'
+    End -> checkGameEnd chess scriptContext
 {-# INLINEABLE validator #-}
 
-checkGameOutput :: ToData a => ScriptContext -> a -> Bool
+checkGameOutput :: ScriptContext -> Game -> Bool
 checkGameOutput ctx d =
   case ownDatum of
     NoOutputDatum ->
@@ -55,7 +54,7 @@ checkGameOutput ctx d =
  where
   expectedData = toBuiltinData d
 
-  expectedHash = findDatumHash (Datum $ toBuiltinData d) txInfo
+  expectedHash = findDatumHash (Datum expectedData) txInfo
 
   ownDatum =
     case getContinuingOutputs ctx of
@@ -65,11 +64,14 @@ checkGameOutput ctx d =
   ScriptContext{scriptContextTxInfo = txInfo} = ctx
 {-# INLINEABLE checkGameOutput #-}
 
+checkGameEnd :: ChessGame -> ScriptContext -> Bool
+checkGameEnd _ _ = True
+
 compiledValidator :: CompiledCode ValidatorType
 compiledValidator =
   $$(PlutusTx.compile [||wrap validator||])
  where
-  wrap = wrapValidator @DatumType @RedeemerType
+  wrap = wrapValidator @ChessGame @ChessPlay
 
 validatorScript :: SerialisedScript
 validatorScript = serialiseCompiledCode compiledValidator

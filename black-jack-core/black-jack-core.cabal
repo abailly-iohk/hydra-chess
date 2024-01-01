@@ -38,6 +38,7 @@ library
     Chess.Contract
     Chess.ELO
     Chess.Game
+    Chess.GameState
     Chess.Parse
     Chess.Plutus
     Chess.Render

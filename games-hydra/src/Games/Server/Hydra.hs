@@ -19,9 +19,10 @@
 
 module Games.Server.Hydra where
 
-import Chess.Game (Check (..), Move, Side (..))
+import Chess.Game (Check (..), Side (..))
 import qualified Chess.Game as Chess
-import Chess.Plutus (fromJSONDatum)
+import Chess.GameState (ChessGame (..), ChessPlay (..))
+import Chess.Plutus (fromJSONDatum, pubKeyHashFromHex)
 import qualified Chess.Token as Token
 import Control.Concurrent.Class.MonadSTM (
   TVar,
@@ -63,7 +64,7 @@ import Data.Foldable (toList)
 import Data.IORef (atomicWriteIORef, newIORef, readIORef)
 import Data.List (intersperse)
 import qualified Data.List as List
-import Data.Scientific (floatingOrInteger, toBoundedInteger)
+import Data.Scientific (floatingOrInteger)
 import Data.Sequence (Seq ((:|>)), (|>))
 import qualified Data.Sequence as Seq
 import Data.String (IsString (..))
@@ -225,18 +226,18 @@ withHydraServer network me host k = do
     -- extract game state from inline datum encoded as Data with schema
     case extractGameState gameScriptAddress utxo of
       Left err -> pure ()
-      Right game ->
+      Right st@ChessGame{game} ->
         if
             | game == Chess.initialGame ->
-                atomically $ modifyTVar' events (|> GameStarted headId game [])
+                atomically $ modifyTVar' events (|> GameStarted headId st [])
             | Chess.checkState game == CheckMate White -> do
-                atomically $ modifyTVar' events (|> GameEnded headId game BlackWins)
+                atomically $ modifyTVar' events (|> GameEnded headId st BlackWins)
                 endGame events cnx headId utxo
             | Chess.checkState game == CheckMate Black -> do
-                atomically $ modifyTVar' events (|> GameEnded headId game WhiteWins)
+                atomically $ modifyTVar' events (|> GameEnded headId st WhiteWins)
                 endGame events cnx headId utxo
             | otherwise ->
-                atomically $ modifyTVar' events (|> GameChanged headId game [])
+                atomically $ modifyTVar' events (|> GameChanged headId st [])
 
   splitGameUTxO :: Connection -> Value -> IO ()
   splitGameUTxO cnx utxo = do
@@ -441,8 +442,14 @@ withHydraServer network me host k = do
     gameScriptFile <- findGameScriptFile network
     gameScriptAddress <- getScriptAddress gameScriptFile network
 
+    let initGame =
+          ChessGame
+            { players = fmap (\(_, pkh, _) -> pubKeyHashFromHex (pack pkh)) gameTokens
+            , game = Chess.initialGame
+            }
+
     -- construct chess game inline datum
-    gameDatumFile <- findDatumFile "game-state" Chess.initialGame network
+    gameDatumFile <- findDatumFile "game-state" initGame network
 
     protocolParametersFile <- findProtocolParametersFile network
     txRawFile <- mkTempFile
@@ -467,7 +474,8 @@ withHydraServer network me host k = do
     submitNewTx connection args skFile
 
   playGame :: Connection -> TVar IO (Seq (FromChain Chess Hydra)) -> HeadId -> GamePlay Chess -> IO ()
-  playGame cnx events _headId (GamePlay move) =
+  playGame cnx events _headId (GamePlay End) = pure ()
+  playGame cnx events _headId (GamePlay play@(ChessMove move)) =
     try go >>= \case
       Left (InvalidMove illegal) -> putStrLn $ "Invalid move:  " <> show illegal
       Left other -> putStrLn $ "Error looking for data:  " <> show other
@@ -491,7 +499,7 @@ withHydraServer network me host k = do
       let collateral = findCollateral gameAddress utxo
 
       -- find current game state
-      gameState <-
+      gameState@ChessGame{game, players} <-
         case extractGameState gameScriptAddress utxo of
           Left err ->
             throwIO $ UTxOError $ "Cannot extract game state from: " <> err
@@ -503,11 +511,13 @@ withHydraServer network me host k = do
         Right v -> pure v
 
       -- compute next game state
-      nextState <- either (throwIO . InvalidMove) pure $ Chess.apply move gameState
+      nextGame <- either (throwIO . InvalidMove) pure $ Chess.apply move game
+
+      let nextState = ChessGame{players, game = nextGame}
 
       -- construct chess game inline datum
       gameDatumFile <- findDatumFile "game-state" nextState network
-      moveRedeemerFile <- findDatumFile "chess-move" move network
+      moveRedeemerFile <- findDatumFile "chess-move" play network
 
       -- define transaction arguments
       let args =
@@ -537,7 +547,7 @@ withHydraServer network me host k = do
   endGame :: TVar IO (Seq (FromChain Chess Hydra)) -> Connection -> HeadId -> Value -> IO ()
   endGame events cnx headId utxo =
     try go >>= \case
-      Left (InvalidGameTokens own their) -> putStrLn $ "Invalid game tokens, own: " <> show own <>", their: " <> show their
+      Left (InvalidGameTokens own their) -> putStrLn $ "Invalid game tokens, own: " <> show own <> ", their: " <> show their
       Left other -> putStrLn $ "Error building end game tx:  " <> show other
       Right{} -> pure ()
    where
@@ -573,70 +583,71 @@ withHydraServer network me host k = do
           throwIO $ UTxOError $ "Cannot extract game value: " <> err
         Right v -> pure v
 
-      let (own, their) = List.partition (\ (_, pk, _) -> pk == pkh) tokens
+      let (own, their) = List.partition (\(_, pk, _) -> pk == pkh) tokens
 
       when (length own /= 1) $ throwIO $ InvalidGameTokens own their
 
       args <-
         if null their
-        then do
-          -- construct chess game inline datum
-          endGameRedeemerFile <- findDatumFile "endgame" End network
+          then do
+            -- construct chess game inline datum
+            endGameRedeemerFile <-
+              -- TODO: find correct side to end
+              findDatumFile "endgame" End network
 
-          -- define transaction arguments
-          pure $
-                [ "--tx-in"
-                , collateral
-                , "--tx-in-collateral"
-                , collateral
-                , "--tx-in"
-                , gameStateTxIn
-                , "--tx-in-script-file"
-                , gameScriptFile
-                , "--tx-in-inline-datum-present"
-                , "--tx-in-redeemer-file"
-                , endGameRedeemerFile
-                , "--tx-in-execution-units"
-                , "(100000000000,1000000000)"
-                , "--tx-out"
-                , eloScriptAddress <> " + " <> stringifyValue (adas, own)
-                , "--tx-out-inline-datum-file"
-                , "1000" -- FIXME: should be some change in ELO rating
-                , "--tx-out"
-                , gameAddress <> "+ 8000000 lovelace" -- FIXME shoudl be value in collateral
-                ]
+            -- define transaction arguments
+            pure $
+              [ "--tx-in"
+              , collateral
+              , "--tx-in-collateral"
+              , collateral
+              , "--tx-in"
+              , gameStateTxIn
+              , "--tx-in-script-file"
+              , gameScriptFile
+              , "--tx-in-inline-datum-present"
+              , "--tx-in-redeemer-file"
+              , endGameRedeemerFile
+              , "--tx-in-execution-units"
+              , "(100000000000,1000000000)"
+              , "--tx-out"
+              , eloScriptAddress <> " + " <> stringifyValue (adas, own)
+              , "--tx-out-inline-datum-file"
+              , "1000" -- FIXME: should be some change in ELO rating
+              , "--tx-out"
+              , gameAddress <> "+ 8000000 lovelace" -- FIXME shoudl be value in collateral
+              ]
+          else do
+            -- construct chess game inline datum
+            gameDatumFile <- findDatumFile "game-state" gameState network
+            endGameRedeemerFile <- findDatumFile "endgame" End network
 
-        else do
-          -- construct chess game inline datum
-          gameDatumFile <- findDatumFile "game-state" gameState network
-          endGameRedeemerFile <- findDatumFile "endgame" End network
-
-          -- define transaction arguments
-          pure $
-                [ "--tx-in"
-                , collateral
-                , "--tx-in-collateral"
-                , collateral
-                , "--tx-in"
-                , gameStateTxIn
-                , "--tx-in-script-file"
-                , gameScriptFile
-                , "--tx-in-inline-datum-present"
-                , "--tx-in-redeemer-file"
-                , endGameRedeemerFile
-                , "--tx-in-execution-units"
-                , "(100000000000,1000000000)"
-                , "--tx-out"
-                , gameScriptAddress <> " + " <> stringifyValue (adas - 2000000, their)
-                , "--tx-out-inline-datum-file"
-                , gameDatumFile
-                , "--tx-out"
-                , eloScriptAddress <> " + " <> stringifyValue (20000000, own)
-                , "--tx-out-inline-datum-file"
-                , "1000" -- FIXME: should be some change in ELO rating
-                , "--tx-out"
-                , gameAddress <> "+ 8000000 lovelace" -- FIXME shoudl be value in collateral
-                ]
+            -- define transaction arguments
+            pure $
+              [ "--tx-in"
+              , collateral
+              , "--tx-in-collateral"
+              , collateral
+              , "--tx-in"
+              , gameStateTxIn
+              , "--tx-in-script-file"
+              , gameScriptFile
+              , "--tx-in-inline-datum-present"
+              , "--tx-in-redeemer-file"
+              , endGameRedeemerFile
+              , "--tx-in-execution-units"
+              , "(100000000000,1000000000)"
+              , "--tx-out"
+              , gameScriptAddress <> " + " <> stringifyValue (adas - 2000000, their)
+              , "--tx-out-inline-datum-file"
+              , gameDatumFile
+              , "--tx-out"
+              , eloScriptAddress <> " + " <> stringifyValue (20000000, own)
+              , "--tx-out-inline-datum-file"
+              , "1000" -- FIXME: should be some change in ELO rating
+              , "--tx-out"
+              , gameAddress <> "+ 8000000 lovelace" -- FIXME shoudl be value in collateral
+              ]
 
       submitNewTx cnx args skFile
 
@@ -925,7 +936,7 @@ hasValueFor pid pkh kv =
         _ -> False
     _ -> False
 
-extractGameState :: String -> Value -> Either Text Chess.Game
+extractGameState :: String -> Value -> Either Text ChessGame
 extractGameState address utxo =
   case utxo of
     Object kv ->
@@ -981,7 +992,7 @@ stringifyValue (adas, tokens) =
  where
   stringify (pid, tok, val) = show val <> " " <> pid <.> tok
 
-findGameState :: Value -> Either Text Chess.Game
+findGameState :: Value -> Either Text ChessGame
 findGameState txout =
   extractInlineDatum txout >>= fromJSONDatum
 

@@ -4,6 +4,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_GHC -fno-specialize -fno-strictness -fno-spec-constr -fdefer-type-errors #-}
@@ -13,7 +14,7 @@ module Chess.Game where
 import PlutusTx.Prelude
 
 import Control.Monad (guard)
-import Data.Aeson (FromJSON, ToJSON)
+import Data.Aeson (FromJSON (..), ToJSON (..))
 import GHC.Generics (Generic)
 import qualified PlutusTx
 import qualified Prelude as Haskell

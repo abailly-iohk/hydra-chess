@@ -106,6 +106,10 @@ validatorToBytes =
 pubKeyHash :: Hash h keyRole -> PubKeyHash
 pubKeyHash h = PubKeyHash (toBuiltin @ByteString $ hashToBytes h)
 
+pubKeyHashToHex :: PubKeyHash -> Text
+pubKeyHashToHex (PubKeyHash bibs) =
+  Text.decodeUtf8 $ Hex.encode $ fromBuiltin bibs
+
 pubKeyHashFromHex :: Text -> PubKeyHash
 pubKeyHashFromHex hex = PubKeyHash (toBuiltin bytes)
  where

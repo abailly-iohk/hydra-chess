@@ -9,13 +9,13 @@
 
 module Game.Chess where
 
-import Chess.Game (Move)
 import qualified Chess.Game as Chess
 import Data.Aeson (FromJSON (..), ToJSON (..))
 import GHC.Generics (Generic)
 import Game.Server (Game (..))
 import Chess.Parse (parseMove)
 import Data.Text (unpack)
+import Chess.GameState(ChessGame(..), ChessPlay(..))
 
 type Chess = Chess.Game
 
@@ -27,12 +27,12 @@ data ChessEnd
   deriving anyclass (ToJSON, FromJSON)
 
 instance Game Chess where
-  type GameState Chess = Chess.Game
-  newtype GamePlay Chess = GamePlay { unMove :: Move }
+  type GameState Chess = ChessGame
+  newtype GamePlay Chess = GamePlay { unMove :: ChessPlay }
   type GameEnd Chess = ChessEnd
-  initialGame = const Chess.initialGame
+  initialGame = const $ ChessGame { game = Chess.initialGame, players = []}
   readPlay =
-    either (const Nothing) (Just . GamePlay) . parseMove . unpack
+    either (const Nothing) (Just . GamePlay . ChessMove) . parseMove . unpack
 
 
 instance Show (GamePlay Chess) where
