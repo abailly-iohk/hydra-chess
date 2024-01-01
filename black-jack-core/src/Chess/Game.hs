@@ -383,9 +383,9 @@ path (Pos r c) (Pos r' c') =
           | vert == 0 && horiz > 0 ->
               [Pos r x | x <- enumFromTo (c + 1) c']
           | vert == 0 && horiz < 0 ->
-              [Pos r x | x <- enumFromTo c' (c - 1)]
+              [Pos r x | x <- reverse $ enumFromTo c' (c - 1)]
           | horiz == 0 && vert < 0 ->
-              [Pos x c | x <- enumFromTo r' (r - 1)]
+              [Pos x c | x <- reverse $ enumFromTo r' (r - 1)]
           | horiz == 0 && vert > 0 ->
               [Pos x c | x <- enumFromTo (r + 1) r']
           | otherwise ->

@@ -284,9 +284,12 @@ prop_rook_cannot_move_if_blocked =
               side
               [ PieceOnBoard Rook side pos
               , PieceOnBoard Pawn side pos1
-              , PieceOnBoard Pawn (flipSide side) pos2
+              , PieceOnBoard Rook (flipSide side) pos2
               ]
-       in isBlocked game (Move pos pos2)
+       in conjoin
+            [ isBlocked game (Move pos pos2)
+            , isBlocked (game{curSide = flipSide side}) (Move pos2 pos)
+            ]
  where
   threePiecesAligned =
     elements
@@ -518,8 +521,8 @@ isIllegal game move =
   case apply move game of
     Right game' ->
       property False
-        & counterexample ("after: " <> unpack (render game'))
-        & counterexample ("before: " <> unpack (render game))
+        & counterexample ("after:\n" <> unpack (render game'))
+        & counterexample ("before:\n" <> unpack (render game))
         & counterexample ("move: " <> show move)
         & counterexample ("path: " <> show (path from to))
     Left err ->
@@ -534,8 +537,8 @@ isBlocked game move =
   case apply move game of
     Right game' ->
       property False
-        & counterexample ("after: " <> unpack (render game'))
-        & counterexample ("before: " <> unpack (render game))
+        & counterexample ("after:\n" <> unpack (render game'))
+        & counterexample ("before:\n" <> unpack (render game))
         & counterexample ("move: " <> show move)
     Left err ->
       err
