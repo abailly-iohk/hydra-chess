@@ -64,14 +64,23 @@ To this aim, the executable currently:
 * Downloads executables and configuration files from reference sources according to version (when they are available)
 * Uses XDG to manage installation directories, configurations, and data (eg. cardano-node database and hydra-node's state)
 * Generates needed keys when they do not exist, possibly requesting funding from the user who can then use a standard wallet to send those funds to the hydra-node
-* Wraps-up and control both executables, trying as much as possible to ensure
+* Wraps-up and control both executables, trying as much as possible to ensure they stay in sync
 
+## The good
+
+* The WS API is easy to work with and leads to straightforward reactive
 
 ## The ugly
 
+* The Head commit process and interfaces are somewhat awkward to work with: The JSON schema is confusing, with various required/optional fields
+* The use of websocket protocol to retrieve state from the hydra-node is awkward as one needs to "manually"synchronize on the responses
+  * This should be addressed by [ADR-25](https://hydra.family/head-protocol/adr/25)
 * The JSON format for UTxO is somewhat painful to work with because the keys are arbitrary strings representing various things: TxIns, policy ids, token names. It would be easier to have more classical data structure with lists of objects with standard field names
 * The cardano-cli's documentation is not so great:
   * The inline documentation is barely usable, useful mostly to know the name of the flags to use, but is lacking a lot of details like for example the fact that inline datum provided on the command-line is supported only for builtin data types and not arbitrary ones
   * Online available documentation is very often inconsistent, lacunary, outdated, or a combination of those. The most useful pieces of documentation relative to plutus tokens minting and scripts inputs and outputs were hard to discover: The [Plutus Pioneer Program](https://github.com/input-output-hk/plutus-pioneer-program) covers a lot of ground but is often focused on using the emulator and not so much on the details of usign teh cardano-cli ; the [Cardano-node Wiki](https://github.com/input-output-hk/cardano-node-wiki/tree/main/docs) is quite comprehensive and provides a lot of examples but is hard to find and quite unstructured ; the [Official cardano docs](https://docs.cardano.org/introduction/) points to the aforementioned documents
-  * :light_bulb: Having [man pages](https://en.wikipedia.org/wiki/Man_page) or some equivalent inline help system, with details on the various commands, and examples, would be tremendously useful and greatly enhance the developer experience. And it would not be hard to have both textual documentation suitable for use in a console and HTML formatted pages centralised online
-* The `transaction build` and `transaction build-raw` commands provide 10s of flags to construct the various parts of a transaction which is extremely unwieldy and error prone.
+  * :bulb: Having [man pages](https://en.wikipedia.org/wiki/Man_page) or some equivalent inline help system, with details on the various commands, and examples, would be tremendously useful and greatly enhance the developer experience. And it would not be hard to have both textual documentation suitable for use in a console and HTML formatted pages centralised online
+* The `transaction build` and `transaction build-raw` commands provide 10s of flags to construct the various parts of a transaction which is extremely unwieldy and error prone
+  * :bulb: It would be much easier for clients to provide the various parts using a JSON or YAML file or input
+* The output of `query utxo` or `transaction view` is not easily consumed (I had to implement a parser to extract the various parts) and therefore cannot be used to pipe into other commands, eg. `transaction build`
+  * :bulb: comm

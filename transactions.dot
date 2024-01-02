@@ -1,0 +1,91 @@
+digraph chess_transactions {
+    fontname="Helvetica,Arial,sans-serif"
+    node [fontname="Helvetica,Arial,sans-serif"]
+    edge [fontname="Helvetica,Arial,sans-serif"]
+    graph [rankdir = "TD"];
+
+    // split transaction for Alice
+    "game-token-a" [ label = "{game-address-A | 10 ADA + 1 pid.pkhA | }" , shape = "record" ];
+    "split-tx-a" [ label = "{split-tx | σ(A)}" , shape = "Mrecord" ];
+    "collateral-a" [ label = "{game-address-A | 8 ADA | }", shape = "record" ];
+    "game-token-1-a" [ label = "{elo-script(pkhA) | 2 ADA + 1 pid.pkhA | 1000 }", shape = "record" ];
+
+    "game-token-a" -> "split-tx-a";
+
+    "split-tx-a" -> "collateral-a";
+    "split-tx-a" -> "game-token-1-a";
+
+    // split transaction for Bob
+    "game-token-b" [ label = "{game-address-B | 10 ADA + 1 pid.pkhB | }" , shape = "record" ];
+    "split-tx-b" [ label = "{split-tx | σ(B)}" , shape = "Mrecord" ];
+    "collateral-b" [ label = "{game-address-B | 8 ADA | }", shape = "record" ];
+    "game-token-1-b" [ label = "{elo-script(pkhA) | 2 ADA + 1 pid.pkhB | 1000 }", shape = "record" ];
+
+    "game-token-b" -> "split-tx-b";
+
+    "split-tx-b" -> "collateral-b";
+    "split-tx-b" -> "game-token-1-b";
+
+    // new game by Alice
+    "new-game" [ label = "{new-game | σ(A)}" , shape = "Mrecord" ];
+    "collateral-a-1" [ label = "{game-address-A | 8 ADA | }", shape = "record" ];
+    "game-state-1" [ label = "{game-script | 4 ADA + 1 pid.pkhA + 1 pid.pkhB | { initial | }}", shape = "record" ];
+
+    "collateral-a" -> "new-game";
+    "game-token-1-a" -> "new-game" [ taillabel = "()" ];
+    "game-token-1-b" -> "new-game" [ taillabel = "()" ];
+
+    "new-game" -> "collateral-a-1";
+    "new-game" -> "game-state-1";
+
+    // first play by White (Alice)
+    "play-1" [ label = "{play | σ(A)}" , shape = "Mrecord" ];
+    "collateral-a-2" [ label = "{game-address-A | 8 ADA | }", shape = "record" ];
+    "game-state-2" [ label = "{game-script | 4 ADA + 1 pid.pkhA + 1 pid.pkhB | { initial | e2-e4 } }", shape = "record" ];
+
+    "collateral-a-1" -> "play-1";
+    "game-state-1" -> "play-1" [ taillabel = "e2-e4" ];
+    "play-1" -> "game-state-2";
+    "play-1" -> "collateral-a-2";
+
+    // second play by Black (Bob)
+    "play-2" [ label = "{play | σ(B)}" , shape = "Mrecord" ];
+    "collateral-b-2" [ label = "{game-address-B | 8 ADA | }", shape = "record" ];
+    "game-state-3" [ label = "{game-script | 4 ADA + 1 pid.pkhA + 1 pid.pkhB | { initial | e2-e4. e7-e5 } }", shape = "record" ];
+
+    "collateral-b" -> "play-2";
+    "game-state-2" -> "play-2" [ taillabel = "e7-e5" ];
+    "play-2" -> "game-state-3";
+    "play-2" -> "collateral-b-2";
+
+    // more plays....
+    "game-state-n" [ label = "{game-script | 4 ADA + 1 pid.pkhA + 1 pid.pkhB | { check-mate | e2-e4. e7-e5. ... } }", shape = "record" ];
+
+    "game-state-3" -> "game-state-n" [ style = "dotted" ];
+
+    // end game Alice
+    "collateral-a-n" [ label = "{game-address-A | 8 ADA | }", shape = "record" ];
+    "game-token-a-n" [ label = "{elo-script(pkhA) | 2 ADA + 1 pid.pkhA | 1020 }", shape = "record" ];
+    "game-state-n+1" [ label = "{game-script | 2 ADA + 1 pid.pkhB | { check-mate | e2-e4. e7-e5. ... } }", shape = "record" ];
+    "collateral-a-n+1" [ label = "{game-address-A | 8 ADA | }", shape = "record" ];
+
+    "end-game-a" [ label = "{end-game | σ(A)}" , shape = "Mrecord" ];
+
+    "game-state-n" -> "end-game-a"  [ taillabel = "End" ];
+    "collateral-a-n" -> "end-game-a";
+    "end-game-a" -> "collateral-a-n+1";
+    "end-game-a" -> "game-token-a-n";
+    "end-game-a" -> "game-state-n+1";
+
+    // end game Bob
+    "collateral-b-n" [ label = "{game-address-B | 8 ADA | }", shape = "record" ];
+    "game-token-b-n" [ label = "{elo-script(pkhB) | 2 ADA + 1 pid.pkhB | 980 }", shape = "record" ];
+    "collateral-b-n+1" [ label = "{game-address-B | 8 ADA | }", shape = "record" ];
+
+    "end-game-b" [ label = "{end-game | σ(B)}" , shape = "Mrecord" ];
+
+    "game-state-n+1" -> "end-game-b"  [ taillabel = "End" ];
+    "collateral-b-n" -> "end-game-b";
+    "end-game-b" -> "collateral-b-n+1";
+    "end-game-b" -> "game-token-b-n";
+}
