@@ -11,6 +11,7 @@ import Data.Maybe (catMaybes)
 import Data.Text (unpack)
 import Game.Chess (Chess, unMove)
 import Game.Server (FromChain (..), IsChain)
+import Game.Server (Content(..))
 
 notifyChessEvent :: (IsChain c) => FromChain Chess c -> IO ()
 notifyChessEvent = \case
@@ -22,6 +23,7 @@ notifyChessEvent = \case
   GameChanged{game = ChessGame{game}, plays} -> do
     putStrLn (unpack $ render game)
     putStrLn (unlines $ unpack . render <$> (catMaybes $ fmap selectMoves $ unMove <$> plays))
+  OtherMessage JsonContent{} -> pure ()
   other -> print other
 
 selectMoves :: ChessPlay -> Maybe Move

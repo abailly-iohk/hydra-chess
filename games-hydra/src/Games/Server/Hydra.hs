@@ -32,10 +32,11 @@ import Control.Concurrent.Class.MonadSTM (
   readTVar,
   readTVarIO,
   retry,
+  writeTVar,
  )
 import Control.Exception (Exception, IOException)
-import Control.Monad (forever, when)
-import Control.Monad.Class.MonadAsync (withAsync)
+import Control.Monad (forever, unless, when, void)
+import Control.Monad.Class.MonadAsync (withAsync, link, async)
 import Control.Monad.Class.MonadThrow (MonadCatch (catch), throwIO, try)
 import Control.Monad.Class.MonadTime (UTCTime)
 import Control.Monad.Class.MonadTimer (threadDelay, timeout)
@@ -104,7 +105,7 @@ import Games.Run.Hydra (
 import Network.HTTP.Client (responseBody, responseStatus)
 import Network.HTTP.Simple (httpLBS, parseRequest, setRequestBodyJSON)
 import Network.HTTP.Types (statusCode)
-import Network.WebSockets (Connection, runClient)
+import Network.WebSockets (Connection, runClient, ConnectionOptions (..), defaultConnectionOptions)
 import qualified Network.WebSockets as WS
 import Numeric.Natural (Natural)
 import System.FilePath ((<.>))
@@ -112,6 +113,7 @@ import System.IO (hClose)
 import System.Posix (mkstemp)
 import System.Process (callProcess)
 import Prelude hiding (seq)
+import Debug.Trace (trace)
 
 -- | The type of backend provide by Hydra
 data Hydra
@@ -159,8 +161,9 @@ data InvalidMove
 withHydraServer :: Network -> HydraParty -> Host -> (Server Chess.Game Hydra IO -> IO ()) -> IO ()
 withHydraServer network me host k = do
   events <- newTVarIO mempty
+  replaying <- newTVarIO True
   withClient host $ \cnx ->
-    withAsync (pullEventsFromWs events cnx) $ \_ ->
+    withAsync (pullEventsFromWs events cnx replaying) $ \ thread ->
       let server =
             Server
               { initHead = sendInit cnx events
@@ -170,12 +173,12 @@ withHydraServer network me host k = do
               , newGame = newGame events cnx
               , closeHead = sendClose cnx events
               }
-       in k server
+       in link thread >> k server
  where
-  pullEventsFromWs :: TVar IO (Seq (FromChain Chess Hydra)) -> Connection -> IO ()
-  pullEventsFromWs events cnx =
+  pullEventsFromWs :: TVar IO (Seq (FromChain Chess Hydra)) -> Connection -> TVar IO Bool -> IO ()
+  pullEventsFromWs events cnx replaying = do
     forever $
-      WS.receiveData cnx >>= \dat ->
+      WS.receiveData cnx >>= \dat -> do
         case eitherDecode' dat of
           Left err ->
             atomically $ modifyTVar' events (|> OtherMessage (Content $ pack err))
@@ -189,7 +192,8 @@ withHydraServer network me host k = do
             Committed headId party _utxo ->
               atomically (modifyTVar' events (|> FundCommitted headId party 0))
             HeadIsOpen headId utxo -> do
-              splitGameUTxO cnx utxo
+              isReplaying <- readTVarIO replaying
+              unless isReplaying $ splitGameUTxO cnx utxo
               atomically (modifyTVar' events (|> HeadOpened headId))
             CommandFailed{} ->
               putStrLn "Command failed"
@@ -205,11 +209,13 @@ withHydraServer network me host k = do
                                 encode postTxError
                         )
                   )
-            Greetings{} -> pure ()
+            Greetings{} ->
+              atomically $ writeTVar replaying False
             HeadIsClosed{} -> pure ()
             ReadyToFanout headId ->
               atomically (modifyTVar' events (|> HeadClosing headId))
-            GetUTxOResponse{utxo} ->
+            GetUTxOResponse{utxo} -> do
+              putStrLn "UtxO response"
               atomically (modifyTVar' events (|> OtherMessage (JsonContent utxo)))
             RolledBack{} -> pure ()
             TxValid{} -> pure ()
@@ -232,10 +238,13 @@ withHydraServer network me host k = do
                 atomically $ modifyTVar' events (|> GameStarted headId st [])
             | Chess.checkState game == CheckMate White -> do
                 atomically $ modifyTVar' events (|> GameEnded headId st BlackWins)
-                endGame events cnx headId utxo
+                -- FIXME this is wrong and a consequence of the incorrect structure of the
+                -- application. The thread receiving messages should transform and transfer them
+                -- as fast as possible but not do complicated tx handling
+                void $ async $ endGame events cnx headId utxo
             | Chess.checkState game == CheckMate Black -> do
                 atomically $ modifyTVar' events (|> GameEnded headId st WhiteWins)
-                endGame events cnx headId utxo
+                void $ async $ endGame events cnx headId utxo
             | otherwise ->
                 atomically $ modifyTVar' events (|> GameChanged headId st [])
 
@@ -352,7 +361,9 @@ withHydraServer network me host k = do
 
       -- FIXME: Need to find the correct game token otherwise splitting won't work
       when (null gameToken) $
-        throwIO $ CommitError $ "Failed to retrieve game token to commit from:\n" <> unlines gameUTxO
+        throwIO $
+          CommitError $
+            "Failed to retrieve game token to commit from:\n" <> unlines gameUTxO
 
       let utxo = mkFullUTxO (Text.pack gameAddress) Nothing (head gameToken)
 
@@ -554,12 +565,9 @@ withHydraServer network me host k = do
       Right{} -> pure ()
    where
     go = do
-      putStrLn $ "Ending Game " <> show headId
       -- retrieve needed tools and keys
-      cardanoCliExe <- findCardanoCliExecutable
       (skFile, vkFile) <- findKeys Game network
       gameAddress <- getVerificationKeyAddress vkFile network
-      socketPath <- findSocketPath network
 
       -- find chess game script & address
       gameScriptFile <- findGameScriptFile network
@@ -588,6 +596,8 @@ withHydraServer network me host k = do
 
       let (own, their) = List.partition (\(_, pk, _) -> pk == pkh) tokens
 
+      putStrLn $ "Tokens:  " <> show tokens <> ", own: " <> show own <> ", their: " <> show their
+
       when (length own /= 1) $ throwIO $ InvalidGameTokens own their
 
       args <-
@@ -613,7 +623,7 @@ withHydraServer network me host k = do
               , "(100000000000,1000000000)"
               , "--tx-out"
               , eloScriptAddress <> " + " <> stringifyValue (adas, own)
-              , "--tx-out-inline-datum-file"
+              , "--tx-out-inline-datum-value"
               , "1000" -- FIXME: should be some change in ELO rating
               , "--tx-out"
               , gameAddress <> "+ 8000000 lovelace" -- FIXME shoudl be value in collateral
@@ -714,15 +724,20 @@ withHydraServer network me host k = do
 
   -- Collect only TxIn
   collectUTxO :: TVar IO (Seq (FromChain g Hydra)) -> Connection -> IO Value
-  collectUTxO events cnx = do
-    WS.sendTextData cnx (encode GetUTxO)
-    timeout
-      600_000_000
-      ( waitFor events $ \case
-          OtherMessage (JsonContent txt) -> Just txt
-          _ -> Nothing
-      )
-      >>= maybe (throwIO $ ServerException "Timeout (10m) waiting for GetUTxO") pure
+  collectUTxO events cnx = go 10
+   where
+    go :: Int -> IO Value
+    go 0 = throwIO $ ServerException "Timeout (10s) waiting for GetUTxO"
+    go n = do
+      WS.sendTextData cnx (encode GetUTxO)
+      putStrLn "sending GetUTxO"
+      timeout
+        10_000_000
+        ( waitFor events $ \case
+            OtherMessage (JsonContent txt) -> Just txt
+            _ -> Nothing
+        )
+        >>= maybe (go (n - 1)) pure
 
 data FullUTxO = FullUTxO
   { txIn :: Text
@@ -780,7 +795,7 @@ mkFullUTxO address scriptInfo = \case
       }
 
 waitFor :: TVar IO (Seq (FromChain g Hydra)) -> (FromChain g Hydra -> Maybe a) -> IO a
-waitFor events predicate =
+waitFor events predicate = do
   atomically $ do
     readTVar events >>= \case
       (_ :|> event) -> maybe retry pure (predicate event)
@@ -880,10 +895,12 @@ withClient Host{host, port} action = do
           tryConnect connectedOnce
         True -> throwIO e
 
-  doConnect connectedOnce = runClient (unpack host) port "/" $ \connection -> do
+  wsOptions = defaultConnectionOptions
+
+  doConnect connectedOnce = WS.runClientWith (unpack host) port "/" wsOptions mempty $ \connection -> do
     atomicWriteIORef connectedOnce True
     putStrLn $ "Connected to " <> unpack host <> ":" <> show port
-    res <- action connection
+    res <- WS.withPingThread connection 10 (pure ()) $ action connection
     WS.sendClose connection ("Bye" :: Text)
     pure res
 
