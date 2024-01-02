@@ -382,8 +382,8 @@ checkFundsAreAvailable network signingKeyFile verificationKeyFile = do
   output <- getUTxOFor network ownAddress
   let maxLovelaceAvailable =
         if null output
-        then 0
-        else maximum $ fmap totalLovelace $ rights $ fmap (parseQueryUTxO . Text.pack) output
+          then 0
+          else maximum $ fmap totalLovelace $ rights $ fmap (parseQueryUTxO . Text.pack) output
   when (maxLovelaceAvailable < 10_000_000) $ do
     putStrLn $
       "Hydra needs some funds to fuel the process, please ensure there's a UTxO with at least 10 ADAs at " <> ownAddress
@@ -509,9 +509,10 @@ mkZeroFeeParams = \case
   Object obj ->
     Object $
       insert "utxoCostPerByte" zero $
-       insert "txFeeFixed" zero $
-        insert "txFeePerByte" zero $
-          updateExecutionPrices obj
+        insert "txFeeFixed" zero $
+          insert "txFeePerByte" zero $
+            updateExecutionPrices $
+              updateMaxTxExecutionUnits obj
   other -> other
  where
   zero = Number 0
@@ -525,11 +526,28 @@ mkZeroFeeParams = \case
           ( Object $
               insert "pricesMemory" zero $
                 insert "pricesSteps" zero $
-                insert "priceMemory" zero $
-                insert "priceSteps" zero obj
+                  insert "priceMemory" zero $
+                    insert "priceSteps" zero obj
           )
           m
       _ -> m
+
+  updateMaxTxExecutionUnits :: KeyMap Value -> KeyMap Value
+  updateMaxTxExecutionUnits m =
+    case m !? "maxTxExecutionUnits" of
+      Just (Object obj) ->
+        insert
+          "maxTxExecutionUnits"
+          ( Object $
+              insert "memory" ten_billions $
+                insert "steps" one_trillion obj
+          )
+          m
+      _ -> m
+
+  ten_billions = Number 10_000_000_000
+
+  one_trillion = Number 1_000_000_000_000
 
 findHydraExecutable :: IO FilePath
 findHydraExecutable = do

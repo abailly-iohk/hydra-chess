@@ -117,4 +117,5 @@ main = do
     HydraOptions{} ->
       undefined -- withHydraServer hydraServer $ flip (runClient @BlackJack) mkImpureIO
     MockOptions{pid, host} ->
-      withMockServer (Party host pid) $ flip (runClient @BlackJack) (mkImpureIO inputParser)
+      withMockServer (Party host pid) $ \ server ->
+      runClient @BlackJack server (const $ pure ()) (mkImpureIO inputParser)
