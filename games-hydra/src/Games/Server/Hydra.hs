@@ -35,8 +35,8 @@ import Control.Concurrent.Class.MonadSTM (
   writeTVar,
  )
 import Control.Exception (Exception, IOException)
-import Control.Monad (forever, unless, when, void)
-import Control.Monad.Class.MonadAsync (withAsync, link, async)
+import Control.Monad (forever, unless, void, when)
+import Control.Monad.Class.MonadAsync (async, link, withAsync)
 import Control.Monad.Class.MonadThrow (MonadCatch (catch), throwIO, try)
 import Control.Monad.Class.MonadTime (UTCTime)
 import Control.Monad.Class.MonadTimer (threadDelay, timeout)
@@ -105,7 +105,7 @@ import Games.Run.Hydra (
 import Network.HTTP.Client (responseBody, responseStatus)
 import Network.HTTP.Simple (httpLBS, parseRequest, setRequestBodyJSON)
 import Network.HTTP.Types (statusCode)
-import Network.WebSockets (Connection, runClient, ConnectionOptions (..), defaultConnectionOptions)
+import Network.WebSockets (Connection, defaultConnectionOptions)
 import qualified Network.WebSockets as WS
 import Numeric.Natural (Natural)
 import System.FilePath ((<.>))
@@ -113,7 +113,6 @@ import System.IO (hClose)
 import System.Posix (mkstemp)
 import System.Process (callProcess)
 import Prelude hiding (seq)
-import Debug.Trace (trace)
 
 -- | The type of backend provide by Hydra
 data Hydra
@@ -163,7 +162,7 @@ withHydraServer network me host k = do
   events <- newTVarIO mempty
   replaying <- newTVarIO True
   withClient host $ \cnx ->
-    withAsync (pullEventsFromWs events cnx replaying) $ \ thread ->
+    withAsync (pullEventsFromWs events cnx replaying) $ \thread ->
       let server =
             Server
               { initHead = sendInit cnx events
@@ -428,6 +427,7 @@ withHydraServer network me host k = do
   -- \| the new game transaction
   --
   -- It is made of:
+  --
   -- \* each game token as input
   -- \* the current player's "deposit" as collateral
   -- \* a single game script output with the initial game
@@ -703,6 +703,7 @@ withHydraServer network me host k = do
 
   sendClose :: Connection -> TVar IO (Seq (FromChain g Hydra)) -> HeadId -> IO ()
   sendClose cnx events _unusedHeadId = do
+    -- TODO: need to handle 'join' of collateral and game token
     WS.sendTextData cnx (encode Close)
     timeout
       600_000_000
