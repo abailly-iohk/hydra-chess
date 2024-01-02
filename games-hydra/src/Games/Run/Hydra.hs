@@ -380,7 +380,10 @@ checkFundsAreAvailable :: Network -> FilePath -> FilePath -> IO ()
 checkFundsAreAvailable network signingKeyFile verificationKeyFile = do
   ownAddress <- getVerificationKeyAddress verificationKeyFile network
   output <- getUTxOFor network ownAddress
-  let maxLovelaceAvailable = maximum $ fmap totalLovelace $ rights $ fmap (parseQueryUTxO . Text.pack) output
+  let maxLovelaceAvailable =
+        if null output
+        then 0
+        else maximum $ fmap totalLovelace $ rights $ fmap (parseQueryUTxO . Text.pack) output
   when (maxLovelaceAvailable < 10_000_000) $ do
     putStrLn $
       "Hydra needs some funds to fuel the process, please ensure there's a UTxO with at least 10 ADAs at " <> ownAddress
