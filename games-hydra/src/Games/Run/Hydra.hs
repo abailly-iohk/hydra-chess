@@ -112,7 +112,7 @@ withHydraNode CardanoNode{network, nodeSocket} k =
 
 findHydraScriptsTxId :: Network -> IO String
 findHydraScriptsTxId = \case
-  -- TODO: those should be pulled from some remotely published source
+  -- TODO: use https://raw.githubusercontent.com/input-output-hk/hydra/0.14.0/networks.json
   -- FIXME: This is actually tied to the version
   Preview -> pure "64deee72cd424d957ea0fddf71508429ecb65fea83a041fe9b708fc2ca973a8e"
   Preprod -> pure "d8ba8c488f52228b200df48fe28305bc311d0507da2c2420b10835bf00d21948"
