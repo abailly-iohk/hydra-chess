@@ -1,0 +1,51 @@
+digraph layer1_transactions {
+    fontname="Helvetica,Arial,sans-serif"
+    node [fontname="Helvetica,Arial,sans-serif"]
+    edge [fontname="Helvetica,Arial,sans-serif"]
+    graph [rankdir = "LR"];
+
+    // Alice registers on-chain
+    "tokenA" [ label = "game-address-A | 10 ADA + 1 pid.pkhA | " , shape = "record" ];
+    "mint-token-a" [ label = "register-token | σ(A) | {mint | 1 pid.pkhA}" , shape = "Mrecord" ];
+    "fees-a" [ label = "address-a | X ADA | ", shape = "record" ];
+    "change-a" [ label = "address-a | X' ADA | ", shape = "record" ];
+
+    "fees-a" -> "mint-token-a";
+
+    "mint-token-a" -> "change-a";
+    "mint-token-a" -> "tokenA";
+
+    // Alice plays in Head
+    "initial-a" [ label = "ν_initial | 2 ADA + 1 headId.pkhFund | headId " , shape = "record" ];
+    "commit-a" [ label = "commit-tx | σ(A), σ(FundA) | " , shape = "Mrecord" ];
+    "commit-output-a" [ label = "ν_commit | 12 ADA + 1 headId.pkhFund + 1 pid.pkhA | ρ(tokenA), ϕ(tokenA) " , shape = "record" ];
+    "change-fund-a" [ label = "address-fund-a | X' ADA | ", shape = "record" ];
+
+    "tokenA" -> "commit-a";
+    "change-a" -> "commit-a";
+    "initial-a" -> "commit-a"  [ headlabel = "ViaCommit(ρ(tokenA))" ];
+
+    "commit-a" -> "commit-output-a";
+    "commit-a" -> "change-fund-a";
+
+    // collect com
+    "collect-com-a" [ label = "collect-com-tx | σ(FundA) | " , shape = "Mrecord" ];
+    "head-output-a" [ label = "ν_head | 12 ADA + 1 headId.pkhFund + 1 pid.pkhA | head_state " , shape = "record" ];
+    "change-fund-1-a" [ label = "address-fund-a | X'' ADA | ", shape = "record" ];
+
+    "change-fund-a" -> "collect-com-a";
+    "commit-output-a" -> "collect-com-a"  [ headlabel = "ViaCollectCom" ];
+
+    "collect-com-a" -> "head-output-a";
+    "collect-com-a" -> "change-fund-1-a";
+
+    // head closing & fanout
+    "close-a" [ label = "close-tx | σ(FundA) | " , shape = "Mrecord" ];
+    "fanout-a" [ label = "fanout-tx | σ(FundA) | " , shape = "Mrecord" ];
+    "token-head-a" [ label = "game-address-A | 10 ADA + 1 pid.pkhA | " , shape = "record" ];
+
+    "head-output-a" -> "close-a" ;
+    "close-a" -> "fanout-a" [ style = "dashed" ];
+    "fanout-a" -> "token-head-a";
+
+}
