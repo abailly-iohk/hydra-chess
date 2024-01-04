@@ -35,6 +35,7 @@ import System.Exit (ExitCode (..))
 import System.FilePath ((</>))
 import System.IO (BufferMode (..), Handle, IOMode (..), hSetBuffering, withFile)
 import System.Process (CreateProcess (..), ProcessHandle, StdStream (..), proc, readProcess, terminateProcess, waitForProcess, withCreateProcess)
+import qualified System.Info as System
 
 data CardanoNode = CardanoNode
   { nodeSocket :: FilePath
@@ -89,6 +90,7 @@ findSocketPath network = do
 
 findCardanoExecutable :: String -> IO FilePath
 findCardanoExecutable version = do
+  let currentOS = System.os
   dataDir <- getXdgDirectory XdgData "cardano"
   createDirectoryIfMissing True dataDir
   let cardanoExecutable = dataDir </> "cardano-node"
@@ -98,7 +100,7 @@ findCardanoExecutable version = do
       then (== version) <$> getVersion cardanoExecutable
       else pure True
   when (not exists || not hasRightVersion) $ do
-    downloadCardanoExecutable version dataDir
+    downloadCardanoExecutable version currentOS dataDir
     permissions <- getPermissions cardanoExecutable
     unless (executable permissions) $ setPermissions cardanoExecutable (setOwnerExecutable True permissions)
   pure cardanoExecutable
@@ -115,18 +117,23 @@ findCardanoCliExecutable = do
   unless (executable permissions) $ setPermissions cardanoCliExecutable (setOwnerExecutable True permissions)
   pure cardanoCliExecutable
 
-downloadCardanoExecutable :: String -> FilePath -> IO ()
-downloadCardanoExecutable version destDir = do
+downloadCardanoExecutable :: String -> String -> FilePath -> IO ()
+downloadCardanoExecutable version currentOs destDir = do
   let binariesUrl =
         "https://github.com/intersectMBO/cardano-node/releases/download/"
           <> version <> "-pre"
           <> "/cardano-node-"
           <> version
-          <> "-macos.tar.gz"
+          <> "-" <> osTag currentOs <> ".tar.gz"
   request <- parseRequest $ "GET " <> binariesUrl
   putStr $ "Downloading cardano executables from " <> binariesUrl
   httpLBS request >>= Tar.unpack destDir . Tar.read . GZip.decompress . getResponseBody
   putStrLn " done"
+
+osTag :: String -> String
+osTag = \case
+  "darwin" -> "macos"
+  other -> other
 
 -- | Wait for the node socket file to become available.
 waitForSocket :: CardanoNode -> IO ()
