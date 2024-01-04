@@ -12,7 +12,8 @@ module Chess.Contract where
 
 import PlutusTx.Prelude
 
-import Chess.Game (apply)
+import Chess.Game (Game (..), Move, Side (..), apply)
+import Chess.GameState (ChessGame (..), ChessPlay (..))
 import Chess.Plutus (ValidatorType, scriptValidatorHash, wrapValidator)
 import PlutusLedgerApi.V2 (
   Datum (Datum),
@@ -23,21 +24,40 @@ import PlutusLedgerApi.V2 (
   getDatum,
   serialiseCompiledCode,
   toBuiltinData,
+  txInfoSignatories,
   txOutDatum,
  )
 import PlutusLedgerApi.V2.Contexts (findDatumHash, getContinuingOutputs)
 import PlutusTx (CompiledCode)
 import qualified PlutusTx
-import Chess.GameState (ChessGame (..), ChessPlay (..))
 
 validator :: ChessGame -> ChessPlay -> ScriptContext -> Bool
-validator chess@ChessGame{game} play scriptContext =
+validator chess play scriptContext =
   case play of
-    ChessMove move ->  case apply move game of
-      Left{} -> traceError "Illegal move"
-      Right game' -> checkGameOutput scriptContext chess { game = game' }
+    ChessMove move -> checkMove move chess scriptContext
     End -> checkGameEnd chess scriptContext
 {-# INLINEABLE validator #-}
+
+checkMove :: Move -> ChessGame -> ScriptContext -> Bool
+checkMove move chess@ChessGame{players, game} scriptContext@ScriptContext{scriptContextTxInfo = txInfo} =
+  isPlayersTurn game
+    && case apply move game of
+      Left{} -> traceError "Illegal move"
+      Right game' -> checkGameOutput scriptContext chess{game = game'}
+ where
+  isPlayersTurn Game{curSide} =
+    case txInfoSignatories txInfo of
+      [signer] ->
+        case findIndex (== signer) players of
+          Just idx ->
+            traceIfFalse "Wrong side to play" $
+              (idx == 0 && curSide == White) || (idx == 1 && curSide == Black)
+          Nothing -> traceError "Wrong signer"
+      [] ->
+        traceError "No signers"
+      _ ->
+        traceError "Too many signers"
+{-# INLINEABLE checkMove #-}
 
 checkGameOutput :: ScriptContext -> ChessGame -> Bool
 checkGameOutput ctx d =
