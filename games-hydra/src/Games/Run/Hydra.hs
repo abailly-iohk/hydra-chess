@@ -595,7 +595,7 @@ data Peer = Peer
   deriving anyclass (ToJSON, FromJSON)
 
 peerArgument :: Network -> Peer -> IO [String]
-peerArgument network Peer{name, cardanoKey, hydraKey, address} = do
+peerArgument network Peer{name, cardanoKey, hydraKey, address = Host{host, port}} = do
   -- we need to write files for the peer
   peersDir <- getXdgDirectory XdgCache ("hydra-node" </> networkDir network </> "peers")
   createDirectoryIfMissing True peersDir
@@ -624,7 +624,7 @@ peerArgument network Peer{name, cardanoKey, hydraKey, address} = do
 
   pure
     [ "--peer"
-    , show address
+    , unpack host <> ":" <> show port
     , "--cardano-verification-key"
     , cardanoKeyFile
     , "--hydra-verification-key"

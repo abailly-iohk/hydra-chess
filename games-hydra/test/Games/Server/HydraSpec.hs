@@ -2,15 +2,17 @@
 
 module Games.Server.HydraSpec where
 
+import qualified Chess.Game as Chess
+import Chess.GameState (ChessGame (..))
 import qualified Data.Aeson as Aeson
+import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import Game.Client.Console (Coin (..), Coins (..), SimpleUTxO (..), parseQueryUTxO)
-import Games.Server.Hydra (extractGameToken, extractGameState)
+import Games.Server.Hydra (extractGameState, extractGameToken)
 import Test.Hspec (Spec, it, shouldBe)
-import qualified Data.ByteString.Lazy as LBS
-import qualified Chess.Game as Chess
-import Chess.GameState (ChessGame(..))
+import Games.Run.Hydra (Peer(..))
+import Game.Server (Host(..))
 
 spec :: Spec
 spec = do
@@ -83,6 +85,19 @@ spec = do
             }
 
     parseQueryUTxO rawOutput `shouldBe` Right expected
+
+  it "decodes peers JSON file" $ do
+    let peersJSON = "[{\"name\":\"arnaud-mbp\",\"address\":{\"host\":\"192.168.1.103\",\"port\":5551},\"hydraKey\":\"58206197ef01d4b8afab12850b1d0f3245b6b196c067dc17f2f86a001285b535a720\",\"cardanoKey\":\"5820b8e0dfdb94e6b1fbadd8cd70756d995664d3cc41d0bd52ec0a1e982f711ec5a1\"}]"
+
+    Aeson.eitherDecode' peersJSON
+      `shouldBe` Right
+        [ Peer
+            { name = "arnaud-mbp"
+            , address = Host "192.168.1.103" 5551
+            , hydraKey = "58206197ef01d4b8afab12850b1d0f3245b6b196c067dc17f2f86a001285b535a720"
+            , cardanoKey = "5820b8e0dfdb94e6b1fbadd8cd70756d995664d3cc41d0bd52ec0a1e982f711ec5a1"
+            }
+        ]
 
   it "extracts game token from JSON UTxO" $ do
     let utxo = fromJust $ Aeson.decode "{\"c5a00b09e82c334bd04d62313ab25608ca70e7d1014ca9c8dfc09251d51ea6a0#0\":{\"address\":\"addr_test1wz4y5mkg3m83dh3npqygnzst74s26cewjw3uel2ylcuqagg9zad83\",\"datum\":null,\"datumhash\":\"36643c8dbde0ad0f092aec2d4d672730e863d6f8d034c7da3b8c31d868e20b4e\",\"inlineDatum\":null,\"referenceScript\":null,\"value\":{\"e18ad836532a69a93160efe11bcfac05b812a092ef3420042e700c10\":{\"1ad7cb51c9e2d6250bd80395a5c920f6f628adc4b1bd057a81c9be98\":1},\"lovelace\":10000000}}}"
