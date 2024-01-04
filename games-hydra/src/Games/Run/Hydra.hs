@@ -1,3 +1,7 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
@@ -37,7 +41,16 @@ import Codec.CBOR.Read (deserialiseFromBytes)
 import Control.Monad (unless, when)
 import Control.Monad.Class.MonadAsync (race)
 import Control.Monad.Class.MonadTimer (threadDelay)
-import Data.Aeson (Value (Number, String), eitherDecode, encode, object, (.=))
+import Data.Aeson (
+  FromJSON,
+  ToJSON,
+  Value (Number, String),
+  decodeFileStrict',
+  eitherDecode,
+  encode,
+  object,
+  (.=),
+ )
 import Data.Aeson.KeyMap (KeyMap, insert, (!?))
 import Data.Aeson.Types (Value (Object))
 import qualified Data.ByteString as BS
@@ -52,6 +65,7 @@ import qualified Data.Text as Text
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Encoding as Lazy
+import GHC.Generics (Generic)
 import Game.Client.Console (Coins (..), SimpleUTxO (..), parseQueryUTxO)
 import Game.Server (Host (..))
 import Games.Run.Cardano (
@@ -131,6 +145,11 @@ hydraNodeProcess network executableFile nodeSocket = do
   protocolParametersFile <- findProtocolParametersFile network
   hydraPersistenceDir <- findHydraPersistenceDir network
   hydraScriptsTxId <- findHydraScriptsTxId network
+
+  -- peers
+  peers <- findPeers network
+  peerArguments <- concat <$> mapM (peerArgument network) peers
+
   let
     nodeId = "hydra"
     hydraPort :: Int = 5551
@@ -162,6 +181,7 @@ hydraNodeProcess network executableFile nodeSocket = do
         , "--node-socket"
         , nodeSocket
         ]
+          <> peerArguments
           <> networkMagicArgs network
       )
   pure (me, proc executableFile args)
@@ -404,22 +424,12 @@ findHydraSigningKey network = do
   createDirectoryIfMissing True configDir
   let hydraSk = configDir </> "hydra.sk"
   exists <- doesFileExist hydraSk
-  if not exists
-    then do
-      seed <- readSeedFromSystemEntropy ed25519seedsize
-      let sk = genKeyDSIGN @Ed25519DSIGN seed
-          jsonEnvelope =
-            object
-              [ "type" .= ("HydraSigningKey_ed25519" :: Text)
-              , "description" .= ("" :: Text)
-              , "cborHex" .= decodeUtf8 (Hex.encode (serialize' sk))
-              ]
+  unless exists $ do
+    exe <- findHydraExecutable
+    callProcess exe ["gen-hydra-key", "--output-file", configDir </> "hydra"]
 
-      LBS.writeFile hydraSk (encode jsonEnvelope)
-      pure (deriveVerKeyDSIGN sk, hydraSk)
-    else do
-      sk <- deserialiseFromEnvelope @(SignKeyDSIGN Ed25519DSIGN) hydraSk
-      pure (deriveVerKeyDSIGN sk, hydraSk)
+  sk <- deserialiseFromEnvelope @(SignKeyDSIGN Ed25519DSIGN) hydraSk
+  pure (deriveVerKeyDSIGN sk, hydraSk)
 
 deserialiseFromEnvelope :: forall a. (FromCBOR a) => FilePath -> IO a
 deserialiseFromEnvelope file = do
@@ -571,3 +581,68 @@ downloadHydraExecutable destDir = do
 
 mkTempFile :: IO FilePath
 mkTempFile = mkstemp "tx.raw." >>= \(fp, hdl) -> hClose hdl >> pure fp
+
+data Peer = Peer
+  { name :: String
+  -- ^ This peer identifier, must be unique across all peers
+  , cardanoKey :: Text
+  -- ^ Hex encoded CBOR serialisation of an Ed25519 Cardano VK
+  , hydraKey :: Text
+  -- ^ Hex encoded CBOR serialisation of an Ed25519 Hydra VK
+  , address :: Host
+  }
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)
+
+peerArgument :: Network -> Peer -> IO [String]
+peerArgument network Peer{name, cardanoKey, hydraKey, address} = do
+  -- we need to write files for the peer
+  peersDir <- getXdgDirectory XdgCache ("hydra-node" </> networkDir network </> "peers")
+  createDirectoryIfMissing True peersDir
+  let cardanoVkEnvelope =
+        object
+          [ "type" .= ("PaymentVerificationKeyShelley_ed25519" :: Text)
+          , "description" .= ("" :: Text)
+          , "cborHex" .= cardanoKey
+          ]
+      cardanoKeyFile = peersDir </> name <.> "cardano" <.> "vk"
+      hydraVkEnvelope =
+        object
+          [ "type" .= ("HydraVerificationKey_ed25519" :: Text)
+          , "description" .= ("" :: Text)
+          , "cborHex" .= hydraKey
+          ]
+      hydraKeyFile = peersDir </> name <.> "hydra" <.> "vk"
+
+  doesFileExist cardanoKeyFile >>= \case
+    False -> LBS.writeFile cardanoKeyFile (encode cardanoVkEnvelope)
+    True -> pure ()
+
+  doesFileExist hydraKeyFile >>= \case
+    False -> LBS.writeFile hydraKeyFile (encode hydraVkEnvelope)
+    True -> pure ()
+
+  pure
+    [ "--peer"
+    , show address
+    , "--cardano-verification-key"
+    , cardanoKeyFile
+    , "--hydra-verification-key"
+    , hydraKeyFile
+    ]
+
+-- TODO: should detect the peers configuration has changed and not reuse the same
+-- state
+findPeers :: Network -> IO [Peer]
+findPeers network = do
+  configDir <- getXdgDirectory XdgConfig ("hydra-node" </> networkDir network)
+  createDirectoryIfMissing True configDir
+  let peersFile = configDir </> "peers.json"
+  exists <- doesFileExist peersFile
+  if exists
+    then do
+      putStrLn $ "Using peers file " <> peersFile
+      maybe (error $ "Failed to decode peers file " <> peersFile) pure =<< decodeFileStrict' peersFile
+    else do
+      putStrLn "No peers defined"
+      pure []
