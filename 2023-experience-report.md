@@ -110,14 +110,33 @@ The Layer 1 flow of transaction is mostly uninteresting but I still put it here 
 * The [validator](https://github.com/abailly/black-jack/blob/1acd49f61e7f2ae55096f37d5342c6caca840644/black-jack-core/src/Chess/Contract.hs#L33) does not fully enforce the above transaction flow, in particular it does not check authorizations to play, nor does it correctly compute the end game situation
 * Validating a single play is very costly: To make the transaction pass in the Hydra ledger I have had to beef up the execution budget to something like _500 billion_ CPU steps (the current maximum per transaction in Cardano is 10 billion).
 
-## The good
+## The Good
 
 * The Hydra WS API is easy to work with and points the client to be implemented as a straightforward reactive application which is definitely intended
+  * Having a [documented JSON schema](https://hydra.family/head-protocol/api-reference#schema-UTxOWithWitness) was helpful to build the UTxO with script information when I was trying to commit scripts in the Head, although the published documentation could be improved
 * It's a testimony to the Layer 2 isomorphism one can use the same tool (eg. `cardano-cli`) to build transactions for the Layer 1 and for hydra. Of course, one cannot use `transaction build` and needs to use the cruder and less friendly `transaction build-raw` but with properly massaged protocol parameters, this becomes straightforward
 * Once climbed the learning curve needed to learn the quirks of the cardano-cli and the proper flow to build, sign and submit transactions, the process is repetitive and there's not so many moving parts
   * This means that implementing a SDK or an API covering the 90% use cases and handling the "standard" transaction flows should be a relatively simple task
+* Having the state of the game stored in the chain and persisted by Hydra is very convenient from a client perspective as it makes it basically stateless and therefore more versatile and resilient
 
-## The ugly
+## The Bad
+
+* The overall developer experience interacting with Cardano, and Hydra too, _must_ definitely be [improved](#the-ugly) in order to make this kind of development faster, safer, easier, something that developers who don't have several years of hands-on experience dealing with transactions and smart contracts can approach confidently
+* Regarding Hydra specifically, the main problem is the peers discovery and connectivity "process", which currently makes it quite hard to run such kind of end-users focused application as the hydra-node process currently requires knowledge of all the information about its peers up-front (cardano keys, hydra keys, ip/port)
+  * While I can think of ways to overcome this issue for the particular case of a Chess game (or similar application), for example by allowing users to register peers and share their own information _before_ starting a game, this does not scale easily to running multiple concurrent games (where each series of game with another player is a single head)
+  * And of course it does not lend itself to supporting multiple DApps with the same infrastructure (eg. a single hydra-node/server and cardano-node)
+  * The use of a P2P TCP-based networking model means that every head needs a different port and direct connection to each peer
+* The programming model I have chosen, to represent directly the game's state and rules in a smart contract, while "natural" as it fits nicely the idea of transactions representing _state machine transitions_, has several shortcomings:
+  * The fact it exceeds the execution budget available on-chain by 2 orders of magnitudes is a problem if one wants to carry over a game from L2 to L1, but it appears to fit nicely the idea of using Hydra to run a customised ledger, and it's always possible to allow the game to be only _aborted_ on-chain as long as the contract is not too large to be referenced or used as a witness in a transaction which is not the case
+  * The Chess rules code I wrote is naive and I am pretty sure there's a lot of opportunity for optimisation, but I am unsure whether it's worth the effort
+  * The main issue lies, I think, in the way it maps to the eUTxO model: While a _validator_ is a _predicate_ over a triple of $(Q, \Sigma, Q)$, eg. a function $ν : Q \times \Sigma \times Q \rightarrow \{ \top, \bot \}$, the off-chain code needs to _build_ the destination state and therefore needs a function $β : Q \times \Sigma \rightarrow Q \cup \{\bot\}$. It's not hard to see the two functions are homomorphic
+  * This requires the code running off-chain and the code running on-chain to be semantically equivalent. This problem is "naturally" solved by using the _same code_ both on-chain and off-chain, something which is easy when one writes the on-chain code in Haskell and compiles it with PlutusTx plugin, but this becomes problematic when one does not program in Haskell (eg. Rust) , or uses a different smart contract language which has no off-chain semantics (eg. Aiken). Then one needs to maintain 2 different code bases while preserving the semantic equivalence in order to prevent the application to build invalid transactions
+  * The idea of isomorphic code is not new as it's the blockchain reincarnation of the old "Write once, run anywhere" motto that, as far as I know, dates back to the late 80s and early 90s, the growth of client-server and distributed systems, and ensured the success of Java and Javascript. But this promise never really delivers as the constraints, limitations, and idiosyncrasies of the execution environments permeate the whole system and leads to strong coupling across barriers that should stay loosely coupled: Components of the system are not only tied together through data structures, amenable to varying interpretations and change, but also through the _code_ and its semantics which must stay in sync and makes it harder over time to evolve each part individually
+  * This might not appear problematic for Chess whose rules, after all, are quite stable. But even in this simple case, it couples the system to a particular implementation, preventing or hampering the development of compatible clients that would only respect some protocol yet would be free of a particular implementation of the protocol. And this issue becomes critical for systems that _need_ to evolve over time and require interoperability
+* :bulb: These shortcomings lead me to the conclusion this
+
+
+## The Ugly
 
 * The Head commit process and interfaces are somewhat awkward to work with: The JSON schema is confusing, with various required/optional fields
 * The use of websocket protocol to retrieve state from the hydra-node is awkward as one needs to "manually"synchronize on the responses
@@ -134,3 +153,7 @@ The Layer 1 flow of transaction is mostly uninteresting but I still put it here 
   * `transaction view` outputs YAML, and not JSON
   * :bulb: Adding a `--json` flag (or a `--format YAML|JSON|XML|CBOR`) to commands would provide consistency and clarity
   * In general, being able to work with simple and well supported format like JSON _everywhere_ would greatly increase the usability and usefulness of the tools
+* Having to use CBOR to build transactions is annoying because, contrary to a self-descriptive DDL like JSON or XML, it requires full knowledge of the schema of every structure one needs to create or read
+  * In JSON, one can read some fields of an object without needing to know what other fields are available.
+  * In the case of transactions, this means one could define inputs, outputs, some witnesses, without having to understand _every_ possible format of each of those, nor protocol update transactions, withdrawals, or other irrelevant features for building a DApp
+  * This comes particularly handy in the face of _change_
