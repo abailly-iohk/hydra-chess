@@ -156,3 +156,10 @@ The Layer 1 flow of transaction is mostly uninteresting but I still put it here 
   * In JSON, one can read some fields of an object without needing to know what other fields are available.
   * In the case of transactions, this means one could define inputs, outputs, some witnesses, without having to understand _every_ possible format of each of those, nor protocol update transactions, withdrawals, or other irrelevant features for building a DApp
   * This comes particularly handy in the face of _change_
+
+## Future work
+
+* While I am convinced using "isomorphic" smart contracts should be avoided, it's still unclear what the alternatives are in the context of a running DApps at scale, using a eUTxO ledger and State Channel.
+  * Sophisticated cryptographic primitives like SNARKs provide this decoupling: The constructive part happens off-chain while the chain only carries succinct proofs the computation is legit. SNARKs are complex, currently unavailable on Cardano, and have their own limitations anyway
+  * A simpler solution in the Hydra Head context exists: As snapshots are produced through a consensus of all parties in a Hydra node, it would be quite easy to make it non-automatic and provide off-chain code a "hook" into snapshot signing, giving any party the power to reject a transaction it deems invalid and therefore removing the need to encode some logic in the ledger
+  * Another option would be to optimistically approve moves represented by ledger transactions, with each transaction carrying some "proof" the move is legit, but only verify a proof in case one party contests a move, similar to a form of rollback: If the contestation is proven to be true, then the faulty transaction and all other transactions depending on it would be cancelled and some penalty would be paid by the faulty issues. This seems like some asynchronous form of the previous solution with the addition of a "slashing" mechanism.
