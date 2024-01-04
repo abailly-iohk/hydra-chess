@@ -91,6 +91,7 @@ import System.Directory (
  )
 import System.FilePath ((<.>), (</>))
 import System.IO (hClose)
+import qualified System.Info as System
 import System.Posix (mkstemp)
 import System.Process (
   CreateProcess (..),
@@ -106,6 +107,9 @@ data HydraNode = HydraNode
   , hydraHost :: Host
   }
   deriving (Show)
+
+version :: String
+version = "0.14.0"
 
 withHydraNode :: CardanoNode -> (HydraNode -> IO a) -> IO a
 withHydraNode CardanoNode{network, nodeSocket} k =
@@ -573,9 +577,18 @@ findHydraExecutable = do
 downloadHydraExecutable :: FilePath -> IO ()
 downloadHydraExecutable destDir = do
   -- TODO: generalise URL when binaries are published
-  let binariesUrl = "https://github.com/input-output-hk/hydra/releases/download/0.14.0/hydra-aarch64-darwin-0.14.0.zip"
+  let binariesUrl =
+        "https://github.com/input-output-hk/hydra/releases/download/"
+          <> version
+          <> "/hydra-"
+          <> System.arch
+          <> "-"
+          <> System.os
+          <> "-"
+          <> version
+          <> ".zip"
   request <- parseRequest $ "GET " <> binariesUrl
-  putStr "Downloading hydra executables"
+  putStr $ "Downloading hydra executables: " <> binariesUrl
   httpLBS request >>= Zip.extractFilesFromArchive [Zip.OptDestination destDir] . Zip.toArchive . getResponseBody
   putStrLn " done"
 
