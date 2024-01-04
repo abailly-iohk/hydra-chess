@@ -222,6 +222,10 @@ withHydraServer network me host k = do
               atomically $ modifyTVar' events (|> OtherMessage (Content $ pack $ asString validationError))
             SnapshotConfirmed{headId, snapshot = Snapshot{utxo}} ->
               handleGameState events cnx headId utxo
+            PeerConnected{peer} ->
+              putStrLn $ "Peer " <> unpack peer <> " connected"
+            PeerDisconnected{peer} ->
+              putStrLn $ "Peer " <> unpack peer <> " disconnected"
 
   handleGameState :: TVar IO (Seq (FromChain Chess Hydra)) -> Connection -> HeadId -> Value -> IO ()
   handleGameState events cnx headId utxo = do
@@ -850,6 +854,8 @@ data Output
   | TxValid {headId :: HeadId, transaction :: Value}
   | TxInvalid {headId :: HeadId, utxo :: Value, transaction :: Value, validationError :: Value}
   | SnapshotConfirmed {headId :: HeadId, snapshot :: Snapshot, signatures :: Value}
+  | PeerConnected {peer :: Text}
+  | PeerDisconnected {peer :: Text}
   deriving stock (Eq, Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
