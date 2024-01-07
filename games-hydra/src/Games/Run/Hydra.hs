@@ -268,7 +268,7 @@ registerGameToken network gameSkFile gameVkFile = do
   fundAddress <- getVerificationKeyAddress fundVk network
   gameAddress <- getVerificationKeyAddress gameVk network
 
-  utxo <- getUTxOFor network fundAddress
+  utxo <- getUTxOFor network fundAddress --TODO: check it has enough ADAs
   when (null utxo) $ error "No UTxO with funds"
   let txin = mkTxIn $ head utxo
 

@@ -11,7 +11,7 @@ where
 import PlutusTx.Prelude
 
 import Cardano.Binary (serialize')
-import Cardano.Crypto.Hash (Hash, hashToBytes)
+import Cardano.Crypto.Hash (Blake2b_224, Hash, hashToBytes, hashWith)
 import Data.Aeson (object, (.=))
 import qualified Data.Aeson as Aeson
 import Data.ByteString (ByteString)
@@ -73,7 +73,12 @@ scriptValidatorHash :: SerialisedScript -> ScriptHash
 scriptValidatorHash =
   ScriptHash
     . toBuiltin
-    . fromShort
+    . hashToBytes
+    . hashWith @Blake2b_224
+      ( \sbs ->
+          "\x02" -- the babbageScriptPrefixTag defined in cardano-ledger for PlutusV2 scripts
+            Prelude.<> fromShort sbs
+      )
 
 -- | Encodes a compiled `PlutusScriptV2` validator into a representation suitable for cardano-cli.
 --
