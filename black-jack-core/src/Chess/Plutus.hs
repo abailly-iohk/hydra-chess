@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
@@ -9,25 +10,14 @@ where
 
 import PlutusTx.Prelude
 
-import Cardano.Api (
-  PlutusScriptVersion (PlutusScriptV2),
-  Script (..),
-  hashScript,
-  serialiseToRawBytes,
-  serialiseToTextEnvelope,
- )
-import qualified Cardano.Api as Api
-import Cardano.Api.Shelley (PlutusScript (PlutusScriptSerialised), fromPlutusData, toPlutusData)
 import Cardano.Binary (serialize')
 import Cardano.Crypto.Hash (Hash, hashToBytes)
+import Data.Aeson (object, (.=))
 import qualified Data.Aeson as Aeson
-import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Base16 as Hex
-import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.Lazy as Lazy
-import Data.ByteString.Short (ShortByteString)
-import Data.String (IsString (..))
+import Data.ByteString.Short (ShortByteString, fromShort)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -37,8 +27,6 @@ import PlutusLedgerApi.V2 (
   SerialisedScript,
   ToData,
   UnsafeFromData,
-  fromData,
-  toData,
  )
 import PlutusTx (UnsafeFromData (..))
 import qualified PlutusTx
@@ -85,10 +73,7 @@ scriptValidatorHash :: SerialisedScript -> ScriptHash
 scriptValidatorHash =
   ScriptHash
     . toBuiltin
-    . serialiseToRawBytes
-    . hashScript
-    . PlutusScript PlutusScriptV2
-    . PlutusScriptSerialised
+    . fromShort
 
 -- | Encodes a compiled `PlutusScriptV2` validator into a representation suitable for cardano-cli.
 --
@@ -97,11 +82,14 @@ scriptValidatorHash =
 -- `--tx-out-script-file` or `--mint-script-file` to the
 -- `cardano-cli`.
 validatorToBytes :: ShortByteString -> ByteString
-validatorToBytes =
+validatorToBytes script =
   Lazy.toStrict
     . Aeson.encode
-    . serialiseToTextEnvelope (Just $ fromString "Chess Script")
-    . PlutusScriptSerialised @Api.PlutusScriptV2
+    $ object
+      [ "type" .= ("PlutusScriptV2" :: Text)
+      , "description" .= ("Chess Script" :: Text)
+      , "cborHex" .= Text.decodeUtf8 (Hex.encode $ serialize' script)
+      ]
 
 pubKeyHash :: Hash h keyRole -> PubKeyHash
 pubKeyHash h = PubKeyHash (toBuiltin @ByteString $ hashToBytes h)
@@ -117,42 +105,3 @@ pubKeyHashFromHex hex = PubKeyHash (toBuiltin bytes)
   bytes = case Hex.decode $ Text.encodeUtf8 hex of
     Left err -> Prelude.error $ "Fail to decode bytestring from hex " <> Text.unpack hex <> ": " <> err
     Right v -> v
-
-fromJSONDatum :: (ToData a, PlutusTx.FromData a) => Aeson.Value -> Either Text a
-fromJSONDatum value = do
-  plutusData <-
-    toPlutusData . Api.getScriptData
-      <$> first (Text.pack . Prelude.show) (Api.scriptDataFromJson Api.ScriptDataJsonDetailedSchema value)
-  maybe
-    ( Left $
-        Text.concat
-          [ "Cannot convert "
-          , Text.decodeUtf8 $ LBS.toStrict $ Aeson.encode value
-          , " to plutus data"
-          ]
-    )
-    Right
-    $ fromData plutusData
-
-datumHashBytes :: (ToData a) => a -> ByteString
-datumHashBytes =
-  serialiseToRawBytes
-    . Api.hashScriptDataBytes
-    . Api.unsafeHashableScriptData
-    . fromPlutusData
-    . toData
-
-datumBytes :: (ToData a) => a -> ByteString
-datumBytes =
-  serialize'
-    . fromPlutusData
-    . toData
-
-datumJSON :: (ToData a) => a -> ByteString
-datumJSON =
-  Lazy.toStrict
-    . Aeson.encode
-    . Api.scriptDataToJson Api.ScriptDataJsonDetailedSchema
-    . Api.unsafeHashableScriptData
-    . fromPlutusData
-    . toData

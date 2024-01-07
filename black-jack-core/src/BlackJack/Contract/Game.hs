@@ -18,7 +18,7 @@
 -- | Plutus data structures and code for running BlackJack game on-chain.
 module BlackJack.Contract.Game where
 
-import PlutusTx.Prelude
+import PlutusTx.Prelude hiding ((<&>))
 
 import Control.Monad (fail)
 import Data.Aeson (
@@ -264,10 +264,10 @@ newtype RGen = RGen Integer
 
 PlutusTx.unstableMakeIsData ''RGen
 
-instance ToJSON a => ToJSON (Map PlayerId a) where
+instance (ToJSON a) => ToJSON (Map PlayerId a) where
   toJSON = toJSON . Map.toList
 
-instance FromJSON a => FromJSON (Map PlayerId a) where
+instance (FromJSON a) => FromJSON (Map PlayerId a) where
   parseJSON v = parseJSON v <&> Map.fromList
 
 data BlackJack

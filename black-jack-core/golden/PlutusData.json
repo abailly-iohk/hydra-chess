@@ -1,0 +1,658 @@
+{
+    "samples": [
+        {
+            "bytes": "4e74b7b24c9a74de84a850051eac194b0e2991ad2e"
+        },
+        {
+            "int": 7
+        },
+        {
+            "int": -16
+        },
+        {
+            "map": [
+                {
+                    "k": {
+                        "list": [
+                            {
+                                "int": 0
+                            },
+                            {
+                                "constructor": 1,
+                                "fields": [
+                                    {
+                                        "bytes": "00"
+                                    },
+                                    {
+                                        "map": []
+                                    }
+                                ]
+                            },
+                            {
+                                "int": -5
+                            },
+                            {
+                                "constructor": 1,
+                                "fields": [
+                                    {
+                                        "list": [
+                                            {
+                                                "constructor": 1,
+                                                "fields": []
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "constructor": 1,
+                                        "fields": [
+                                            {
+                                                "list": []
+                                            }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "bytes": "040200000305"
+                            },
+                            {
+                                "bytes": "08040702"
+                            },
+                            {
+                                "bytes": "060307"
+                            }
+                        ]
+                    },
+                    "v": {
+                        "bytes": ""
+                    }
+                },
+                {
+                    "k": {
+                        "list": [
+                            {
+                                "int": -2
+                            },
+                            {
+                                "bytes": "0102"
+                            },
+                            {
+                                "bytes": "00030805000203"
+                            },
+                            {
+                                "bytes": "08020801"
+                            },
+                            {
+                                "bytes": "040302"
+                            },
+                            {
+                                "int": 6
+                            }
+                        ]
+                    },
+                    "v": {
+                        "bytes": "312c0c07470e3f801f43"
+                    }
+                },
+                {
+                    "k": {
+                        "map": [
+                            {
+                                "k": {
+                                    "constructor": 6,
+                                    "fields": []
+                                },
+                                "v": {
+                                    "list": [
+                                        {
+                                            "int": -1
+                                        },
+                                        {
+                                            "constructor": 1,
+                                            "fields": []
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                "k": {
+                                    "bytes": "060107030405"
+                                },
+                                "v": {
+                                    "int": 7
+                                }
+                            },
+                            {
+                                "k": {
+                                    "bytes": "00060207"
+                                },
+                                "v": {
+                                    "int": 6
+                                }
+                            },
+                            {
+                                "k": {
+                                    "constructor": 2,
+                                    "fields": [
+                                        {
+                                            "bytes": "010101"
+                                        },
+                                        {
+                                            "map": []
+                                        }
+                                    ]
+                                },
+                                "v": {
+                                    "list": [
+                                        {
+                                            "map": []
+                                        },
+                                        {
+                                            "constructor": 1,
+                                            "fields": [
+                                                {
+                                                    "list": []
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    },
+                    "v": {
+                        "constructor": 8,
+                        "fields": [
+                            {
+                                "bytes": ""
+                            },
+                            {
+                                "int": -1
+                            },
+                            {
+                                "bytes": "070204"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "map": [
+                {
+                    "k": {
+                        "constructor": 10,
+                        "fields": [
+                            {
+                                "map": [
+                                    {
+                                        "k": {
+                                            "list": [
+                                                {
+                                                    "int": 0
+                                                }
+                                            ]
+                                        },
+                                        "v": {
+                                            "list": [
+                                                {
+                                                    "constructor": 2,
+                                                    "fields": []
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "k": {
+                                            "int": -1
+                                        },
+                                        "v": {
+                                            "constructor": 2,
+                                            "fields": []
+                                        }
+                                    },
+                                    {
+                                        "k": {
+                                            "list": []
+                                        },
+                                        "v": {
+                                            "map": [
+                                                {
+                                                    "k": {
+                                                        "bytes": ""
+                                                    },
+                                                    "v": {
+                                                        "constructor": 1,
+                                                        "fields": []
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "constructor": 2,
+                                "fields": [
+                                    {
+                                        "bytes": "0000"
+                                    },
+                                    {
+                                        "list": [
+                                            {
+                                                "list": []
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "bytes": "0001"
+                                    }
+                                ]
+                            },
+                            {
+                                "list": [
+                                    {
+                                        "list": [
+                                            {
+                                                "bytes": ""
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "int": -1
+                                    },
+                                    {
+                                        "constructor": 3,
+                                        "fields": []
+                                    }
+                                ]
+                            },
+                            {
+                                "bytes": "020105000306"
+                            },
+                            {
+                                "list": [
+                                    {
+                                        "bytes": ""
+                                    },
+                                    {
+                                        "int": 0
+                                    }
+                                ]
+                            },
+                            {
+                                "constructor": 2,
+                                "fields": [
+                                    {
+                                        "bytes": ""
+                                    }
+                                ]
+                            },
+                            {
+                                "bytes": ""
+                            }
+                        ]
+                    },
+                    "v": {
+                        "constructor": 9,
+                        "fields": [
+                            {
+                                "map": [
+                                    {
+                                        "k": {
+                                            "list": [
+                                                {
+                                                    "list": []
+                                                }
+                                            ]
+                                        },
+                                        "v": {
+                                            "list": []
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "constructor": 4,
+                                "fields": [
+                                    {
+                                        "map": [
+                                            {
+                                                "k": {
+                                                    "bytes": ""
+                                                },
+                                                "v": {
+                                                    "list": []
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "list": [
+                                            {
+                                                "list": []
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "bytes": "000201"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                },
+                {
+                    "k": {
+                        "bytes": "641a6320"
+                    },
+                    "v": {
+                        "constructor": 8,
+                        "fields": [
+                            {
+                                "int": 3
+                            },
+                            {
+                                "int": 1
+                            },
+                            {
+                                "bytes": "03070805"
+                            },
+                            {
+                                "constructor": 3,
+                                "fields": [
+                                    {
+                                        "int": 1
+                                    }
+                                ]
+                            },
+                            {
+                                "map": [
+                                    {
+                                        "k": {
+                                            "constructor": 1,
+                                            "fields": [
+                                                {
+                                                    "list": []
+                                                }
+                                            ]
+                                        },
+                                        "v": {
+                                            "bytes": "01"
+                                        }
+                                    },
+                                    {
+                                        "k": {
+                                            "list": []
+                                        },
+                                        "v": {
+                                            "list": []
+                                        }
+                                    },
+                                    {
+                                        "k": {
+                                            "int": 3
+                                        },
+                                        "v": {
+                                            "int": 0
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "constructor": 3,
+                                "fields": [
+                                    {
+                                        "bytes": ""
+                                    },
+                                    {
+                                        "bytes": "020102"
+                                    },
+                                    {
+                                        "int": -2
+                                    }
+                                ]
+                            },
+                            {
+                                "bytes": "02030802"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "k": {
+                        "constructor": 2,
+                        "fields": [
+                            {
+                                "bytes": "060200030207"
+                            },
+                            {
+                                "bytes": ""
+                            },
+                            {
+                                "int": -1
+                            },
+                            {
+                                "int": 2
+                            },
+                            {
+                                "constructor": 1,
+                                "fields": [
+                                    {
+                                        "bytes": "0102"
+                                    },
+                                    {
+                                        "bytes": "00"
+                                    },
+                                    {
+                                        "constructor": 2,
+                                        "fields": [
+                                            {
+                                                "list": []
+                                            }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "int": -7
+                            }
+                        ]
+                    },
+                    "v": {
+                        "bytes": "0b7d02412378312361623b503e"
+                    }
+                },
+                {
+                    "k": {
+                        "constructor": 15,
+                        "fields": [
+                            {
+                                "int": 0
+                            },
+                            {
+                                "int": 2
+                            },
+                            {
+                                "bytes": "0700070204"
+                            },
+                            {
+                                "bytes": "000008"
+                            },
+                            {
+                                "list": []
+                            },
+                            {
+                                "constructor": 5,
+                                "fields": []
+                            }
+                        ]
+                    },
+                    "v": {
+                        "int": 1
+                    }
+                },
+                {
+                    "k": {
+                        "list": [
+                            {
+                                "map": [
+                                    {
+                                        "k": {
+                                            "bytes": "00"
+                                        },
+                                        "v": {
+                                            "bytes": "0000"
+                                        }
+                                    },
+                                    {
+                                        "k": {
+                                            "int": 1
+                                        },
+                                        "v": {
+                                            "bytes": "000102"
+                                        }
+                                    },
+                                    {
+                                        "k": {
+                                            "bytes": ""
+                                        },
+                                        "v": {
+                                            "int": -2
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "bytes": "0502"
+                            },
+                            {
+                                "bytes": "0702050204"
+                            }
+                        ]
+                    },
+                    "v": {
+                        "list": [
+                            {
+                                "bytes": "0406"
+                            },
+                            {
+                                "list": [
+                                    {
+                                        "bytes": "01"
+                                    }
+                                ]
+                            },
+                            {
+                                "list": []
+                            },
+                            {
+                                "list": [
+                                    {
+                                        "map": [
+                                            {
+                                                "k": {
+                                                    "constructor": 1,
+                                                    "fields": []
+                                                },
+                                                "v": {
+                                                    "list": []
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "list": [
+                                            {
+                                                "map": []
+                                            }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "int": 1
+                            },
+                            {
+                                "bytes": "050805"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "k": {
+                        "list": [
+                            {
+                                "bytes": "020602060602"
+                            },
+                            {
+                                "int": 2
+                            },
+                            {
+                                "constructor": 1,
+                                "fields": [
+                                    {
+                                        "int": 0
+                                    }
+                                ]
+                            },
+                            {
+                                "bytes": "040403030402"
+                            },
+                            {
+                                "bytes": "000200"
+                            },
+                            {
+                                "list": [
+                                    {
+                                        "map": [
+                                            {
+                                                "k": {
+                                                    "int": 1
+                                                },
+                                                "v": {
+                                                    "int": -1
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "bytes": "0001"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    "v": {
+                        "constructor": 4,
+                        "fields": [
+                            {
+                                "list": [
+                                    {
+                                        "int": -3
+                                    },
+                                    {
+                                        "list": [
+                                            {
+                                                "constructor": 1,
+                                                "fields": []
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "list": [
+                                            {
+                                                "int": -1
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    ],
+    "seed": 464392809
+}

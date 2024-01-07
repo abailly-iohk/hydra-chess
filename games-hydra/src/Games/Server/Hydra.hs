@@ -22,7 +22,7 @@ module Games.Server.Hydra where
 import Chess.Game (Check (..), Side (..))
 import qualified Chess.Game as Chess
 import Chess.GameState (ChessGame (..), ChessPlay (..))
-import Chess.Plutus (fromJSONDatum, pubKeyHashFromHex)
+import Chess.Plutus (pubKeyHashFromHex)
 import qualified Chess.Token as Token
 import Control.Concurrent.Class.MonadSTM (
   TVar,
@@ -113,6 +113,7 @@ import System.IO (hClose)
 import System.Posix (mkstemp)
 import System.Process (callProcess)
 import Prelude hiding (seq)
+import Chess.Data (fromJSONDatum)
 
 -- | The type of backend provide by Hydra
 data Hydra
@@ -880,9 +881,7 @@ instance FromJSON Response where
 -- -- | Individual server output messages as produced by the 'Hydra.HeadLogic' in
 -- -- the 'ClientEffect'.
 -- data ServerOutput tx
---   = PeerConnected {peer :: NodeId}
---   | PeerDisconnected {peer :: NodeId}
---   | HeadIsContested {headId :: HeadId, snapshotNumber :: SnapshotNumber}
+--   = HeadIsContested {headId :: HeadId, snapshotNumber :: SnapshotNumber}
 --   | TxSeen {headId :: HeadId, transaction :: tx}
 --   | TxExpired {headId :: HeadId, transaction :: tx}
 --   | InvalidInput {reason :: String, input :: Text}

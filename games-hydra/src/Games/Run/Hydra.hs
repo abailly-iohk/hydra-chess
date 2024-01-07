@@ -26,11 +26,13 @@ import Cardano.Crypto.DSIGN (
 import Cardano.Crypto.Hash (Blake2b_224)
 import Cardano.Crypto.Seed (readSeedFromSystemEntropy)
 import qualified Chess.Contract as Contract
+import Chess.Data (
+  datumJSON,
+ )
 import qualified Chess.ELO as ELO
 import Chess.Plutus (
   MintAction (Mint),
   ToData,
-  datumJSON,
   pubKeyHash,
   pubKeyHashFromHex,
   validatorToBytes,

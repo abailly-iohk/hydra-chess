@@ -78,6 +78,8 @@ spec = parallel $ do
   describe "King" $ do
     prop "can move 1 square in all directions" prop_king_moves_one_square
     prop "can take adjacent piece" prop_king_takes_adjacent_piece
+  -- describe "Castling" $ do
+  --   prop "is possible kingside" prop_king_castles_kings
   describe "Check" $ do
     prop "is set if next move can take King" prop_is_check_if_next_move_can_take_king
     it "is set if move uncover a piece that can take King" is_check_if_move_uncovers_attacking_piece

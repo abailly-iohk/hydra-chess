@@ -11,12 +11,6 @@ module BlackJack.Contract where
 
 import PlutusTx.Prelude
 
-import Cardano.Api (
-  PlutusScriptVersion (PlutusScriptV2),
-  SerialiseAsRawBytes (serialiseToRawBytes),
-  hashScript,
-  pattern PlutusScript,
- )
 import BlackJack.Contract.Game (possibleActions)
 import BlackJack.Game (BlackJack, Play)
 import PlutusLedgerApi.V2 (
@@ -36,7 +30,7 @@ import PlutusLedgerApi.V2 (
 import PlutusLedgerApi.V2.Contexts (findDatumHash, getContinuingOutputs)
 import PlutusTx (CompiledCode)
 import qualified PlutusTx
-import Cardano.Api.Shelley (PlutusScript(PlutusScriptSerialised))
+import Chess.Plutus (scriptValidatorHash)
 
 type DatumType = BlackJack
 type RedeemerType = Play
@@ -96,16 +90,3 @@ wrapValidator f d r c =
   redeemer = unsafeFromBuiltinData r
   context = unsafeFromBuiltinData c
 {-# INLINEABLE wrapValidator #-}
-
--- * Similar utilities as plutus-ledger
-
--- | Compute the on-chain 'ScriptHash' for a given serialised plutus script. Use
--- this to refer to another validator script.
-scriptValidatorHash :: SerialisedScript -> ScriptHash
-scriptValidatorHash =
-  ScriptHash
-    . toBuiltin
-    . serialiseToRawBytes
-    . hashScript
-    . PlutusScript PlutusScriptV2
-    . PlutusScriptSerialised

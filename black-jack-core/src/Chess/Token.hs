@@ -20,25 +20,13 @@ import Chess.Plutus (
   validatorToBytes,
   wrapMintingPolicy,
  )
+import Data.ByteString (ByteString)
 import PlutusLedgerApi.V2 (
   ScriptContext (..),
   ScriptHash (..),
   SerialisedScript,
   serialiseCompiledCode,
-  toData,
  )
-
-import Cardano.Api (
-  ScriptDataJsonSchema (..),
-  scriptDataToJson,
-  unsafeHashableScriptData,
- )
-import Cardano.Api.Shelley (
-  fromPlutusData,
- )
-import qualified Data.Aeson as Aeson
-import Data.ByteString (ByteString)
-import qualified Data.ByteString.Lazy as Lazy
 import PlutusTx (CompiledCode)
 import qualified PlutusTx
 import Prelude (Show (show), String)
@@ -67,12 +55,3 @@ validatorHashHex = show validatorHash
 validatorBytes :: ByteString
 validatorBytes =
   validatorToBytes validatorScript
-
-mintActionJSON :: MintAction -> ByteString
-mintActionJSON =
-  Lazy.toStrict
-    . Aeson.encode
-    . scriptDataToJson ScriptDataJsonDetailedSchema
-    . unsafeHashableScriptData
-    . fromPlutusData
-    . toData
