@@ -293,7 +293,9 @@ withHydraServer network me host k = do
           , "build-raw"
           ]
             <> args
-            <> [ "--fee"
+            <> [ "--required-signer"
+               , sk
+               , "--fee"
                , "0"
                , "--protocol-params-file"
                , protocolParametersFile

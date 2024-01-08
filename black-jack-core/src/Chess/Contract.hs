@@ -45,13 +45,18 @@ checkMove move chess@ChessGame{players, game} scriptContext@ScriptContext{script
       Left{} -> traceError "Illegal move"
       Right game' -> checkGameOutput scriptContext chess{game = game'}
  where
-  isPlayersTurn Game{curSide} =
+  isPlayersTurn Game{curSide}
+    | length players == 2 = checkPlayerTurn curSide
+    | length players == 1 = True -- solo mode
+    | otherwise = traceError "Number of players must be 1 or 2"
+
+  checkPlayerTurn side =
     case txInfoSignatories txInfo of
       [signer] ->
         case findIndex (== signer) players of
           Just idx ->
             traceIfFalse "Wrong side to play" $
-              (idx == 0 && curSide == White) || (idx == 1 && curSide == Black)
+              (idx == 0 && side == White) || (idx == 1 && side == Black)
           Nothing -> traceError "Wrong signer"
       [] ->
         traceError "No signers"
