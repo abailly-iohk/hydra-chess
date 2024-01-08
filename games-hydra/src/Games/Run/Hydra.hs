@@ -58,9 +58,9 @@ import Data.Aeson.Types (Value (Object))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as Hex
 import qualified Data.ByteString.Lazy as LBS
-import Data.Char (isDigit, isHexDigit, isSpace)
 import Data.Data (Proxy (..))
 import Data.Either (rights)
+import Data.Function (on)
 import qualified Data.List as List
 import Data.Text (Text, unpack)
 import qualified Data.Text as Text
@@ -270,7 +270,11 @@ registerGameToken network gameSkFile gameVkFile = do
 
   utxo <- getUTxOFor network fundAddress --TODO: check it has enough ADAs
   when (null utxo) $ error "No UTxO with funds"
-  let txin = mkTxIn $ head utxo
+  let txin =
+        mkTxIn $
+          List.maximumBy (compare `on` totalLovelace) $
+            rights $
+              fmap (parseQueryUTxO . Text.pack) utxo
 
   cardanoCliExe <- findCardanoCliExecutable
   socketPath <- findSocketPath network
@@ -396,11 +400,11 @@ findGameScriptFile network = do
   BS.writeFile eloScriptFile (validatorToBytes Contract.validatorScript)
   pure eloScriptFile
 
-mkTxIn :: String -> String
-mkTxIn cliOutput = txId <> "#" <> txIx
- where
-  txId = takeWhile (not . isSpace) cliOutput
-  txIx = takeWhile isDigit $ dropWhile isSpace $ dropWhile isHexDigit $ cliOutput
+mkTxIn :: SimpleUTxO -> String
+mkTxIn =
+  Text.unpack . \case
+    SimpleUTxO{txIn} -> txIn
+    UTxOWithDatum{txIn} -> txIn
 
 checkFundsAreAvailable :: Network -> FilePath -> FilePath -> IO ()
 checkFundsAreAvailable network signingKeyFile verificationKeyFile = do
@@ -415,11 +419,11 @@ checkFundsAreAvailable network signingKeyFile verificationKeyFile = do
       "Hydra needs some funds to fuel the process, please ensure there's a UTxO with at least 10 ADAs at " <> ownAddress
     threadDelay 60_000_000
     checkFundsAreAvailable network signingKeyFile verificationKeyFile
- where
-  totalLovelace :: SimpleUTxO -> Integer
-  totalLovelace = \case
-    SimpleUTxO{coins = Coins{lovelace}} -> lovelace
-    UTxOWithDatum{coins = Coins{lovelace}} -> lovelace
+
+totalLovelace :: SimpleUTxO -> Integer
+totalLovelace = \case
+  SimpleUTxO{coins = Coins{lovelace}} -> lovelace
+  UTxOWithDatum{coins = Coins{lovelace}} -> lovelace
 
 ed25519seedsize :: Word
 ed25519seedsize = seedSizeDSIGN (Proxy @Ed25519DSIGN)
