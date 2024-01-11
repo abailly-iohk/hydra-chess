@@ -18,7 +18,8 @@ This project started with [Black Jack](https://en.wikipedia.org/wiki/Blackjack) 
 * [ ] ~~Proper "randomness"~~
 * [x] Startup & configure Hydra server in the background
 * [x] Startup & configure cardano-node in the background
-* [ ] Support for 2-players
+* [x] Support for 2-players
+* [ ] User guide
 * [ ] Web UI
 
 # Why?
