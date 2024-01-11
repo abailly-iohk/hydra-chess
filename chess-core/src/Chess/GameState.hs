@@ -8,16 +8,18 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -fno-specialize -fdefer-type-errors #-}
 {-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:target-version=1.0.0 #-}
+
 module Chess.GameState where
 
-import Prelude(($), fmap, pure, (<$>), Bool (..))
+import Chess.Game (Game (..), Move)
 import Chess.Plutus (pubKeyHashFromHex, pubKeyHashToHex)
 import Data.Aeson (FromJSON (..), ToJSON (..), object, withObject, (.:), (.=))
 import GHC.Generics (Generic)
 import PlutusLedgerApi.V2 (PubKeyHash)
 import qualified PlutusTx
+import Test.QuickCheck (Arbitrary (..), frequency)
+import Prelude (Bool (..), fmap, pure, ($), (<$>))
 import qualified Prelude as Haskell
-import Chess.Game (Game, Move)
 
 -- * Toplevel state/transition
 data ChessGame = ChessGame
@@ -57,6 +59,13 @@ data ChessPlay
   deriving (Haskell.Eq, Haskell.Show, Generic, ToJSON, FromJSON)
 
 PlutusTx.unstableMakeIsData ''ChessPlay
+
+instance Arbitrary ChessPlay where
+  arbitrary =
+    frequency
+      [ (1, pure End)
+      , (9, ChessMove <$> arbitrary)
+      ]
 
 isMove :: ChessPlay -> Bool
 isMove = \case

@@ -5,7 +5,10 @@ module Chess.Generators where
 
 import Chess.Game
 import Control.Monad.State (MonadState (..), StateT, execStateT, lift)
-import Test.QuickCheck (Arbitrary (..), Gen, choose, elements)
+import Test.QuickCheck (Arbitrary (..), Gen, choose, elements, listOf, vectorOf)
+import Chess.GameState (ChessGame(..))
+import PlutusLedgerApi.V2 (PubKeyHash(..), toBuiltin)
+import qualified Data.ByteString as BS
 
 -- * Generators
 
@@ -41,9 +44,6 @@ instance Arbitrary Piece where
 instance Arbitrary Side where
   arbitrary = elements [White, Black]
 
-instance Arbitrary Game where
-  arbitrary = execStateT genMoves initialGame
-
 newtype RookLike = RookLike Piece
   deriving (Eq, Show)
 
@@ -55,6 +55,9 @@ newtype BishopLike = BishopLike Piece
 
 instance Arbitrary BishopLike where
   arbitrary = BishopLike <$> elements [Bishop, Queen]
+
+instance Arbitrary Game where
+  arbitrary = execStateT genMoves initialGame
 
 genMoves :: StateT Game Gen ()
 genMoves =
@@ -70,3 +73,9 @@ genMoves =
         move <- lift $ elements moves
         either (const $ pure ()) put (apply move game)
         genMove (n - 1)
+
+instance Arbitrary ChessGame where
+  arbitrary = ChessGame <$> listOf genPubKeyHash <*> arbitrary
+
+genPubKeyHash :: Gen PubKeyHash
+genPubKeyHash = PubKeyHash . toBuiltin . BS.pack <$> vectorOf 28 arbitrary

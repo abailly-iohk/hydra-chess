@@ -16,9 +16,9 @@ index-state:
 
 
 packages:
-  black-jack-core
-  black-jack-client
-  games-hydra
+  chess-core
+  chess-client
+  chess-hydra
 
 package *
   ghc-options: -j8
@@ -26,7 +26,7 @@ package *
 tests: True
 benchmarks: True
 
-package black-jack-core
+package chess-core
   haddock-options: "--optghc=-fplugin-opt PlutusTx.Plugin:defer-errors"
 
 -- Always show detailed output for tests

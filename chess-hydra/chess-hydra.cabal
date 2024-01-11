@@ -1,5 +1,5 @@
 cabal-version:      2.4
-name:               black-jack-client
+name:               chess-hydra
 version:            0.1.0.0
 
 -- A short (one-line) description of the package.
@@ -25,36 +25,50 @@ library
   hs-source-dirs:  src
   ghc-options:     -Wall -Werror
   exposed-modules:
-    Game.Client
-    Game.Client.Console
-    Game.Client.IO
-    Game.Server
-    Game.Server.Mock
+    Games.Options
+    Games.Run
+    Games.Run.Cardano
+    Games.Run.Hydra
 
-    Game.BlackJack
-    Game.Chess
+    Games.Server.Hydra
+    Games.Server.IO
   build-depends:
                   QuickCheck
                 , aeson
                 , base
                 , base16-bytestring
-                , black-jack-core
+                , chess-core
+                , chess-client
                 , bytestring
+                , cardano-binary
+                , cborg
                 , containers
+                , directory
+                , filepath
                 , generic-random
                 , http-client
                 , http-conduit
+                , http-types
+                , cardano-crypto-class
                 , io-classes
                 , megaparsec
                 , mtl
                 , mtl
+                , optparse-applicative
+                , process
                 , random
+                , serialise
+                , scientific
+                , tar
                 , text
+                , unix
                 , websockets
+                , zip-archive
+                , zlib
 
-executable black-jack-client
-  ghc-options:      -Wall -Werror
-  main-is:          Main.hs
+executable hygames
+  ghc-options:      -Wall -Werror -threaded -rtsopts -with-rtsopts=-N
+  main-is:          games-hydra.hs
 
   -- Modules included in this executable, other than Main.
   -- other-modules:
@@ -64,8 +78,9 @@ executable black-jack-client
   build-depends:
     , aeson
     , base
-    , black-jack-client
-    , black-jack-core
+    , chess-client
+    , chess-core
+    , chess-hydra
     , optparse-applicative
     , text
 
@@ -73,18 +88,19 @@ executable black-jack-client
   default-language: Haskell2010
 
 test-suite tests
-  ghc-options:        -threaded -rtsopts -with-rtsopts=-N -Wall
+  ghc-options:        -threaded -rtsopts -with-rtsopts=-N -Wall -Werror
   hs-source-dirs:     test
   other-modules:
-    Game.Client.ConsoleSpec
-    Game.ClientSpec
+    Games.Server.HydraSpec
 
   main-is:            Spec.hs
   type:               exitcode-stdio-1.0
   build-depends:
     , aeson
     , base
-    , black-jack-client
+    , chess-client
+    , chess-core
+    , chess-hydra
     , bytestring
     , containers
     , hspec

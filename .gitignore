@@ -34,3 +34,6 @@ hspec-results.md
 demo/chainstate
 demo/headstate
 \#*
+
+*.sk
+*.vk

@@ -17,6 +17,8 @@ import Control.Monad (guard)
 import Data.Aeson (FromJSON (..), ToJSON (..))
 import GHC.Generics (Generic)
 import qualified PlutusTx
+import Test.QuickCheck (Arbitrary (..), choose, suchThat)
+import qualified Prelude
 import qualified Prelude as Haskell
 
 type Row = Integer
@@ -26,6 +28,9 @@ data Position = Pos {row :: Row, col :: Col}
   deriving (Haskell.Eq, Haskell.Show, Generic, ToJSON, FromJSON)
 
 PlutusTx.unstableMakeIsData ''Position
+
+instance Arbitrary Position where
+  arbitrary = Pos Prelude.<$> choose (0, 7) Prelude.<*> choose (0, 7)
 
 instance Eq Position where
   Pos r c == Pos r' c' = r == r' && c == c'
@@ -151,6 +156,12 @@ data Move = Move Position Position
   deriving (Haskell.Eq, Haskell.Show, Generic, ToJSON, FromJSON)
 
 PlutusTx.unstableMakeIsData ''Move
+
+instance Arbitrary Move where
+  arbitrary = do
+    from <- arbitrary
+    to <- arbitrary `suchThat` (/= from)
+    Prelude.pure $ Move from to
 
 data IllegalMove
   = NotMoving Move

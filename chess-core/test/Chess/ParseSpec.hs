@@ -3,14 +3,14 @@
 {-# HLINT ignore "Use camelCase" #-}
 module Chess.ParseSpec where
 
-import Chess.Game (Move(..), Position(..))
+import Chess.Game (Move(..))
 import Chess.Parse (parseMove)
 import Chess.Render (Render (..))
 import Data.Function ((&))
 import Data.Text (unpack)
 import Test.Hspec (Spec)
 import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck (Property, counterexample, (===), Arbitrary (..), elements)
+import Test.QuickCheck (Property, counterexample, (===))
 
 spec :: Spec
 spec = do
@@ -22,12 +22,3 @@ parse_pawn_moves move =
    in parseMove repr
         === Right move
         & counterexample ("rendered: " <> repr)
-
-instance Arbitrary Move where
-  arbitrary = Move <$> arbitrary <*> arbitrary
-
-instance Arbitrary Position where
-  arbitrary =
-    Pos
-      <$> elements [0 .. 7]
-      <*> elements [0 .. 7]

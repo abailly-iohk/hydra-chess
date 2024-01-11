@@ -9,6 +9,7 @@
 
 module Game.ClientSpec where
 
+import Chess.Generators ()
 import Control.Concurrent.Class.MonadSTM (
   MonadSTM,
   atomically,
@@ -22,7 +23,7 @@ import Control.Monad.Class.MonadAsync (MonadAsync (race_))
 import Control.Monad.Class.MonadTimer (threadDelay)
 import Control.Monad.IOSim (runSimOrThrow)
 import Data.String (IsString)
-import Game.BlackJack (BlackJack)
+import Game.Chess (Chess)
 import Game.Client (runClient)
 import Game.Client.IO (Command (..), Err (..), HasIO (..), Output (..))
 import Game.Server (
@@ -48,7 +49,7 @@ import Test.QuickCheck (
 spec :: Spec
 spec = do
   describe "Serialisation" $ do
-    roundtripAndGoldenSpecs (Proxy @(Indexed BlackJack MockChain))
+    roundtripAndGoldenSpecs (Proxy @(Indexed Chess MockChain))
 
   describe "Fund Table" $ do
     prop "commit to head some funds given table created" prop_commit_to_head_when_funding_table
@@ -83,7 +84,7 @@ prop_commit_to_head_when_funding_table (KnownParties peers) (Committable coins) 
   forAll (elements coins) $ \c ->
     let value = coinValue @MockChain c
         result = runSimOrThrow $ do
-          let server = connectedServer{poll = \_ _ -> pure $ Indexed 0 [HeadCreated @BlackJack @MockChain mockId peers]}
+          let server = connectedServer{poll = \_ _ -> pure $ Indexed 0 [HeadCreated @Chess @MockChain mockId peers]}
           withIOSimIO [NewTable (pid <$> peers), FundTable mockId value] $ runClient server (const $ pure ())
      in Ok "committed" `elem` snd result
 
@@ -113,7 +114,7 @@ instance Arbitrary Committable where
 mockId :: (IsString a) => a
 mockId = "1234"
 
-connectedServer :: (Monad m) => Server BlackJack MockChain m
+connectedServer :: (Monad m) => Server Chess MockChain m
 connectedServer =
   Server
     { initHead = \_ -> pure mockId
